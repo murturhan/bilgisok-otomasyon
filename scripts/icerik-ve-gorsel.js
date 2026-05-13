@@ -1,19 +1,12 @@
 /**
  * BİLGİ-ŞOK İçerik ve Görsel Üretim Scripti
- * 
- * Gemini ile içerik üretir → Cloudflare FLUX.1 schnell ile 20 görsel üretir
- * → 1024x1024 görseli FFmpeg yerine canvas/sharp ile 1280x720'a crop eder
- * → Drive'a yükler → Sheets'e içerik kaydeder → Telegram bildirim
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { google } from "googleapis";
 import axios from "axios";
-import FormData from "form-data";
 import fs from "fs";
-import path from "path";
 
-// ============ ENV ============
 const {
   GEMINI_API_KEY,
   CLOUDFLARE_API_TOKEN,
@@ -27,9 +20,6 @@ const {
   INDEX,
 } = process.env;
 
-const FOLDER_KLIPLER = "bilgisok-klipler"; // İleride kullanılacak
-
-// ============ HELPERS ============
 async function telegram(text) {
   try {
     await axios.post(
@@ -45,7 +35,11 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// ============ GOOGLE AUTH ============
+function normalizeTarih(t) {
+  if (!t) return "";
+  return String(t).trim().toLowerCase();
+}
+
 function getGoogleAuth() {
   const credentials = JSON.parse(GDRIVE_SERVICE_ACCOUNT_JSON);
   const auth = new google.auth.GoogleAuth({
@@ -58,14 +52,12 @@ function getGoogleAuth() {
   return auth;
 }
 
-// ============ STEP 1: SHEETS'TEN KONU AL ============
 async function konuyuAl() {
   console.log(`Konu alınıyor: tarih=${TARIH}, index=${INDEX}`);
   
   const auth = getGoogleAuth();
   const sheets = google.sheets({ version: "v4", auth });
   
-  // konu_havuzu sheet'inden oku
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: GSHEETS_SPREADSHEET_ID,
     range: "konu_havuzu!A:C",
@@ -73,17 +65,25 @@ async function konuyuAl() {
   
   const rows = res.data.values || [];
   
-  // Header'dan sonraki tarihe ait satırları bul
+  console.log(`Toplam ${rows.length} satır okundu (başlık dahil).`);
+  console.log("İlk 3 satır:", JSON.stringify(rows.slice(0, 3)));
+  
+  const aranan = normalizeTarih(TARIH);
+  console.log(`Aranan tarih (normalize): "${aranan}"`);
+  
   const matchingRows = [];
   for (let i = 1; i < rows.length; i++) {
-    if (rows[i][1] === TARIH) {
+    const satirTarih = normalizeTarih(rows[i][1]);
+    if (satirTarih === aranan) {
       matchingRows.push({ rowIndex: i + 1, konu: rows[i][0] });
     }
   }
   
+  console.log(`Eşleşen satır sayısı: ${matchingRows.length}`);
+  
   const idx = parseInt(INDEX);
   if (idx < 0 || idx >= matchingRows.length) {
-    throw new Error(`Geçersiz index ${idx}, ${matchingRows.length} konu var.`);
+    throw new Error(`Geçersiz index ${idx}, ${matchingRows.length} konu var. Aranan tarih: "${aranan}".`);
   }
   
   const selected = matchingRows[idx];
@@ -91,57 +91,48 @@ async function konuyuAl() {
   return selected;
 }
 
-// ============ STEP 2: GEMINI İLE İÇERİK ÜRET ============
 async function icerikUret(konu) {
   console.log("Gemini içerik üretiyor...");
   
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.7,
+    },
+  });
   
-  const prompt = `Sen, YouTube'da antik tarih ve gizemler üzerine Türkçe içerik üreten bir uzmansın. Konuya çok hakim, akademik ama anlaşılır bir tarzda anlatıyorsun.
+  const prompt = `Sen, YouTube'da antik tarih ve gizemler üzerine Türkçe içerik üreten bir uzmansın.
 
 KONU: "${konu}"
 
 GERÇEK BİLGİ ZORUNLULUĞU:
 - SADECE doğrulanmış tarihi ve arkeolojik bilgi kullan
-- UYDURMA, TAHMİN VE SPEKÜLASYON YOK
-- Tarihler, isimler, yerler GERÇEK olmalı
+- UYDURMA YOK
 
-Aşağıdaki yapıda JSON çıktısı üret:
+Aşağıdaki JSON yapısında çıktı üret:
 
 {
   "konu": "${konu}",
-  "baslik": "YouTube videosu için merak uyandırıcı, kanca işlevi gören başlık (60-70 karakter)",
-  "aciklama": "Video açıklaması, 200-300 kelime, anahtar kelimeler dahil",
-  "senaryo": "Tam seslendirme metni, 800-1200 kelime. Giriş kanca cümlesi, gelişme bölümleri, kapanış. Akıcı, hikayemsi.",
-  "ai_gorsel_prompts": [
-    "20 adet detaylı görsel üretim promptu (İngilizce). Antik mekanlar, tarihi figürler, arkeolojik buluntular, sanatsal yorumlar.",
-    "Her prompt 'cinematic, photorealistic, 16:9, ultra detailed' gibi kalite terimleri içersin",
-    "Karakterler ve mekanlar konuyla TUTARLI olmalı"
-  ],
-  "ai_klip_prompts": [
-    "3 adet AI video klip promptu (İngilizce, Veo Studio için). 5-8 saniyelik klip senaryoları."
-  ],
-  "pexels_anahtar_kelimeler": [
-    "4 adet Pexels stok video arama anahtar kelimesi (İngilizce). Dolgu video olarak kullanılacak."
-  ]
+  "baslik": "YouTube videosu için merak uyandırıcı başlık (60-70 karakter)",
+  "aciklama": "Video açıklaması, 200-300 kelime",
+  "senaryo": "Tam seslendirme metni, 800-1200 kelime",
+  "ai_gorsel_prompts": ["20 adet detaylı görsel üretim promptu (İngilizce, cinematic, photorealistic)"],
+  "ai_klip_prompts": ["3 adet AI video klip promptu (İngilizce, Veo Studio için)"],
+  "pexels_anahtar_kelimeler": ["4 adet Pexels stok video anahtar kelimesi (İngilizce)"]
 }
 
-ai_gorsel_prompts dizisinde tam 20 öğe olmalı.
-ai_klip_prompts dizisinde tam 3 öğe olmalı.
-pexels_anahtar_kelimeler dizisinde tam 4 öğe olmalı.
-
-SADECE JSON çıktısı ver, başka metin ekleme. Markdown code block kullanma.`;
+ai_gorsel_prompts: TAM 20 öğe
+ai_klip_prompts: TAM 3 öğe
+pexels_anahtar_kelimeler: TAM 4 öğe`;
 
   const result = await model.generateContent(prompt);
   let text = result.response.text();
-  
-  // Markdown code block varsa temizle
-  text = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+  text = text.trim();
   
   const json = JSON.parse(text);
   
-  // Validasyon
   if (!json.ai_gorsel_prompts || json.ai_gorsel_prompts.length < 20) {
     throw new Error(`Gemini 20 görsel promptu vermedi, ${json.ai_gorsel_prompts?.length || 0} verdi.`);
   }
@@ -150,7 +141,6 @@ SADECE JSON çıktısı ver, başka metin ekleme. Markdown code block kullanma.`
   return json;
 }
 
-// ============ STEP 3: CLOUDFLARE FLUX.1 SCHNELL İLE GÖRSEL ÜRET ============
 async function gorselUret(prompt, index) {
   const url = `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell`;
   
@@ -163,12 +153,11 @@ async function gorselUret(prompt, index) {
     },
     data: {
       prompt: prompt,
-      steps: 4, // schnell sadece 4 step destekler, hızlı
+      steps: 4,
     },
     timeout: 120000,
   });
   
-  // Response: { result: { image: "base64..." }, success: true }
   if (!response.data?.result?.image) {
     throw new Error(`FLUX.1 görsel ${index + 1} için image alanı boş`);
   }
@@ -190,10 +179,10 @@ async function tumGorselleriUret(prompts) {
   
   for (let i = 0; i < prompts.length; i++) {
     try {
-      console.log(`Görsel ${i + 1}/${prompts.length} üretiliyor...`);
+      console.log(`Görsel ${i + 1}/${prompts.length}...`);
       const gorsel = await gorselUret(prompts[i], i);
       sonuclar.push({ ...gorsel, index: i });
-      await delay(500); // rate limit koruması
+      await delay(500);
     } catch (e) {
       console.error(`Görsel ${i + 1} hatası: ${e.message}`);
       hatalar.push({ index: i, error: e.message });
@@ -204,14 +193,12 @@ async function tumGorselleriUret(prompts) {
   return { sonuclar, hatalar };
 }
 
-// ============ STEP 4: DRIVE'A YÜKLE ============
 async function driveYukle(gorseller, konuKlasoru) {
   console.log("Drive'a yükleniyor...");
   
   const auth = getGoogleAuth();
   const drive = google.drive({ version: "v3", auth });
   
-  // Önce bu video için alt klasör oluştur
   const folderRes = await drive.files.create({
     requestBody: {
       name: konuKlasoru,
@@ -222,7 +209,7 @@ async function driveYukle(gorseller, konuKlasoru) {
   });
   
   const altKlasorId = folderRes.data.id;
-  console.log(`Alt klasör oluşturuldu: ${konuKlasoru} (${altKlasorId})`);
+  console.log(`Alt klasör: ${konuKlasoru} (${altKlasorId})`);
   
   const yuklenenler = [];
   
@@ -247,7 +234,7 @@ async function driveYukle(gorseller, konuKlasoru) {
         link: fileRes.data.webViewLink,
       });
     } catch (e) {
-      console.error(`Drive yükleme hatası ${gorsel.filename}: ${e.message}`);
+      console.error(`Drive yükleme hatası: ${e.message}`);
     }
   }
   
@@ -255,8 +242,7 @@ async function driveYukle(gorseller, konuKlasoru) {
   return { yuklenenler, altKlasorId, klasorLink: folderRes.data.webViewLink };
 }
 
-// ============ STEP 5: SHEET'E İÇERİK KAYDET ============
-async function sheetKaydet(konu, icerik, altKlasorId) {
+async function sheetKaydet(konu, icerik) {
   console.log("Sheets'e içerik kaydediliyor...");
   
   const auth = getGoogleAuth();
@@ -281,40 +267,29 @@ async function sheetKaydet(konu, icerik, altKlasorId) {
   console.log("Sheets'e yazıldı.");
 }
 
-// ============ MAIN ============
 async function main() {
   try {
-    // 1. Konu al
     const { konu } = await konuyuAl();
     
-    await telegram(
-      `✅ *Konu:* ${konu}\n\n⏳ Gemini ile içerik üretiliyor...`
-    );
+    await telegram(`✅ *Konu:* ${konu}\n\n⏳ Gemini ile içerik üretiliyor...`);
     
-    // 2. Gemini ile içerik üret
     const icerik = await icerikUret(konu);
     
     await telegram(
       `📝 *İçerik hazır*\n\n📌 *Başlık:* ${icerik.baslik}\n\n⏳ 20 görsel üretiliyor (Cloudflare FLUX.1)...`
     );
     
-    // 3. Görselleri üret
-    const { sonuclar: gorseller, hatalar } = await tumGorselleriUret(
-      icerik.ai_gorsel_prompts
-    );
+    const { sonuclar: gorseller } = await tumGorselleriUret(icerik.ai_gorsel_prompts);
     
     if (gorseller.length === 0) {
       throw new Error("Hiç görsel üretilemedi");
     }
     
-    // 4. Drive'a yükle
     const konuKlasoru = `${TARIH}-${konu.substring(0, 50).replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ ]/g, "")}`;
     const { yuklenenler, klasorLink } = await driveYukle(gorseller, konuKlasoru);
     
-    // 5. Sheet'e kaydet
-    await sheetKaydet(konu, icerik, konuKlasoru);
+    await sheetKaydet(konu, icerik);
     
-    // 6. Final Telegram bildirim
     const klipPromptlari = icerik.ai_klip_prompts
       .map((p, i) => `🎥 *KLİP ${i + 1}:*\n${p}`)
       .join("\n\n");
@@ -324,7 +299,7 @@ async function main() {
       `📂 *Drive klasörü:* [Aç](${klasorLink})\n\n` +
       `━━━━━━━━━━━━━━━\n\n` +
       `🎬 *VEO STUDIO'DA 3 KLİP ÜRET:*\n\n${klipPromptlari}\n\n` +
-      `Klipleri "bilgisok-klipler" klasörüne yükle, sistem otomatik tespit edip videoyu oluşturacak.`
+      `Klipleri "bilgisok-klipler" klasörüne yükle.`
     );
     
     console.log("\n✅ TÜM İŞLEM BAŞARILI");
@@ -334,9 +309,7 @@ async function main() {
     console.error("HATA:", error.message);
     console.error(error.stack);
     
-    await telegram(
-      `❌ *Hata:* ${error.message.substring(0, 500)}`
-    );
+    await telegram(`❌ *Hata:* ${error.message.substring(0, 500)}`);
     
     process.exit(1);
   }
