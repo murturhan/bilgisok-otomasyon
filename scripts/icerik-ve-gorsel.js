@@ -1,13 +1,16 @@
 /**
  * BİLGİ-ŞOK İçerik ve Görsel Üretim Scripti
- * - Cloudflare: 3 hesap rotation
+ * - Cloudflare: 3 hesap rotation (FLUX görseller)
  * - Drive: OAuth user delegation (kullanıcının kendi quotası)
- * - Sheets: Service Account (mevcut)
+ * - Sheets: Service Account
  * - Görsel boyutu: 1280x720 (16:9 YouTube)
+ * - Seslendirme: Edge TTS (tr-TR-AhmetNeural)
+ * - Stok video: Pexels API
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { google } from "googleapis";
+import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import axios from "axios";
 import fs from "fs";
 
@@ -27,6 +30,7 @@ const {
   GOOGLE_OAUTH_REFRESH_TOKEN,
   GSHEETS_SPREADSHEET_ID,
   GDRIVE_FOLDER_ID,
+  PEXELS_API_KEY,
   TELEGRAM_BOT_TOKEN,
   CHAT_ID,
   TARIH,
@@ -145,10 +149,10 @@ Aşağıdaki JSON yapısında çıktı üret:
   "konu": "${konu}",
   "baslik": "YouTube videosu için merak uyandırıcı başlık (60-70 karakter)",
   "aciklama": "Video açıklaması, 200-300 kelime",
-  "senaryo": "Tam seslendirme metni, 800-1200 kelime",
-  "ai_gorsel_prompts": ["20 adet detaylı görsel üretim promptu (İngilizce, cinematic, photorealistic, 16:9 widescreen composition)"],
+  "senaryo": "Tam seslendirme metni, 800-1200 kelime. Doğal akıcı Türkçe. Cümleler arası nokta ve virgüllere dikkat et (TTS için önemli). Soru, ünlem, vurgu işaretlerini doğru kullan.",
+  "ai_gorsel_prompts": ["20 adet detaylı görsel üretim promptu (İngilizce, cinematic, photorealistic, 16:9 widescreen composition, wide cinematic shot)"],
   "ai_klip_prompts": ["3 adet AI video klip promptu (İngilizce, Veo Studio için, 16:9)"],
-  "pexels_anahtar_kelimeler": ["4 adet Pexels stok video anahtar kelimesi (İngilizce)"]
+  "pexels_anahtar_kelimeler": ["4 adet Pexels stok video anahtar kelimesi (İngilizce, tek/iki kelimelik, basit, örn: 'ancient ruins', 'desert sunset', 'old map', 'historical artifacts')"]
 }
 
 ai_gorsel_prompts: TAM 20 öğe, her birinde "wide cinematic shot" veya benzeri 16:9 kompozisyon ipucu olsun
@@ -332,57 +336,205 @@ async function tumGorselleriUret(prompts) {
     }
   }
   
-  console.log(`\n📊 Sonuç: ${sonuclar.length} başarılı, ${hatalar.length} başarısız.`);
+  console.log(`\n📊 Görsel sonucu: ${sonuclar.length} başarılı, ${hatalar.length} başarısız.`);
   return { sonuclar, hatalar };
 }
 
-async function driveYukle(gorseller, konuKlasoru) {
+// ─── EDGE TTS: Seslendirme ─────────────────────────────────────────
+async function seslendirmeUret(senaryo) {
+  console.log(`Seslendirme üretiliyor (Edge TTS, ${senaryo.length} karakter)...`);
+  
+  const tts = new MsEdgeTTS();
+  await tts.setMetadata(
+    "tr-TR-AhmetNeural",
+    OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3
+  );
+  
+  const filename = `seslendirme-${Date.now()}.mp3`;
+  const filepath = `/tmp/${filename}`;
+  
+  // Stream'i dosyaya yaz
+  const { audioStream } = await tts.toStream(senaryo);
+  const writeStream = fs.createWriteStream(filepath);
+  
+  return new Promise((resolve, reject) => {
+    audioStream.on("data", (chunk) => writeStream.write(chunk));
+    audioStream.on("end", () => {
+      writeStream.end();
+      writeStream.on("finish", () => {
+        const stats = fs.statSync(filepath);
+        console.log(`  ✓ Seslendirme OK (${(stats.size / 1024).toFixed(0)}KB)`);
+        resolve({ filename, filepath, size: stats.size });
+      });
+    });
+    audioStream.on("error", (err) => {
+      console.error("TTS audio stream error:", err);
+      reject(err);
+    });
+    
+    // Timeout (90 saniye)
+    setTimeout(() => {
+      reject(new Error("Edge TTS timeout (90s)"));
+    }, 90000);
+  });
+}
+
+// ─── PEXELS: Stok Video İndirme ────────────────────────────────────
+async function pexelsVideoAra(query) {
+  const url = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=3&orientation=landscape&size=medium`;
+  
+  const response = await axios.get(url, {
+    headers: { Authorization: PEXELS_API_KEY },
+    timeout: 30000,
+  });
+  
+  const videos = response.data.videos || [];
+  if (videos.length === 0) return null;
+  
+  // İlk video, HD veya SD dosyasını seç
+  const video = videos[0];
+  const videoFile = video.video_files.find((f) => f.quality === "hd" && f.width <= 1920)
+    || video.video_files.find((f) => f.quality === "sd")
+    || video.video_files[0];
+  
+  return {
+    url: videoFile.link,
+    width: videoFile.width,
+    height: videoFile.height,
+    duration: video.duration,
+    pexels_id: video.id,
+  };
+}
+
+async function pexelsVideoIndir(videoBilgi, index) {
+  console.log(`  Stok video ${index + 1} indiriliyor (${videoBilgi.width}x${videoBilgi.height}, ${videoBilgi.duration}s)...`);
+  
+  const response = await axios({
+    method: "GET",
+    url: videoBilgi.url,
+    responseType: "arraybuffer",
+    timeout: 120000,
+  });
+  
+  const filename = `pexels-${String(index + 1).padStart(2, "0")}-${videoBilgi.pexels_id}.mp4`;
+  const filepath = `/tmp/${filename}`;
+  fs.writeFileSync(filepath, Buffer.from(response.data));
+  
+  const stats = fs.statSync(filepath);
+  return { filename, filepath, size: stats.size, ...videoBilgi };
+}
+
+async function tumStokVideolariIndir(keywords) {
+  console.log(`${keywords.length} stok video aranıyor (Pexels)...`);
+  
+  const sonuclar = [];
+  
+  for (let i = 0; i < keywords.length; i++) {
+    try {
+      const videoBilgi = await pexelsVideoAra(keywords[i]);
+      if (!videoBilgi) {
+        console.log(`  ⚠ "${keywords[i]}" için sonuç bulunamadı.`);
+        continue;
+      }
+      
+      const indirilen = await pexelsVideoIndir(videoBilgi, i);
+      sonuclar.push({ ...indirilen, keyword: keywords[i], index: i });
+      console.log(`  ✓ Stok video ${i + 1} OK (${(indirilen.size / 1024 / 1024).toFixed(1)}MB) [${keywords[i]}]`);
+    } catch (e) {
+      console.error(`  ✗ Stok video ${i + 1} hata (${keywords[i]}): ${e.message}`);
+    }
+  }
+  
+  console.log(`\n📊 Stok video sonucu: ${sonuclar.length}/${keywords.length} indirildi.`);
+  return sonuclar;
+}
+
+// ─── DRIVE: Yükleme ────────────────────────────────────────────────
+async function driveAltKlasorAc(drive, ad, parentId) {
+  const res = await drive.files.create({
+    requestBody: {
+      name: ad,
+      mimeType: "application/vnd.google-apps.folder",
+      parents: [parentId],
+    },
+    fields: "id, name, webViewLink",
+  });
+  return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
+}
+
+async function driveDosyaYukle(drive, dosya, parentId, mimeType) {
+  const res = await drive.files.create({
+    requestBody: {
+      name: dosya.filename,
+      parents: [parentId],
+    },
+    media: {
+      mimeType: mimeType,
+      body: fs.createReadStream(dosya.filepath),
+    },
+    fields: "id, name, webViewLink",
+  });
+  return { drive_id: res.data.id, filename: res.data.name, link: res.data.webViewLink };
+}
+
+async function driveYukle(materyaller, konuKlasoru) {
   console.log("Drive'a yükleniyor (OAuth user delegation)...");
   
   const auth = getOAuthClient();
   const drive = google.drive({ version: "v3", auth });
   
-  const folderRes = await drive.files.create({
-    requestBody: {
-      name: konuKlasoru,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [GDRIVE_FOLDER_ID],
-    },
-    fields: "id, name, webViewLink",
-  });
+  // Ana konu klasörü
+  const anaKlasor = await driveAltKlasorAc(drive, konuKlasoru, GDRIVE_FOLDER_ID);
+  console.log(`Ana klasör: ${anaKlasor.name} (${anaKlasor.id})`);
   
-  const altKlasorId = folderRes.data.id;
-  console.log(`Alt klasör: ${konuKlasoru} (${altKlasorId})`);
+  // Alt klasörler
+  const gorsellerKlasor = await driveAltKlasorAc(drive, "01-gorseller", anaKlasor.id);
+  const sesKlasor = await driveAltKlasorAc(drive, "02-ses", anaKlasor.id);
+  const stokVideoKlasor = await driveAltKlasorAc(drive, "03-pexels-stok-video", anaKlasor.id);
+  const klipKlasor = await driveAltKlasorAc(drive, "04-veo-klipleri-buraya", anaKlasor.id);
   
-  const yuklenenler = [];
-  
-  for (const gorsel of gorseller) {
+  // Görseller
+  const yuklenenGorseller = [];
+  for (const gorsel of materyaller.gorseller) {
     try {
-      const fileRes = await drive.files.create({
-        requestBody: {
-          name: gorsel.filename,
-          parents: [altKlasorId],
-        },
-        media: {
-          mimeType: "image/jpeg",
-          body: fs.createReadStream(gorsel.filepath),
-        },
-        fields: "id, name, webViewLink",
-      });
-      
-      yuklenenler.push({
-        index: gorsel.index,
-        drive_id: fileRes.data.id,
-        filename: fileRes.data.name,
-        link: fileRes.data.webViewLink,
-      });
+      const sonuc = await driveDosyaYukle(drive, gorsel, gorsellerKlasor.id, "image/jpeg");
+      yuklenenGorseller.push({ ...sonuc, index: gorsel.index });
     } catch (e) {
-      console.error(`Drive yükleme hatası: ${e.message}`);
+      console.error(`Görsel yükleme hatası: ${e.message}`);
+    }
+  }
+  console.log(`✓ ${yuklenenGorseller.length} görsel yüklendi.`);
+  
+  // Ses
+  let yuklenenSes = null;
+  if (materyaller.ses) {
+    try {
+      yuklenenSes = await driveDosyaYukle(drive, materyaller.ses, sesKlasor.id, "audio/mpeg");
+      console.log(`✓ Seslendirme yüklendi.`);
+    } catch (e) {
+      console.error(`Ses yükleme hatası: ${e.message}`);
     }
   }
   
-  console.log(`${yuklenenler.length} görsel Drive'a yüklendi.`);
-  return { yuklenenler, altKlasorId, klasorLink: folderRes.data.webViewLink };
+  // Stok videolar
+  const yuklenenStokVideolar = [];
+  for (const video of materyaller.stokVideolar) {
+    try {
+      const sonuc = await driveDosyaYukle(drive, video, stokVideoKlasor.id, "video/mp4");
+      yuklenenStokVideolar.push({ ...sonuc, keyword: video.keyword });
+    } catch (e) {
+      console.error(`Stok video yükleme hatası: ${e.message}`);
+    }
+  }
+  console.log(`✓ ${yuklenenStokVideolar.length} stok video yüklendi.`);
+  
+  return {
+    klasorLink: anaKlasor.link,
+    klipKlasorId: klipKlasor.id,
+    yuklenenGorseller,
+    yuklenenSes,
+    yuklenenStokVideolar,
+  };
 }
 
 async function sheetKaydet(konu, icerik) {
@@ -402,7 +554,7 @@ async function sheetKaydet(konu, icerik) {
         icerik.baslik,
         icerik.aciklama,
         icerik.senaryo,
-        "Görseller hazır - klip bekleniyor",
+        "Materyaller hazır - Veo klipleri ve montaj bekleniyor",
       ]],
     },
   });
@@ -417,38 +569,68 @@ async function main() {
       console.log(`ℹ Hesap-A manuel olarak devre dışı.`);
     }
     
+    // 1. Konu al
     const { konu } = await konuyuAl();
-    
     await telegram(`✅ *Konu:* ${konu}\n\n⏳ Gemini ile içerik üretiliyor...`);
     
+    // 2. İçerik üret
     const icerik = await icerikUret(konu);
-    
     await telegram(
-      `📝 *İçerik hazır*\n\n📌 *Başlık:* ${icerik.baslik}\n\n⏳ 20 görsel üretiliyor (16:9, ${CF_ACCOUNTS.length} hesap, ~3-4 dakika)...`
+      `📝 *İçerik hazır*\n\n📌 *Başlık:* ${icerik.baslik}\n\n⏳ Görsel + ses + stok video üretiliyor (~5 dakika)...`
     );
     
-    const { sonuclar: gorseller } = await tumGorselleriUret(icerik.ai_gorsel_prompts);
+    // 3. Paralel: Görseller, ses, stok videolar
+    console.log("\n=== PARALEL ÜRETİM BAŞLIYOR ===\n");
+    
+    const [gorselSonuc, sesSonuc, stokVideoSonuc] = await Promise.all([
+      tumGorselleriUret(icerik.ai_gorsel_prompts),
+      seslendirmeUret(icerik.senaryo).catch((e) => {
+        console.error(`Seslendirme hatası: ${e.message}`);
+        return null;
+      }),
+      tumStokVideolariIndir(icerik.pexels_anahtar_kelimeler).catch((e) => {
+        console.error(`Stok video hatası: ${e.message}`);
+        return [];
+      }),
+    ]);
+    
+    const gorseller = gorselSonuc.sonuclar;
     
     if (gorseller.length === 0) {
       throw new Error("Hiç görsel üretilemedi");
     }
     
+    // 4. Drive'a yükle
     const konuKlasoru = `${TARIH}-${konu.substring(0, 50).replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ ]/g, "")}`;
-    const { yuklenenler, klasorLink } = await driveYukle(gorseller, konuKlasoru);
+    const drive = await driveYukle(
+      {
+        gorseller,
+        ses: sesSonuc,
+        stokVideolar: stokVideoSonuc,
+      },
+      konuKlasoru
+    );
     
+    // 5. Sheets'e kaydet
     await sheetKaydet(konu, icerik);
     
+    // 6. Telegram özet
     const klipPromptlari = icerik.ai_klip_prompts
-      .map((p, i) => `🎥 *KLİP ${i + 1}:*\n${p}`)
+      .map((p, i) => `🎥 *KLİP ${i + 1}:*\n\`${p}\``)
       .join("\n\n");
     
-    await telegram(
-      `🎉 *${yuklenenler.length}/20 görsel hazır!*\n\n` +
-      `📂 *Drive klasörü:* [Aç](${klasorLink})\n\n` +
+    const ozet =
+      `🎉 *Materyaller hazır!*\n\n` +
+      `📂 [Drive klasörü](${drive.klasorLink})\n\n` +
+      `📊 *İçerik:*\n` +
+      `• 🖼 ${drive.yuklenenGorseller.length}/20 görsel (16:9)\n` +
+      `• 🔊 ${drive.yuklenenSes ? "Seslendirme hazır (Ahmet)" : "❌ Seslendirme YOK"}\n` +
+      `• 🎬 ${drive.yuklenenStokVideolar.length}/4 stok video\n\n` +
       `━━━━━━━━━━━━━━━\n\n` +
       `🎬 *VEO STUDIO'DA 3 KLİP ÜRET:*\n\n${klipPromptlari}\n\n` +
-      `Klipleri "bilgisok-klipler" klasörüne yükle.`
-    );
+      `Klipleri Drive'daki "04-veo-klipleri-buraya" klasörüne yükle.`;
+    
+    await telegram(ozet);
     
     console.log("\n✅ TÜM İŞLEM BAŞARILI");
     process.exit(0);
