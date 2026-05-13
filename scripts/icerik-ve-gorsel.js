@@ -1,7 +1,8 @@
 /**
  * BİLGİ-ŞOK İçerik ve Görsel Üretim Scripti
- * Multi-account Cloudflare rotation (3 hesap destekli)
- * Hesap A şu an kotada, B+C ile çalışıyor.
+ * - Cloudflare: 3 hesap rotation
+ * - Drive: OAuth user delegation (kullanıcının kendi quotası)
+ * - Sheets: Service Account (mevcut)
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -20,6 +21,9 @@ const {
   CLOUDFLARE_ACCOUNT_ID_3,
   CLOUDFLARE_HESAP_A_KOTADA,
   GDRIVE_SERVICE_ACCOUNT_JSON,
+  GOOGLE_OAUTH_CLIENT_ID,
+  GOOGLE_OAUTH_CLIENT_SECRET,
+  GOOGLE_OAUTH_REFRESH_TOKEN,
   GSHEETS_SPREADSHEET_ID,
   GDRIVE_FOLDER_ID,
   TELEGRAM_BOT_TOKEN,
@@ -28,10 +32,7 @@ const {
   INDEX,
 } = process.env;
 
-// Cloudflare hesap listesi (rotation için)
 const CF_ACCOUNTS = [];
-
-// Hesap A — manuel olarak devre dışı bırakılabilir (CLOUDFLARE_HESAP_A_KOTADA=true ile)
 const hesapAKotada = CLOUDFLARE_HESAP_A_KOTADA === "true";
 if (CLOUDFLARE_API_TOKEN && CLOUDFLARE_ACCOUNT_ID && !hesapAKotada) {
   CF_ACCOUNTS.push({ token: CLOUDFLARE_API_TOKEN, accountId: CLOUDFLARE_ACCOUNT_ID, name: "Hesap-A" });
@@ -67,22 +68,31 @@ function normalizeTarih(t) {
   return String(t).trim().toLowerCase();
 }
 
-function getGoogleAuth() {
+// Sheets için: Service Account (mevcut)
+function getServiceAccountAuth() {
   const credentials = JSON.parse(GDRIVE_SERVICE_ACCOUNT_JSON);
-  const auth = new google.auth.GoogleAuth({
+  return new google.auth.GoogleAuth({
     credentials: credentials,
-    scopes: [
-      "https://www.googleapis.com/auth/drive",
-      "https://www.googleapis.com/auth/spreadsheets",
-    ],
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
-  return auth;
+}
+
+// Drive için: OAuth user delegation (kullanıcının kendi quotası)
+function getOAuthClient() {
+  const oauth2Client = new google.auth.OAuth2(
+    GOOGLE_OAUTH_CLIENT_ID,
+    GOOGLE_OAUTH_CLIENT_SECRET
+  );
+  oauth2Client.setCredentials({
+    refresh_token: GOOGLE_OAUTH_REFRESH_TOKEN,
+  });
+  return oauth2Client;
 }
 
 async function konuyuAl() {
   console.log(`Konu alınıyor: tarih=${TARIH}, index=${INDEX}`);
   
-  const auth = getGoogleAuth();
+  const auth = getServiceAccountAuth();
   const sheets = google.sheets({ version: "v4", auth });
   
   const res = await sheets.spreadsheets.values.get({
@@ -249,10 +259,7 @@ async function tumGorselleriUret(prompts) {
   const sonuclar = [];
   const hatalar = [];
   
-  // Her hesabın çalışma durumu
   const hesapKotaDolu = new Array(CF_ACCOUNTS.length).fill(false);
-  
-  // Görsel başına öncelikli hesap: 20 görsel / N hesap = her hesap eşit pay
   const yariSinir = Math.ceil(prompts.length / CF_ACCOUNTS.length);
   
   for (let i = 0; i < prompts.length; i++) {
@@ -261,7 +268,6 @@ async function tumGorselleriUret(prompts) {
     
     let oncelikliHesap = Math.min(Math.floor(i / yariSinir), CF_ACCOUNTS.length - 1);
     
-    // Hesap denemesi: önce öncelikli, sonra diğerleri (fallback)
     const hesapSirasi = [oncelikliHesap];
     for (let j = 0; j < CF_ACCOUNTS.length; j++) {
       if (j !== oncelikliHesap) hesapSirasi.push(j);
@@ -330,9 +336,9 @@ async function tumGorselleriUret(prompts) {
 }
 
 async function driveYukle(gorseller, konuKlasoru) {
-  console.log("Drive'a yükleniyor...");
+  console.log("Drive'a yükleniyor (OAuth user delegation)...");
   
-  const auth = getGoogleAuth();
+  const auth = getOAuthClient();
   const drive = google.drive({ version: "v3", auth });
   
   const folderRes = await drive.files.create({
@@ -381,7 +387,7 @@ async function driveYukle(gorseller, konuKlasoru) {
 async function sheetKaydet(konu, icerik) {
   console.log("Sheets'e içerik kaydediliyor...");
   
-  const auth = getGoogleAuth();
+  const auth = getServiceAccountAuth();
   const sheets = google.sheets({ version: "v4", auth });
   
   await sheets.spreadsheets.values.append({
@@ -407,7 +413,7 @@ async function main() {
   try {
     console.log(`🔧 ${CF_ACCOUNTS.length} Cloudflare hesabı aktif: ${CF_ACCOUNTS.map(a => a.name).join(", ")}`);
     if (hesapAKotada) {
-      console.log(`ℹ Hesap-A manuel olarak devre dışı (CLOUDFLARE_HESAP_A_KOTADA=true).`);
+      console.log(`ℹ Hesap-A manuel olarak devre dışı.`);
     }
     
     const { konu } = await konuyuAl();
