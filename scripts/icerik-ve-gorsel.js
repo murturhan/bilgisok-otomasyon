@@ -145,6 +145,12 @@ pexels_anahtar_kelimeler: TAM 4 öğe`;
         throw new Error(`Gemini ${json.ai_gorsel_prompts?.length || 0} görsel promptu verdi, 20 gerekli.`);
       }
       
+      // Eğer 20'den fazla geldiyse ilk 20'sini al
+      if (json.ai_gorsel_prompts.length > 20) {
+        console.log(`Gemini ${json.ai_gorsel_prompts.length} prompt verdi, ilk 20 alınıyor.`);
+        json.ai_gorsel_prompts = json.ai_gorsel_prompts.slice(0, 20);
+      }
+      
       console.log(`İçerik üretildi: ${json.baslik}`);
       return json;
       
@@ -187,6 +193,7 @@ async function gorselUret(prompt, index) {
       steps: 4,
     },
     timeout: 120000,
+    validateStatus: (status) => status >= 200 && status < 300,
   });
   
   if (!response.data?.result?.image) {
@@ -203,30 +210,60 @@ async function gorselUret(prompt, index) {
 }
 
 async function tumGorselleriUret(prompts) {
-  console.log(`${prompts.length} görsel üretiliyor (FLUX.1 schnell)...`);
+  // Cloudflare Workers AI rate limit dostu ayarlar:
+  const ISTEKLER_ARASI_MS = 7000;     // her görsel arası 7 saniye (saniyede <1 istek)
+  const MAX_RETRY = 5;                 // 429 için sabırlı ol
+  const RETRY_BEKLEME_MS = [10000, 30000, 60000, 120000, 240000]; // exponential backoff
+  
+  console.log(`${prompts.length} görsel üretilecek (FLUX.1 schnell, ${ISTEKLER_ARASI_MS/1000}s aralıkla)...`);
   
   const sonuclar = [];
   const hatalar = [];
   
   for (let i = 0; i < prompts.length; i++) {
     let basarili = false;
-    for (let retry = 1; retry <= 3; retry++) {
+    let sonHata = "";
+    
+    for (let retry = 1; retry <= MAX_RETRY; retry++) {
       try {
-        console.log(`Görsel ${i + 1}/${prompts.length} (deneme ${retry})...`);
+        console.log(`Görsel ${i + 1}/${prompts.length} (deneme ${retry}/${MAX_RETRY})...`);
         const gorsel = await gorselUret(prompts[i], i);
         sonuclar.push({ ...gorsel, index: i });
+        console.log(`  ✓ Görsel ${i + 1} OK (${(gorsel.size/1024).toFixed(0)}KB)`);
         basarili = true;
         break;
       } catch (e) {
-        console.error(`Görsel ${i + 1} hata (deneme ${retry}): ${e.message}`);
-        if (retry < 3) await delay(retry * 5000);
+        const status = e.response?.status;
+        const msg = e.message || "";
+        sonHata = `${status || "?"}: ${msg}`;
+        
+        const is429 = status === 429 || msg.includes("429");
+        const is5xx = status >= 500 && status < 600;
+        const retryEdilebilir = is429 || is5xx || msg.includes("timeout") || msg.includes("ECONNRESET");
+        
+        if (retry < MAX_RETRY && retryEdilebilir) {
+          const bekle = RETRY_BEKLEME_MS[retry - 1];
+          console.log(`  ⚠ Görsel ${i + 1} hata (${sonHata}). ${bekle/1000}s bekleniyor...`);
+          await delay(bekle);
+        } else if (retry < MAX_RETRY) {
+          // retry edilemeyecek bir hata (auth, 400 vs.) — bu görseli atla
+          console.error(`  ✗ Görsel ${i + 1} retry edilemez hata: ${sonHata}`);
+          break;
+        } else {
+          console.error(`  ✗ Görsel ${i + 1} ${MAX_RETRY} denemede başarısız: ${sonHata}`);
+        }
       }
     }
-    if (!basarili) hatalar.push({ index: i });
-    await delay(500);
+    
+    if (!basarili) hatalar.push({ index: i, hata: sonHata });
+    
+    // Sonraki görsele geçmeden önce bekle (son görsel hariç)
+    if (i < prompts.length - 1) {
+      await delay(ISTEKLER_ARASI_MS);
+    }
   }
   
-  console.log(`${sonuclar.length} görsel üretildi, ${hatalar.length} hata.`);
+  console.log(`\n📊 Sonuç: ${sonuclar.length} başarılı, ${hatalar.length} başarısız.`);
   return { sonuclar, hatalar };
 }
 
@@ -313,7 +350,7 @@ async function main() {
     const icerik = await icerikUret(konu);
     
     await telegram(
-      `📝 *İçerik hazır*\n\n📌 *Başlık:* ${icerik.baslik}\n\n⏳ 20 görsel üretiliyor (Cloudflare FLUX.1)...`
+      `📝 *İçerik hazır*\n\n📌 *Başlık:* ${icerik.baslik}\n\n⏳ 20 görsel üretiliyor (Cloudflare FLUX.1, ~5 dakika)...`
     );
     
     const { sonuclar: gorseller } = await tumGorselleriUret(icerik.ai_gorsel_prompts);
