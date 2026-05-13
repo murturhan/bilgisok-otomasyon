@@ -1,5 +1,7 @@
 /**
  * BİLGİ-ŞOK İçerik ve Görsel Üretim Scripti
+ * Multi-account Cloudflare rotation (3 hesap destekli)
+ * Hesap A şu an kotada, B+C ile çalışıyor.
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -9,8 +11,14 @@ import fs from "fs";
 
 const {
   GEMINI_API_KEY,
+  GEMINI_API_KEY_2,
   CLOUDFLARE_API_TOKEN,
   CLOUDFLARE_ACCOUNT_ID,
+  CLOUDFLARE_API_TOKEN_2,
+  CLOUDFLARE_ACCOUNT_ID_2,
+  CLOUDFLARE_API_TOKEN_3,
+  CLOUDFLARE_ACCOUNT_ID_3,
+  CLOUDFLARE_HESAP_A_KOTADA,
   GDRIVE_SERVICE_ACCOUNT_JSON,
   GSHEETS_SPREADSHEET_ID,
   GDRIVE_FOLDER_ID,
@@ -19,6 +27,25 @@ const {
   TARIH,
   INDEX,
 } = process.env;
+
+// Cloudflare hesap listesi (rotation için)
+const CF_ACCOUNTS = [];
+
+// Hesap A — manuel olarak devre dışı bırakılabilir (CLOUDFLARE_HESAP_A_KOTADA=true ile)
+const hesapAKotada = CLOUDFLARE_HESAP_A_KOTADA === "true";
+if (CLOUDFLARE_API_TOKEN && CLOUDFLARE_ACCOUNT_ID && !hesapAKotada) {
+  CF_ACCOUNTS.push({ token: CLOUDFLARE_API_TOKEN, accountId: CLOUDFLARE_ACCOUNT_ID, name: "Hesap-A" });
+}
+if (CLOUDFLARE_API_TOKEN_2 && CLOUDFLARE_ACCOUNT_ID_2) {
+  CF_ACCOUNTS.push({ token: CLOUDFLARE_API_TOKEN_2, accountId: CLOUDFLARE_ACCOUNT_ID_2, name: "Hesap-B" });
+}
+if (CLOUDFLARE_API_TOKEN_3 && CLOUDFLARE_ACCOUNT_ID_3) {
+  CF_ACCOUNTS.push({ token: CLOUDFLARE_API_TOKEN_3, accountId: CLOUDFLARE_ACCOUNT_ID_3, name: "Hesap-C" });
+}
+
+if (CF_ACCOUNTS.length === 0) {
+  throw new Error("Hiç Cloudflare hesabı yapılandırılmamış!");
+}
 
 async function telegram(text) {
   try {
@@ -92,7 +119,8 @@ async function konuyuAl() {
 async function icerikUret(konu) {
   console.log("Gemini içerik üretiyor...");
   
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+  const geminiKeys = [GEMINI_API_KEY];
+  if (GEMINI_API_KEY_2) geminiKeys.push(GEMINI_API_KEY_2);
   
   const prompt = `Sen, YouTube'da antik tarih ve gizemler üzerine Türkçe içerik üreten bir uzmansın.
 
@@ -123,10 +151,13 @@ pexels_anahtar_kelimeler: TAM 4 öğe`;
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const modelAdi = modeller[Math.min(attempt - 1, modeller.length - 1)];
+    const aktifKey = geminiKeys[(attempt - 1) % geminiKeys.length];
+    const keyAdi = geminiKeys.length > 1 ? `Key-${(attempt - 1) % geminiKeys.length + 1}` : "Key-1";
     
     try {
-      console.log(`Gemini denemesi ${attempt}/${maxRetries} - Model: ${modelAdi}`);
+      console.log(`Gemini denemesi ${attempt}/${maxRetries} - Model: ${modelAdi} - ${keyAdi}`);
       
+      const genAI = new GoogleGenerativeAI(aktifKey);
       const model = genAI.getGenerativeModel({
         model: modelAdi,
         generationConfig: {
@@ -145,7 +176,6 @@ pexels_anahtar_kelimeler: TAM 4 öğe`;
         throw new Error(`Gemini ${json.ai_gorsel_prompts?.length || 0} görsel promptu verdi, 20 gerekli.`);
       }
       
-      // Eğer 20'den fazla geldiyse ilk 20'sini al
       if (json.ai_gorsel_prompts.length > 20) {
         console.log(`Gemini ${json.ai_gorsel_prompts.length} prompt verdi, ilk 20 alınıyor.`);
         json.ai_gorsel_prompts = json.ai_gorsel_prompts.slice(0, 20);
@@ -165,7 +195,7 @@ pexels_anahtar_kelimeler: TAM 4 öğe`;
       }
       
       if (is503 || is429) {
-        const bekle = attempt * 30000; // 30s, 60s, 90s, 120s
+        const bekle = attempt * 30000;
         console.log(`Gemini yoğun (${is503 ? '503' : '429'}). ${bekle/1000}s bekleyip tekrar denenecek...`);
         await delay(bekle);
       } else {
@@ -178,14 +208,14 @@ pexels_anahtar_kelimeler: TAM 4 öğe`;
   throw new Error("Gemini retry mantığı beklenmedik şekilde bitti");
 }
 
-async function gorselUret(prompt, index) {
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell`;
+async function gorselUretCloudflare(prompt, index, account) {
+  const url = `https://api.cloudflare.com/client/v4/accounts/${account.accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`;
   
   const response = await axios({
     method: "POST",
     url: url,
     headers: {
-      Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}`,
+      Authorization: `Bearer ${account.token}`,
       "Content-Type": "application/json",
     },
     data: {
@@ -210,54 +240,86 @@ async function gorselUret(prompt, index) {
 }
 
 async function tumGorselleriUret(prompts) {
-  // Cloudflare Workers AI rate limit dostu ayarlar:
-  const ISTEKLER_ARASI_MS = 7000;     // her görsel arası 7 saniye (saniyede <1 istek)
-  const MAX_RETRY = 5;                 // 429 için sabırlı ol
-  const RETRY_BEKLEME_MS = [10000, 30000, 60000, 120000, 240000]; // exponential backoff
+  const ISTEKLER_ARASI_MS = 7000;
+  const MAX_RETRY_PER_ACCOUNT = 3;
+  const RETRY_BEKLEME_MS = [10000, 30000, 60000];
   
-  console.log(`${prompts.length} görsel üretilecek (FLUX.1 schnell, ${ISTEKLER_ARASI_MS/1000}s aralıkla)...`);
+  console.log(`${prompts.length} görsel üretilecek (${CF_ACCOUNTS.length} hesap: ${CF_ACCOUNTS.map(a => a.name).join(", ")})...`);
   
   const sonuclar = [];
   const hatalar = [];
+  
+  // Her hesabın çalışma durumu
+  const hesapKotaDolu = new Array(CF_ACCOUNTS.length).fill(false);
+  
+  // Görsel başına öncelikli hesap: 20 görsel / N hesap = her hesap eşit pay
+  const yariSinir = Math.ceil(prompts.length / CF_ACCOUNTS.length);
   
   for (let i = 0; i < prompts.length; i++) {
     let basarili = false;
     let sonHata = "";
     
-    for (let retry = 1; retry <= MAX_RETRY; retry++) {
-      try {
-        console.log(`Görsel ${i + 1}/${prompts.length} (deneme ${retry}/${MAX_RETRY})...`);
-        const gorsel = await gorselUret(prompts[i], i);
-        sonuclar.push({ ...gorsel, index: i });
-        console.log(`  ✓ Görsel ${i + 1} OK (${(gorsel.size/1024).toFixed(0)}KB)`);
-        basarili = true;
-        break;
-      } catch (e) {
-        const status = e.response?.status;
-        const msg = e.message || "";
-        sonHata = `${status || "?"}: ${msg}`;
-        
-        const is429 = status === 429 || msg.includes("429");
-        const is5xx = status >= 500 && status < 600;
-        const retryEdilebilir = is429 || is5xx || msg.includes("timeout") || msg.includes("ECONNRESET");
-        
-        if (retry < MAX_RETRY && retryEdilebilir) {
-          const bekle = RETRY_BEKLEME_MS[retry - 1];
-          console.log(`  ⚠ Görsel ${i + 1} hata (${sonHata}). ${bekle/1000}s bekleniyor...`);
-          await delay(bekle);
-        } else if (retry < MAX_RETRY) {
-          // retry edilemeyecek bir hata (auth, 400 vs.) — bu görseli atla
-          console.error(`  ✗ Görsel ${i + 1} retry edilemez hata: ${sonHata}`);
+    let oncelikliHesap = Math.min(Math.floor(i / yariSinir), CF_ACCOUNTS.length - 1);
+    
+    // Hesap denemesi: önce öncelikli, sonra diğerleri (fallback)
+    const hesapSirasi = [oncelikliHesap];
+    for (let j = 0; j < CF_ACCOUNTS.length; j++) {
+      if (j !== oncelikliHesap) hesapSirasi.push(j);
+    }
+    
+    for (const hesapIdx of hesapSirasi) {
+      if (hesapKotaDolu[hesapIdx]) {
+        continue;
+      }
+      
+      const account = CF_ACCOUNTS[hesapIdx];
+      
+      for (let retry = 1; retry <= MAX_RETRY_PER_ACCOUNT; retry++) {
+        try {
+          console.log(`Görsel ${i + 1}/${prompts.length} (${account.name}, deneme ${retry}/${MAX_RETRY_PER_ACCOUNT})...`);
+          const gorsel = await gorselUretCloudflare(prompts[i], i, account);
+          sonuclar.push({ ...gorsel, index: i });
+          console.log(`  ✓ Görsel ${i + 1} OK (${(gorsel.size/1024).toFixed(0)}KB) [${account.name}]`);
+          basarili = true;
           break;
-        } else {
-          console.error(`  ✗ Görsel ${i + 1} ${MAX_RETRY} denemede başarısız: ${sonHata}`);
+        } catch (e) {
+          const status = e.response?.status;
+          const msg = e.message || "";
+          sonHata = `${status || "?"}: ${msg}`;
+          
+          const is429 = status === 429 || msg.includes("429");
+          const is5xx = status >= 500 && status < 600;
+          const retryEdilebilir = is429 || is5xx || msg.includes("timeout") || msg.includes("ECONNRESET");
+          
+          if (is429 && retry === MAX_RETRY_PER_ACCOUNT) {
+            console.log(`  ⚠ ${account.name} sürekli 429, kotası dolu kabul ediliyor.`);
+            hesapKotaDolu[hesapIdx] = true;
+            break;
+          }
+          
+          if (retry < MAX_RETRY_PER_ACCOUNT && retryEdilebilir) {
+            const bekle = RETRY_BEKLEME_MS[retry - 1];
+            console.log(`  ⚠ Görsel ${i + 1} hata (${sonHata}). ${bekle/1000}s bekleniyor [${account.name}]...`);
+            await delay(bekle);
+          } else if (retry < MAX_RETRY_PER_ACCOUNT) {
+            console.error(`  ✗ Görsel ${i + 1} retry edilemez hata: ${sonHata}`);
+            break;
+          } else {
+            console.error(`  ✗ Görsel ${i + 1} ${account.name}'te başarısız: ${sonHata}`);
+          }
         }
       }
+      
+      if (basarili) break;
     }
     
     if (!basarili) hatalar.push({ index: i, hata: sonHata });
     
-    // Sonraki görsele geçmeden önce bekle (son görsel hariç)
+    if (hesapKotaDolu.every(d => d)) {
+      console.error("\n⛔ TÜM CLOUDFLARE HESAPLARI KOTADA. Üretim durduruldu.");
+      break;
+    }
+    
     if (i < prompts.length - 1) {
       await delay(ISTEKLER_ARASI_MS);
     }
@@ -343,6 +405,11 @@ async function sheetKaydet(konu, icerik) {
 
 async function main() {
   try {
+    console.log(`🔧 ${CF_ACCOUNTS.length} Cloudflare hesabı aktif: ${CF_ACCOUNTS.map(a => a.name).join(", ")}`);
+    if (hesapAKotada) {
+      console.log(`ℹ Hesap-A manuel olarak devre dışı (CLOUDFLARE_HESAP_A_KOTADA=true).`);
+    }
+    
     const { konu } = await konuyuAl();
     
     await telegram(`✅ *Konu:* ${konu}\n\n⏳ Gemini ile içerik üretiliyor...`);
@@ -350,7 +417,7 @@ async function main() {
     const icerik = await icerikUret(konu);
     
     await telegram(
-      `📝 *İçerik hazır*\n\n📌 *Başlık:* ${icerik.baslik}\n\n⏳ 20 görsel üretiliyor (Cloudflare FLUX.1, ~5 dakika)...`
+      `📝 *İçerik hazır*\n\n📌 *Başlık:* ${icerik.baslik}\n\n⏳ 20 görsel üretiliyor (${CF_ACCOUNTS.length} hesap, ~3-4 dakika)...`
     );
     
     const { sonuclar: gorseller } = await tumGorselleriUret(icerik.ai_gorsel_prompts);
