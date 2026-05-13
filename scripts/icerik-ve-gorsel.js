@@ -65,11 +65,9 @@ async function konuyuAl() {
   
   const rows = res.data.values || [];
   
-  console.log(`Toplam ${rows.length} satır okundu (başlık dahil).`);
-  console.log("İlk 3 satır:", JSON.stringify(rows.slice(0, 3)));
+  console.log(`Toplam ${rows.length} satır okundu.`);
   
   const aranan = normalizeTarih(TARIH);
-  console.log(`Aranan tarih (normalize): "${aranan}"`);
   
   const matchingRows = [];
   for (let i = 1; i < rows.length; i++) {
@@ -83,7 +81,7 @@ async function konuyuAl() {
   
   const idx = parseInt(INDEX);
   if (idx < 0 || idx >= matchingRows.length) {
-    throw new Error(`Geçersiz index ${idx}, ${matchingRows.length} konu var. Aranan tarih: "${aranan}".`);
+    throw new Error(`Geçersiz index ${idx}, ${matchingRows.length} konu var.`);
   }
   
   const selected = matchingRows[idx];
@@ -95,13 +93,6 @@ async function icerikUret(konu) {
   console.log("Gemini içerik üretiyor...");
   
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.7,
-    },
-  });
   
   const prompt = `Sen, YouTube'da antik tarih ve gizemler üzerine Türkçe içerik üreten bir uzmansın.
 
@@ -127,18 +118,58 @@ ai_gorsel_prompts: TAM 20 öğe
 ai_klip_prompts: TAM 3 öğe
 pexels_anahtar_kelimeler: TAM 4 öğe`;
 
-  const result = await model.generateContent(prompt);
-  let text = result.response.text();
-  text = text.trim();
+  const maxRetries = 5;
+  const modeller = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
   
-  const json = JSON.parse(text);
-  
-  if (!json.ai_gorsel_prompts || json.ai_gorsel_prompts.length < 20) {
-    throw new Error(`Gemini 20 görsel promptu vermedi, ${json.ai_gorsel_prompts?.length || 0} verdi.`);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const modelAdi = modeller[Math.min(attempt - 1, modeller.length - 1)];
+    
+    try {
+      console.log(`Gemini denemesi ${attempt}/${maxRetries} - Model: ${modelAdi}`);
+      
+      const model = genAI.getGenerativeModel({
+        model: modelAdi,
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.7,
+        },
+      });
+      
+      const result = await model.generateContent(prompt);
+      let text = result.response.text();
+      text = text.trim();
+      
+      const json = JSON.parse(text);
+      
+      if (!json.ai_gorsel_prompts || json.ai_gorsel_prompts.length < 20) {
+        throw new Error(`Gemini ${json.ai_gorsel_prompts?.length || 0} görsel promptu verdi, 20 gerekli.`);
+      }
+      
+      console.log(`İçerik üretildi: ${json.baslik}`);
+      return json;
+      
+    } catch (error) {
+      const msg = error.message || "";
+      const is503 = msg.includes("503") || msg.includes("Service Unavailable") || msg.includes("overloaded");
+      const is429 = msg.includes("429") || msg.includes("Too Many Requests") || msg.includes("quota");
+      
+      if (attempt === maxRetries) {
+        console.error(`Gemini ${maxRetries} denemede başarısız:`, msg);
+        throw error;
+      }
+      
+      if (is503 || is429) {
+        const bekle = attempt * 30000; // 30s, 60s, 90s, 120s
+        console.log(`Gemini yoğun (${is503 ? '503' : '429'}). ${bekle/1000}s bekleyip tekrar denenecek...`);
+        await delay(bekle);
+      } else {
+        console.error(`Gemini hatası (denenecek): ${msg}`);
+        await delay(10000);
+      }
+    }
   }
   
-  console.log(`İçerik üretildi: ${json.baslik}`);
-  return json;
+  throw new Error("Gemini retry mantığı beklenmedik şekilde bitti");
 }
 
 async function gorselUret(prompt, index) {
@@ -178,15 +209,21 @@ async function tumGorselleriUret(prompts) {
   const hatalar = [];
   
   for (let i = 0; i < prompts.length; i++) {
-    try {
-      console.log(`Görsel ${i + 1}/${prompts.length}...`);
-      const gorsel = await gorselUret(prompts[i], i);
-      sonuclar.push({ ...gorsel, index: i });
-      await delay(500);
-    } catch (e) {
-      console.error(`Görsel ${i + 1} hatası: ${e.message}`);
-      hatalar.push({ index: i, error: e.message });
+    let basarili = false;
+    for (let retry = 1; retry <= 3; retry++) {
+      try {
+        console.log(`Görsel ${i + 1}/${prompts.length} (deneme ${retry})...`);
+        const gorsel = await gorselUret(prompts[i], i);
+        sonuclar.push({ ...gorsel, index: i });
+        basarili = true;
+        break;
+      } catch (e) {
+        console.error(`Görsel ${i + 1} hata (deneme ${retry}): ${e.message}`);
+        if (retry < 3) await delay(retry * 5000);
+      }
     }
+    if (!basarili) hatalar.push({ index: i });
+    await delay(500);
   }
   
   console.log(`${sonuclar.length} görsel üretildi, ${hatalar.length} hata.`);
