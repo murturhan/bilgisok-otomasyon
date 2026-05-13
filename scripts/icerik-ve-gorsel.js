@@ -3,6 +3,7 @@
  * - Cloudflare: 3 hesap rotation
  * - Drive: OAuth user delegation (kullanıcının kendi quotası)
  * - Sheets: Service Account (mevcut)
+ * - Görsel boyutu: 1280x720 (16:9 YouTube)
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -68,7 +69,6 @@ function normalizeTarih(t) {
   return String(t).trim().toLowerCase();
 }
 
-// Sheets için: Service Account (mevcut)
 function getServiceAccountAuth() {
   const credentials = JSON.parse(GDRIVE_SERVICE_ACCOUNT_JSON);
   return new google.auth.GoogleAuth({
@@ -77,7 +77,6 @@ function getServiceAccountAuth() {
   });
 }
 
-// Drive için: OAuth user delegation (kullanıcının kendi quotası)
 function getOAuthClient() {
   const oauth2Client = new google.auth.OAuth2(
     GOOGLE_OAUTH_CLIENT_ID,
@@ -147,12 +146,12 @@ Aşağıdaki JSON yapısında çıktı üret:
   "baslik": "YouTube videosu için merak uyandırıcı başlık (60-70 karakter)",
   "aciklama": "Video açıklaması, 200-300 kelime",
   "senaryo": "Tam seslendirme metni, 800-1200 kelime",
-  "ai_gorsel_prompts": ["20 adet detaylı görsel üretim promptu (İngilizce, cinematic, photorealistic)"],
-  "ai_klip_prompts": ["3 adet AI video klip promptu (İngilizce, Veo Studio için)"],
+  "ai_gorsel_prompts": ["20 adet detaylı görsel üretim promptu (İngilizce, cinematic, photorealistic, 16:9 widescreen composition)"],
+  "ai_klip_prompts": ["3 adet AI video klip promptu (İngilizce, Veo Studio için, 16:9)"],
   "pexels_anahtar_kelimeler": ["4 adet Pexels stok video anahtar kelimesi (İngilizce)"]
 }
 
-ai_gorsel_prompts: TAM 20 öğe
+ai_gorsel_prompts: TAM 20 öğe, her birinde "wide cinematic shot" veya benzeri 16:9 kompozisyon ipucu olsun
 ai_klip_prompts: TAM 3 öğe
 pexels_anahtar_kelimeler: TAM 4 öğe`;
 
@@ -231,6 +230,8 @@ async function gorselUretCloudflare(prompt, index, account) {
     data: {
       prompt: prompt,
       steps: 4,
+      width: 1280,
+      height: 720,
     },
     timeout: 120000,
     validateStatus: (status) => status >= 200 && status < 300,
@@ -254,7 +255,7 @@ async function tumGorselleriUret(prompts) {
   const MAX_RETRY_PER_ACCOUNT = 3;
   const RETRY_BEKLEME_MS = [10000, 30000, 60000];
   
-  console.log(`${prompts.length} görsel üretilecek (${CF_ACCOUNTS.length} hesap: ${CF_ACCOUNTS.map(a => a.name).join(", ")})...`);
+  console.log(`${prompts.length} görsel üretilecek 1280x720 (${CF_ACCOUNTS.length} hesap: ${CF_ACCOUNTS.map(a => a.name).join(", ")})...`);
   
   const sonuclar = [];
   const hatalar = [];
@@ -423,7 +424,7 @@ async function main() {
     const icerik = await icerikUret(konu);
     
     await telegram(
-      `📝 *İçerik hazır*\n\n📌 *Başlık:* ${icerik.baslik}\n\n⏳ 20 görsel üretiliyor (${CF_ACCOUNTS.length} hesap, ~3-4 dakika)...`
+      `📝 *İçerik hazır*\n\n📌 *Başlık:* ${icerik.baslik}\n\n⏳ 20 görsel üretiliyor (16:9, ${CF_ACCOUNTS.length} hesap, ~3-4 dakika)...`
     );
     
     const { sonuclar: gorseller } = await tumGorselleriUret(icerik.ai_gorsel_prompts);
