@@ -1,0 +1,116 @@
+name: 01 - İçerik Üret
+on:
+  repository_dispatch:
+    types: [icerik_uret]
+  workflow_dispatch:
+    inputs:
+      tarih:
+        description: 'Tarih (örn: 13.05.2026)'
+        required: true
+      index:
+        description: 'Konu indexi (0-4)'
+        required: true
+        default: '0'
+      chat_id:
+        description: 'Telegram chat ID'
+        required: false
+        default: '6090600843'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  icerik-uret:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: NPM dependencies
+        run: |
+          npm init -y
+          npm pkg set type=module
+          npm install --no-save \
+            @google/generative-ai \
+            googleapis \
+            axios
+      
+      - name: Parametreleri belirle
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "tarih=${{ github.event.client_payload.tarih }}" >> $GITHUB_OUTPUT
+            echo "index=${{ github.event.client_payload.index }}" >> $GITHUB_OUTPUT
+            echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
+          else
+            echo "tarih=${{ github.event.inputs.tarih }}" >> $GITHUB_OUTPUT
+            echo "index=${{ github.event.inputs.index }}" >> $GITHUB_OUTPUT
+            echo "chat_id=${{ github.event.inputs.chat_id }}" >> $GITHUB_OUTPUT
+          fi
+          echo "job_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
+      
+      - name: İçerik üret
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+          GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TARIH: ${{ steps.params.outputs.tarih }}
+          INDEX: ${{ steps.params.outputs.index }}
+          CHAT_ID: ${{ steps.params.outputs.chat_id }}
+          JOB_ID: ${{ steps.params.outputs.job_id }}
+        run: node scripts/01-icerik-uret.js
+      
+      # 01 başarılı bitince diğer 4'ünü tetikle (paralel başlasınlar)
+      - name: 02-Görsel tetikle
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "{\"event_type\":\"gorsel_uret\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
+      
+      - name: 03-Seslendirme tetikle
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "{\"event_type\":\"seslendirme_uret\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
+      
+      - name: 04-Stok video tetikle
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "{\"event_type\":\"stok_video_indir\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
+      
+      - name: 05-Thumbnail tetikle
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "{\"event_type\":\"thumbnail_uret\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
