@@ -17,6 +17,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: FFmpeg kur (ffprobe için)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
