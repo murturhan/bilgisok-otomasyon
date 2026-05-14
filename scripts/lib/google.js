@@ -1,5 +1,5 @@
 /**
- * Ortak Google kütüphanesi: Service Account (Sheets) + OAuth (Drive)
+ * Ortak Google kütüphanesi: Service Account (Sheets + Drive read) + OAuth (Drive write)
  */
 
 import { google } from "googleapis";
@@ -14,16 +14,19 @@ const {
   GDRIVE_FOLDER_ID,
 } = process.env;
 
-// Sheets için: Service Account
+// Sheets için: Service Account (sadece spreadsheets scope)
 export function getServiceAccountAuth() {
   const credentials = JSON.parse(GDRIVE_SERVICE_ACCOUNT_JSON);
   return new google.auth.GoogleAuth({
     credentials: credentials,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    scopes: [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.readonly",
+    ],
   });
 }
 
-// Drive için: OAuth user delegation
+// Drive için: OAuth user delegation (Drive write)
 export function getOAuthClient() {
   const oauth2Client = new google.auth.OAuth2(
     GOOGLE_OAUTH_CLIENT_ID,
@@ -70,15 +73,7 @@ export async function konuHavuzundanAl(tarih, index) {
   return matching[idx].konu;
 }
 
-// ─── JOB STATE TABLOSU ───────────────────────────────────────────
-// Sheets'te 'job_state' adlı bir sayfa kullanırız.
-// Kolonlar: A=job_id, B=tarih, C=index, D=konu, E=baslik, F=thumbnail_baslik,
-//          G=thumbnail_prompt, H=senaryo, I=aciklama, J=ai_gorsel_prompts_json,
-//          K=ai_klip_prompts_json, L=pexels_kw_json, M=drive_folder_id,
-//          N=gorsel_status, O=ses_status, P=stok_status, Q=thumbnail_status,
-//          R=created_at, S=updated_at, T=chat_id, U=klip_klasor_id
-
-const JOB_STATE_RANGE = "job_state!A:U";
+const JOB_STATE_RANGE = "job_state!A:V";
 
 export async function jobOlustur(jobData) {
   const sheets = getSheets();
@@ -98,14 +93,15 @@ export async function jobOlustur(jobData) {
     JSON.stringify(jobData.ai_klip_prompts || []),
     JSON.stringify(jobData.pexels_anahtar_kelimeler || []),
     jobData.drive_folder_id || "",
-    "pending", // gorsel
-    "pending", // ses
-    "pending", // stok
-    "pending", // thumbnail
+    "pending",
+    "pending",
+    "pending",
+    "pending",
     now,
     now,
     String(jobData.chat_id || ""),
     jobData.klip_klasor_id || "",
+    jobData.thumbnail_alt_baslik || "",
   ];
   
   await sheets.spreadsheets.values.append({
@@ -122,7 +118,7 @@ export async function jobOku(jobId) {
   const sheets = getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: GSHEETS_SPREADSHEET_ID,
-    range: JOB_STATE_RANGE,
+    range: "job_state!A:X", // X kolonuna kadar (video_status dahil)
   });
   
   const rows = res.data.values || [];
@@ -151,6 +147,9 @@ export async function jobOku(jobId) {
         updated_at: rows[i][18],
         chat_id: rows[i][19],
         klip_klasor_id: rows[i][20] || "",
+        thumbnail_alt_baslik: rows[i][21] || "",
+        altyazi_status: rows[i][22] || "",
+        video_status: rows[i][23] || "",
       };
     }
   }
@@ -163,7 +162,6 @@ export async function jobGuncelle(jobId, updates) {
   const job = await jobOku(jobId);
   const rowIndex = job.rowIndex;
   
-  // Hangi alan hangi kolonda (0-indexed)
   const kolonHaritasi = {
     drive_folder_id: 12,
     gorsel_status: 13,
@@ -172,13 +170,21 @@ export async function jobGuncelle(jobId, updates) {
     thumbnail_status: 16,
     updated_at: 18,
     klip_klasor_id: 20,
+    thumbnail_alt_baslik: 21,
+    altyazi_status: 22,
+    video_status: 23,
   };
   
   const updates2 = { ...updates, updated_at: new Date().toISOString() };
   
   for (const [key, value] of Object.entries(updates2)) {
     if (!(key in kolonHaritasi)) continue;
-    const colLetter = String.fromCharCode(65 + kolonHaritasi[key]); // A=65
+    const colIdx = kolonHaritasi[key];
+    // A=0, B=1, ... W=22, X=23
+    const colLetter = colIdx < 26 
+      ? String.fromCharCode(65 + colIdx)
+      : "A" + String.fromCharCode(65 + (colIdx - 26));
+    
     await sheets.spreadsheets.values.update({
       spreadsheetId: GSHEETS_SPREADSHEET_ID,
       range: `job_state!${colLetter}${rowIndex}`,
@@ -204,7 +210,6 @@ export async function driveKlasorAc(ad, parentId) {
 
 export async function driveAltKlasorBul(adKismi, parentId) {
   const drive = getDrive();
-  // Belirli parent içinde adı içeren klasör ara
   const q = `mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and name contains '${adKismi.replace(/'/g, "\\'")}' and trashed=false`;
   const res = await drive.files.list({
     q: q,
