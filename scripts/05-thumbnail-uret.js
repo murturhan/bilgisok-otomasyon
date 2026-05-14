@@ -1,0 +1,60 @@
+name: 05 - Thumbnail Üret
+on:
+  repository_dispatch:
+    types: [thumbnail_uret]
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Job ID (run_id)'
+        required: true
+
+jobs:
+  thumbnail-uret:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: NPM dependencies
+        run: |
+          npm init -y
+          npm pkg set type=module
+          npm install --no-save \
+            googleapis \
+            axios \
+            sharp
+      
+      - name: Job ID belirle
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "job_id=${{ github.event.client_payload.job_id }}" >> $GITHUB_OUTPUT
+          else
+            echo "job_id=${{ github.event.inputs.job_id }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Thumbnail üret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN_2: ${{ secrets.CLOUDFLARE_API_TOKEN_2 }}
+          CLOUDFLARE_ACCOUNT_ID_2: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_2 }}
+          CLOUDFLARE_API_TOKEN_3: ${{ secrets.CLOUDFLARE_API_TOKEN_3 }}
+          CLOUDFLARE_ACCOUNT_ID_3: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_3 }}
+          CLOUDFLARE_HESAP_A_KOTADA: ${{ vars.CLOUDFLARE_HESAP_A_KOTADA }}
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+          GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          JOB_ID: ${{ steps.params.outputs.job_id }}
+        run: node scripts/05-thumbnail-uret.js
