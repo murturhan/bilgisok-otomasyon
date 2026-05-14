@@ -1,0 +1,53 @@
+name: 04 - Stok Video İndir
+on:
+  repository_dispatch:
+    types: [stok_video_indir]
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Job ID (run_id)'
+        required: true
+
+jobs:
+  stok-video-indir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: NPM dependencies
+        run: |
+          npm init -y
+          npm pkg set type=module
+          npm install --no-save \
+            googleapis \
+            axios
+      
+      - name: Job ID belirle
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "job_id=${{ github.event.client_payload.job_id }}" >> $GITHUB_OUTPUT
+          else
+            echo "job_id=${{ github.event.inputs.job_id }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Pexels indir
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+          GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          JOB_ID: ${{ steps.params.outputs.job_id }}
+        run: node scripts/04-stok-video-indir.js
