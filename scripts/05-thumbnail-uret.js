@@ -1,5 +1,5 @@
 /**
- * 05 - Thumbnail Üretimi (FLUX + sharp overlay)
+ * 05 - Thumbnail Üretimi (MrBeast tarzı, neon, drop shadow)
  */
 
 import fs from "fs";
@@ -24,40 +24,106 @@ function escapeXml(str) {
     .replace(/'/g, "&apos;");
 }
 
-function svgOverlayUret(thumbnailBaslik) {
-  const kelimeler = thumbnailBaslik.split(" ");
-  const satirlar = [];
-  let mevcutSatir = "";
-  for (const kelime of kelimeler) {
-    if ((mevcutSatir + " " + kelime).trim().length <= 14) {
-      mevcutSatir = (mevcutSatir + " " + kelime).trim();
-    } else {
-      if (mevcutSatir) satirlar.push(mevcutSatir);
-      mevcutSatir = kelime;
-    }
-  }
-  if (mevcutSatir) satirlar.push(mevcutSatir);
+// MrBeast tarzı: Sağ taraf dikey blok, sarı ana başlık + kırmızı alt başlık
+function svgOverlayUret(baslik, altBaslik) {
+  const baslikSafe = escapeXml(baslik || "");
+  const altBaslikSafe = escapeXml(altBaslik || "");
   
-  const fontSize = satirlar.length === 1 ? 130 : (satirlar.length === 2 ? 110 : 90);
-  const lineHeight = fontSize * 1.1;
-  const totalHeight = satirlar.length * lineHeight;
-  const startY = (720 - totalHeight) / 2 + fontSize;
+  // Font boyutu başlık uzunluğuna göre
+  const baslikLen = baslik.length;
+  let fontSize = 130;
+  if (baslikLen > 12) fontSize = 95;
+  else if (baslikLen > 8) fontSize = 115;
+  else if (baslikLen > 5) fontSize = 130;
+  else fontSize = 145;
   
-  const textElements = satirlar.map((satir, i) => {
-    const y = startY + i * lineHeight;
-    return `<text x="640" y="${y}" font-family="Impact, Arial Black, sans-serif" font-size="${fontSize}" font-weight="900" fill="#FFD700" stroke="#000000" stroke-width="10" paint-order="stroke fill" text-anchor="middle" letter-spacing="2">${escapeXml(satir)}</text>`;
-  }).join("\n");
+  const altFontSize = Math.floor(fontSize * 0.55);
+  
+  // Konum: sağ tarafta, dikey ortalanmış
+  // Görselin sağ 40%'ı için
+  const blockCenterX = 1280 - 280;  // sağdan 280px içeride
+  const blockCenterY = 360;
   
   return `<svg width="1280" height="720" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" style="stop-color:rgba(0,0,0,0.5)"/>
-        <stop offset="50%" style="stop-color:rgba(0,0,0,0.2)"/>
-        <stop offset="100%" style="stop-color:rgba(0,0,0,0.5)"/>
+      <!-- Sol taraf hafif karartma (görseli vurgulama) -->
+      <linearGradient id="leftFade" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" style="stop-color:rgba(0,0,0,0.0)"/>
+        <stop offset="100%" style="stop-color:rgba(0,0,0,0.0)"/>
       </linearGradient>
+      
+      <!-- Sağ taraf yarı saydam koyu blok (metnin arkası) -->
+      <linearGradient id="rightBlock" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" style="stop-color:rgba(0,0,0,0.0)"/>
+        <stop offset="20%" style="stop-color:rgba(0,0,0,0.6)"/>
+        <stop offset="100%" style="stop-color:rgba(0,0,0,0.85)"/>
+      </linearGradient>
+      
+      <!-- Sarı metin için drop shadow filtresi -->
+      <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
+        <feOffset dx="6" dy="8" result="offsetblur"/>
+        <feComponentTransfer>
+          <feFuncA type="linear" slope="0.9"/>
+        </feComponentTransfer>
+        <feMerge>
+          <feMergeNode/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+      
+      <!-- Glow filtresi -->
+      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
     </defs>
-    <rect width="1280" height="720" fill="url(#grad)" />
-    ${textElements}
+    
+    <!-- Sağ tarafta yarı saydam koyu blok -->
+    <rect x="700" y="0" width="580" height="720" fill="url(#rightBlock)"/>
+    
+    <!-- Üst kırmızı şerit (alt başlık varsa) -->
+    ${altBaslikSafe ? `
+    <rect x="${blockCenterX - 240}" y="${blockCenterY - fontSize - 40}" width="480" height="${altFontSize + 30}" 
+          fill="#E50914" rx="6"/>
+    <text x="${blockCenterX}" y="${blockCenterY - fontSize - 8}" 
+          font-family="Impact, 'Arial Black', sans-serif" 
+          font-size="${altFontSize}" 
+          font-weight="900" 
+          fill="#FFFFFF" 
+          text-anchor="middle"
+          letter-spacing="3">${altBaslikSafe}</text>
+    ` : ''}
+    
+    <!-- Ana başlık: SARI, büyük, drop shadow + glow -->
+    <text x="${blockCenterX}" y="${blockCenterY + 20}" 
+          font-family="Impact, 'Arial Black', sans-serif" 
+          font-size="${fontSize}" 
+          font-weight="900" 
+          fill="#FFD700" 
+          stroke="#000000" 
+          stroke-width="8" 
+          paint-order="stroke fill"
+          text-anchor="middle"
+          letter-spacing="3"
+          filter="url(#dropShadow)">${baslikSafe}</text>
+    
+    <!-- Sarı glow tekrar -->
+    <text x="${blockCenterX}" y="${blockCenterY + 20}" 
+          font-family="Impact, 'Arial Black', sans-serif" 
+          font-size="${fontSize}" 
+          font-weight="900" 
+          fill="#FFD700" 
+          text-anchor="middle"
+          letter-spacing="3"
+          opacity="0.8"
+          filter="url(#glow)">${baslikSafe}</text>
+    
+    <!-- Alt aksan kırmızı çizgi -->
+    <rect x="${blockCenterX - 100}" y="${blockCenterY + 50}" width="200" height="6" fill="#E50914"/>
   </svg>`;
 }
 
@@ -78,7 +144,10 @@ async function main() {
     
     const accounts = getCfAccounts();
     const aktifHesap = accounts[0];
-    const svg = svgOverlayUret(job.thumbnail_baslik);
+    const altBaslik = job.thumbnail_alt_baslik || "";
+    const svg = svgOverlayUret(job.thumbnail_baslik, altBaslik);
+    
+    console.log(`Thumbnail: "${job.thumbnail_baslik}" | "${altBaslik}"`);
     
     let basariliSayisi = 0;
     
