@@ -1,9 +1,10 @@
 /**
- * 05 - Thumbnail Üretimi v4 (Taşma garantili)
+ * 05 - Thumbnail Üretimi v5 (Logo overlay eklendi)
  */
 
 import fs from "fs";
 import sharp from "sharp";
+import axios from "axios";
 import {
   jobOku,
   jobGuncelle,
@@ -15,6 +16,11 @@ import { telegram } from "./lib/telegram.js";
 
 const { JOB_ID } = process.env;
 
+// Logo'nun GitHub raw URL'i (public repo)
+const LOGO_URL = "https://raw.githubusercontent.com/murturhan/bilgisok-otomasyon/main/bilgisok-logo.png.png";
+const LOGO_BOYUT = 180; // Logo'nun thumbnail içindeki genişliği (px)
+const LOGO_MARGIN = 30; // Sol-alt köşeden boşluk
+
 function escapeXml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -24,21 +30,17 @@ function escapeXml(str) {
     .replace(/'/g, "&apos;");
 }
 
-// Başlığı 1 veya 2 satıra böl (eşik: 6 karakter)
 function basligiBol(baslik) {
   const trimmed = baslik.trim();
   if (trimmed.length <= 6) return [trimmed];
   
   const kelimeler = trimmed.split(/\s+/);
   
-  // Tek kelime ama uzunsa ortadan böl
   if (kelimeler.length === 1) {
     const mid = Math.ceil(trimmed.length / 2);
     return [trimmed.substring(0, mid), trimmed.substring(mid)];
   }
   
-  // İki+ kelime varsa en dengeli bölme
-  const toplam = trimmed.length;
   let enIyiBolme = 1;
   let enKucukFark = Infinity;
   
@@ -58,10 +60,8 @@ function basligiBol(baslik) {
   ];
 }
 
-// Font boyutu - GÜVENLİ (sıkı sıkıştırılmış)
-// Impact için karakter genişlik oranı yaklaşık 0.65-0.7
 function fontBoyutuHesapla(satir, maxGenislik) {
-  const oran = 0.70; // İmpact gerçek oranı
+  const oran = 0.70;
   for (let size = 130; size >= 40; size -= 5) {
     if (satir.length * size * oran <= maxGenislik) return size;
   }
@@ -72,14 +72,12 @@ function svgOverlayUret(baslik, altBaslik) {
   const satirlar = basligiBol(baslik);
   const altBaslikVar = altBaslik && altBaslik.trim().length > 0;
   
-  // Sağ blok - daha sıkı kenar
   const BLOK_BASLANGIC_X = 640;
   const BLOK_GENISLIGI = 640;
   const BLOK_ORTA_X = BLOK_BASLANGIC_X + BLOK_GENISLIGI / 2;
   const KENAR_BOSLUK = 90;
-  const MAX_METIN_GENISLIGI = BLOK_GENISLIGI - KENAR_BOSLUK * 2; // 460
+  const MAX_METIN_GENISLIGI = BLOK_GENISLIGI - KENAR_BOSLUK * 2;
   
-  // En uzun satıra göre font boyutu - GÜVENLİ
   const enUzunSatir = satirlar.reduce((a, b) => a.length > b.length ? a : b);
   const baslikFontSize = fontBoyutuHesapla(enUzunSatir, MAX_METIN_GENISLIGI);
   const lineHeight = baslikFontSize * 1.05;
@@ -88,15 +86,12 @@ function svgOverlayUret(baslik, altBaslik) {
     ? Math.min(fontBoyutuHesapla(altBaslik, MAX_METIN_GENISLIGI - 40), Math.floor(baslikFontSize * 0.5))
     : 0;
   
-  // Toplam yükseklik
   const toplamBaslikYukseklik = satirlar.length * lineHeight;
   const altBaslikBosluk = altBaslikVar ? altFontSize + 40 : 0;
   const toplamYukseklik = toplamBaslikYukseklik + altBaslikBosluk;
   
-  // Dikey ortalama
   const baslangicY = (720 - toplamYukseklik) / 2 + baslikFontSize * 0.9;
   
-  // Ana başlık satırları
   const baslikTextElements = satirlar.map((satir, i) => {
     const y = baslangicY + i * lineHeight;
     return `<text x="${BLOK_ORTA_X}" y="${y}" 
@@ -112,7 +107,6 @@ function svgOverlayUret(baslik, altBaslik) {
             filter="url(#dropShadow)">${escapeXml(satir)}</text>`;
   }).join("\n");
   
-  // Alt başlık (kırmızı şeritte)
   let altBaslikSvg = "";
   if (altBaslikVar) {
     const altY = baslangicY + toplamBaslikYukseklik + altFontSize * 0.6 + 10;
@@ -162,6 +156,33 @@ function svgOverlayUret(baslik, altBaslik) {
   </svg>`;
 }
 
+// Logo'yu indir + boyutlandır, sol alt köşe için hazırla
+let logoBufferCache = null;
+async function logoYukle() {
+  if (logoBufferCache) return logoBufferCache;
+  
+  try {
+    console.log("Logo indiriliyor...");
+    const response = await axios.get(LOGO_URL, {
+      responseType: "arraybuffer",
+      timeout: 30000,
+    });
+    
+    // Logo'yu LOGO_BOYUT genişliğine resize et (aspect ratio korur)
+    const resized = await sharp(Buffer.from(response.data))
+      .resize({ width: LOGO_BOYUT, height: LOGO_BOYUT, fit: "inside" })
+      .png()
+      .toBuffer();
+    
+    logoBufferCache = resized;
+    console.log(`✓ Logo yüklendi (${(resized.length / 1024).toFixed(0)}KB resized)`);
+    return resized;
+  } catch (e) {
+    console.error(`Logo yükleme hatası: ${e.message}`);
+    return null;
+  }
+}
+
 async function main() {
   try {
     console.log(`Job: ${JOB_ID}`);
@@ -187,6 +208,9 @@ async function main() {
     
     const svg = svgOverlayUret(job.thumbnail_baslik, altBaslik);
     
+    // Logo'yu indir (cache'lenir)
+    const logoBuffer = await logoYukle();
+    
     let basariliSayisi = 0;
     
     for (let v = 0; v < 2; v++) {
@@ -200,8 +224,23 @@ async function main() {
         const filename = `thumbnail-${String(v + 1).padStart(2, "0")}-${Date.now()}.jpg`;
         const filepath = `/tmp/${filename}`;
         
+        // Composite katmanları: önce FLUX görseli, üstüne SVG text overlay, üstüne LOGO
+        const composites = [
+          { input: Buffer.from(svg), top: 0, left: 0 },
+        ];
+        
+        // Logo'yu sol alt köşeye ekle
+        if (logoBuffer) {
+          composites.push({
+            input: logoBuffer,
+            top: 720 - LOGO_BOYUT - LOGO_MARGIN,
+            left: LOGO_MARGIN,
+            blend: "over",
+          });
+        }
+        
         await sharp(imageBuffer)
-          .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+          .composite(composites)
           .jpeg({ quality: 92 })
           .toFile(filepath);
         
