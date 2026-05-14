@@ -1,5 +1,5 @@
 /**
- * 05 - Thumbnail Üretimi (MrBeast tarzı, neon, drop shadow)
+ * 05 - Thumbnail Üretimi v3 (MrBeast tarzı, sağlam tipografi, taşma koruması)
  */
 
 import fs from "fs";
@@ -24,106 +24,153 @@ function escapeXml(str) {
     .replace(/'/g, "&apos;");
 }
 
-// MrBeast tarzı: Sağ taraf dikey blok, sarı ana başlık + kırmızı alt başlık
+// Başlığı en fazla 2 satıra böl (her satır maks ~8 karakter)
+function basligiBol(baslik) {
+  const trimmed = baslik.trim();
+  
+  // Çok kısaysa tek satır
+  if (trimmed.length <= 9) return [trimmed];
+  
+  // Boşluktan böl: en dengeli iki satır oluştur
+  const kelimeler = trimmed.split(/\s+/);
+  
+  // Tek kelime ama uzunsa, ortadan böl
+  if (kelimeler.length === 1) {
+    const mid = Math.ceil(trimmed.length / 2);
+    return [trimmed.substring(0, mid), trimmed.substring(mid)];
+  }
+  
+  // En dengeli bölme noktasını bul
+  const toplam = trimmed.length;
+  let enIyiBolme = 1;
+  let enKucukFark = Infinity;
+  
+  for (let i = 1; i < kelimeler.length; i++) {
+    const ilkSatir = kelimeler.slice(0, i).join(" ");
+    const ikinciSatir = kelimeler.slice(i).join(" ");
+    const fark = Math.abs(ilkSatir.length - ikinciSatir.length);
+    if (fark < enKucukFark) {
+      enKucukFark = fark;
+      enIyiBolme = i;
+    }
+  }
+  
+  return [
+    kelimeler.slice(0, enIyiBolme).join(" "),
+    kelimeler.slice(enIyiBolme).join(" "),
+  ];
+}
+
+// Karakter sayısına göre font boyutu (taşmasın)
+function fontBoyutuHesapla(satir, maxGenislik) {
+  // ~0.55 oran (Impact font için yaklaşık)
+  const tahminGenislik = (size) => satir.length * size * 0.55;
+  
+  for (let size = 140; size >= 50; size -= 5) {
+    if (tahminGenislik(size) <= maxGenislik) return size;
+  }
+  return 50;
+}
+
 function svgOverlayUret(baslik, altBaslik) {
-  const baslikSafe = escapeXml(baslik || "");
-  const altBaslikSafe = escapeXml(altBaslik || "");
+  const satirlar = basligiBol(baslik);
+  const altBaslikVar = altBaslik && altBaslik.trim().length > 0;
   
-  // Font boyutu başlık uzunluğuna göre
-  const baslikLen = baslik.length;
-  let fontSize = 130;
-  if (baslikLen > 12) fontSize = 95;
-  else if (baslikLen > 8) fontSize = 115;
-  else if (baslikLen > 5) fontSize = 130;
-  else fontSize = 145;
+  // Sağ blok: x=640'tan başla, 640 genişliğinde
+  const BLOK_BASLANGIC_X = 640;
+  const BLOK_GENISLIGI = 640;
+  const BLOK_ORTA_X = BLOK_BASLANGIC_X + BLOK_GENISLIGI / 2;  // 960
+  const MAX_METIN_GENISLIGI = BLOK_GENISLIGI - 80;  // 560 (kenar boşluğu)
   
-  const altFontSize = Math.floor(fontSize * 0.55);
+  // Font boyutlarını hesapla (en uzun satıra göre)
+  const enUzunSatir = satirlar.reduce((a, b) => a.length > b.length ? a : b);
+  const baslikFontSize = fontBoyutuHesapla(enUzunSatir, MAX_METIN_GENISLIGI);
+  const lineHeight = baslikFontSize * 1.05;
   
-  // Konum: sağ tarafta, dikey ortalanmış
-  // Görselin sağ 40%'ı için
-  const blockCenterX = 1280 - 280;  // sağdan 280px içeride
-  const blockCenterY = 360;
+  // Alt başlık font boyutu (varsa)
+  const altFontSize = altBaslikVar ? fontBoyutuHesapla(altBaslik, MAX_METIN_GENISLIGI - 60) : 0;
+  
+  // Toplam yükseklik
+  const toplamBaslikYukseklik = satirlar.length * lineHeight;
+  const altBaslikYukseklik = altBaslikVar ? altFontSize + 40 : 0;
+  const toplamYukseklik = toplamBaslikYukseklik + altBaslikYukseklik + (altBaslikVar ? 30 : 0);
+  
+  // Dikey ortala
+  const baslangicY = (720 - toplamYukseklik) / 2 + baslikFontSize;
+  
+  // Ana başlık satırları SVG'si
+  const baslikTextElements = satirlar.map((satir, i) => {
+    const y = baslangicY + i * lineHeight;
+    return `
+      <text x="${BLOK_ORTA_X}" y="${y}" 
+            font-family="Impact, 'Arial Black', sans-serif" 
+            font-size="${baslikFontSize}" 
+            font-weight="900" 
+            fill="#FFEB3B" 
+            stroke="#000000" 
+            stroke-width="${Math.max(6, baslikFontSize * 0.07)}" 
+            paint-order="stroke fill"
+            text-anchor="middle"
+            letter-spacing="2"
+            filter="url(#dropShadow)">${escapeXml(satir)}</text>`;
+  }).join("\n");
+  
+  // Alt başlık (kırmızı şeritte)
+  let altBaslikSvg = "";
+  if (altBaslikVar) {
+    const altY = baslangicY + toplamBaslikYukseklik + 30;
+    const seritGenislik = Math.min(altBaslik.length * altFontSize * 0.65 + 60, MAX_METIN_GENISLIGI);
+    altBaslikSvg = `
+      <rect x="${BLOK_ORTA_X - seritGenislik/2}" y="${altY - altFontSize - 5}" 
+            width="${seritGenislik}" height="${altFontSize + 25}" 
+            fill="#E50914" rx="8"/>
+      <text x="${BLOK_ORTA_X}" y="${altY + altFontSize * 0.15}" 
+            font-family="Impact, 'Arial Black', sans-serif" 
+            font-size="${altFontSize}" 
+            font-weight="900" 
+            fill="#FFFFFF" 
+            text-anchor="middle"
+            letter-spacing="3">${escapeXml(altBaslik)}</text>`;
+  }
   
   return `<svg width="1280" height="720" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <!-- Sol taraf hafif karartma (görseli vurgulama) -->
-      <linearGradient id="leftFade" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" style="stop-color:rgba(0,0,0,0.0)"/>
-        <stop offset="100%" style="stop-color:rgba(0,0,0,0.0)"/>
-      </linearGradient>
-      
-      <!-- Sağ taraf yarı saydam koyu blok (metnin arkası) -->
+      <!-- Sağ taraf koyu gradient (metin arkası) -->
       <linearGradient id="rightBlock" x1="0%" y1="0%" x2="100%" y2="0%">
         <stop offset="0%" style="stop-color:rgba(0,0,0,0.0)"/>
-        <stop offset="20%" style="stop-color:rgba(0,0,0,0.6)"/>
-        <stop offset="100%" style="stop-color:rgba(0,0,0,0.85)"/>
+        <stop offset="15%" style="stop-color:rgba(0,0,0,0.5)"/>
+        <stop offset="40%" style="stop-color:rgba(0,0,0,0.85)"/>
+        <stop offset="100%" style="stop-color:rgba(0,0,0,0.9)"/>
       </linearGradient>
       
-      <!-- Sarı metin için drop shadow filtresi -->
-      <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
-        <feOffset dx="6" dy="8" result="offsetblur"/>
+      <!-- Drop shadow filtresi -->
+      <filter id="dropShadow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="10"/>
+        <feOffset dx="8" dy="10" result="offsetblur"/>
         <feComponentTransfer>
-          <feFuncA type="linear" slope="0.9"/>
+          <feFuncA type="linear" slope="0.95"/>
         </feComponentTransfer>
         <feMerge>
           <feMergeNode/>
           <feMergeNode in="SourceGraphic"/>
         </feMerge>
       </filter>
-      
-      <!-- Glow filtresi -->
-      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-        <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-        <feMerge>
-          <feMergeNode in="coloredBlur"/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
     </defs>
     
-    <!-- Sağ tarafta yarı saydam koyu blok -->
-    <rect x="700" y="0" width="580" height="720" fill="url(#rightBlock)"/>
+    <!-- Sağ koyu blok -->
+    <rect x="${BLOK_BASLANGIC_X}" y="0" width="${BLOK_GENISLIGI}" height="720" fill="url(#rightBlock)"/>
     
-    <!-- Üst kırmızı şerit (alt başlık varsa) -->
-    ${altBaslikSafe ? `
-    <rect x="${blockCenterX - 240}" y="${blockCenterY - fontSize - 40}" width="480" height="${altFontSize + 30}" 
-          fill="#E50914" rx="6"/>
-    <text x="${blockCenterX}" y="${blockCenterY - fontSize - 8}" 
-          font-family="Impact, 'Arial Black', sans-serif" 
-          font-size="${altFontSize}" 
-          font-weight="900" 
-          fill="#FFFFFF" 
-          text-anchor="middle"
-          letter-spacing="3">${altBaslikSafe}</text>
-    ` : ''}
+    <!-- Üst sarı çizgi (dekorasyon) -->
+    <rect x="${BLOK_BASLANGIC_X + 60}" y="60" width="120" height="6" fill="#FFEB3B"/>
     
-    <!-- Ana başlık: SARI, büyük, drop shadow + glow -->
-    <text x="${blockCenterX}" y="${blockCenterY + 20}" 
-          font-family="Impact, 'Arial Black', sans-serif" 
-          font-size="${fontSize}" 
-          font-weight="900" 
-          fill="#FFD700" 
-          stroke="#000000" 
-          stroke-width="8" 
-          paint-order="stroke fill"
-          text-anchor="middle"
-          letter-spacing="3"
-          filter="url(#dropShadow)">${baslikSafe}</text>
+    <!-- Ana başlık satırları -->
+    ${baslikTextElements}
     
-    <!-- Sarı glow tekrar -->
-    <text x="${blockCenterX}" y="${blockCenterY + 20}" 
-          font-family="Impact, 'Arial Black', sans-serif" 
-          font-size="${fontSize}" 
-          font-weight="900" 
-          fill="#FFD700" 
-          text-anchor="middle"
-          letter-spacing="3"
-          opacity="0.8"
-          filter="url(#glow)">${baslikSafe}</text>
+    <!-- Alt başlık -->
+    ${altBaslikSvg}
     
-    <!-- Alt aksan kırmızı çizgi -->
-    <rect x="${blockCenterX - 100}" y="${blockCenterY + 50}" width="200" height="6" fill="#E50914"/>
+    <!-- Alt sarı çizgi (dekorasyon) -->
+    <rect x="${BLOK_BASLANGIC_X + 60}" y="660" width="120" height="6" fill="#FFEB3B"/>
   </svg>`;
 }
 
