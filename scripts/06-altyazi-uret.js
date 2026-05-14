@@ -1,12 +1,15 @@
 /**
- * 06 - Altyazı Üretimi (SRT)
- * - Senaryoyu Edge TTS ile yeniden seslendir, boundary event'lerinden zaman damgaları topla
- * - Standard SRT formatı dosya üret
- * - Drive'a yükle
+ * 06 - Altyazı Üretimi (SRT) v2
+ * - Senaryoyu cümlelere böl, karakter sayısına oranlı süre ata
+ * - Edge TTS'le bir kez seslendir, gerçek ses süresini ölç (ffprobe yerine MP3 header)
+ * - Süreleri gerçek ses süresine göre ölçeklendir
+ * - Standart SRT formatı dosya üret + Drive'a yükle
  */
 
 import fs from "fs";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
+import { exec } from "child_process";
+import { promisify } from "util";
 import {
   jobOku,
   jobGuncelle,
@@ -16,12 +19,14 @@ import {
 } from "./lib/google.js";
 import { telegram } from "./lib/telegram.js";
 
+const execAsync = promisify(exec);
 const { JOB_ID } = process.env;
 
 // SRT zaman formatı: HH:MM:SS,mmm
 function msToSrtTime(ms) {
+  ms = Math.max(0, Math.round(ms));
   const totalSeconds = Math.floor(ms / 1000);
-  const milliseconds = Math.floor(ms % 1000);
+  const milliseconds = ms % 1000;
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -29,95 +34,75 @@ function msToSrtTime(ms) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")},${String(milliseconds).padStart(3, "0")}`;
 }
 
-// Edge TTS'i çağırıp word-level boundary event'leri topla
-async function ttsWordBoundaries(senaryo) {
-  console.log(`Edge TTS ile word boundaries toplanıyor (${senaryo.length} karakter)...`);
+// Senaryoyu altyazı satırlarına böl (her satır 5-9 kelime, noktalama ile)
+function senaryoyuAltyaziSatirlarinaBol(senaryo, hedefKelime = 7) {
+  const text = senaryo.replace(/\s+/g, " ").trim();
+  // Noktalama ile cümlelere böl
+  const cumleler = text.match(/[^.!?…]+[.!?…]+/g) || [text];
   
+  const altyazilar = [];
+  
+  for (const cumle of cumleler) {
+    const kelimeler = cumle.trim().split(/\s+/);
+    
+    // Eğer cümle kısaysa tek satır
+    if (kelimeler.length <= hedefKelime + 2) {
+      altyazilar.push(kelimeler.join(" "));
+      continue;
+    }
+    
+    // Cümleyi 5-9 kelimelik parçalara böl
+    for (let i = 0; i < kelimeler.length; i += hedefKelime) {
+      const parca = kelimeler.slice(i, i + hedefKelime).join(" ");
+      altyazilar.push(parca);
+    }
+  }
+  
+  return altyazilar.filter(a => a.length > 0);
+}
+
+// Edge TTS ile MP3 üret + dosyaya yaz (zamanı ölçmek için)
+async function ttsMp3Uret(metin, filepath) {
   const tts = new MsEdgeTTS();
   await tts.setMetadata(
     "tr-TR-AhmetNeural",
     OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3
   );
   
-  // msedge-tts boundary event ile metadata akışını destekler
-  const { audioStream, metadataStream } = await tts.toStream(senaryo);
-  
-  const wordBoundaries = [];
-  let audioChunks = [];
-  
-  // Audio stream'i tüket (bitirmek için gerekli, ama kaydetmiyoruz - 03 zaten kaydetti)
-  audioStream.on("data", (chunk) => audioChunks.push(chunk));
-  
-  // Metadata stream'i dinle (her kelime için event)
-  metadataStream.on("data", (data) => {
-    try {
-      const meta = typeof data === "string" ? JSON.parse(data) : data;
-      // Edge TTS metadata format: { Metadata: [{ Type, Data: { Offset, Duration, text: {...} } }] }
-      const items = meta?.Metadata || [];
-      for (const item of items) {
-        if (item.Type === "WordBoundary") {
-          const offset100ns = item.Data?.Offset || 0;
-          const duration100ns = item.Data?.Duration || 0;
-          const text = item.Data?.text?.Text || "";
-          
-          // Edge TTS offset 100-nanosecond units (1 ms = 10000 units)
-          wordBoundaries.push({
-            startMs: offset100ns / 10000,
-            durationMs: duration100ns / 10000,
-            text: text,
-          });
-        }
-      }
-    } catch (e) {
-      // Metadata parse hatası - sessizce atla
-    }
-  });
+  const result = await tts.toStream(metin);
+  const audioStream = result.audioStream;
   
   return new Promise((resolve, reject) => {
+    const writeStream = fs.createWriteStream(filepath);
+    
+    audioStream.on("data", (chunk) => writeStream.write(chunk));
     audioStream.on("end", () => {
-      console.log(`✓ ${wordBoundaries.length} kelime boundary toplandı`);
-      resolve(wordBoundaries);
+      writeStream.end();
+      writeStream.on("finish", () => resolve(filepath));
     });
     audioStream.on("error", reject);
     
-    setTimeout(() => reject(new Error("Edge TTS boundary timeout (120s)")), 120000);
+    setTimeout(() => reject(new Error("Edge TTS timeout (120s)")), 120000);
   });
 }
 
-// Kelime boundary'lerini cümle/satır gruplarına böl (her altyazı 5-9 kelime)
-function bountaryleriCumleleryeBol(boundaries, hedefKelimePerSatir = 7) {
-  const altyazilar = [];
-  let mevcutSatir = [];
-  
-  // Noktalama işaretleriyle biten kelimeleri yakala
-  const cumleBitimi = /[.!?…]$/;
-  
-  for (let i = 0; i < boundaries.length; i++) {
-    const b = boundaries[i];
-    mevcutSatir.push(b);
-    
-    const bittiPunktuation = cumleBitimi.test(b.text.trim());
-    const dolu = mevcutSatir.length >= hedefKelimePerSatir;
-    const son = i === boundaries.length - 1;
-    
-    if (bittiPunktuation || dolu || son) {
-      // Mevcut satırı altyazıya ekle
-      if (mevcutSatir.length > 0) {
-        const startMs = mevcutSatir[0].startMs;
-        const lastWord = mevcutSatir[mevcutSatir.length - 1];
-        const endMs = lastWord.startMs + lastWord.durationMs;
-        const text = mevcutSatir.map(w => w.text).join(" ");
-        
-        altyazilar.push({ startMs, endMs, text });
-        mevcutSatir = [];
-      }
-    }
+// MP3 süresini al (ffprobe ile)
+async function mp3SuresiAl(filepath) {
+  try {
+    const cmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filepath}"`;
+    const { stdout } = await execAsync(cmd);
+    return parseFloat(stdout.trim()) * 1000; // ms
+  } catch (e) {
+    // ffprobe yoksa MP3 dosya boyutundan tahmin
+    const stats = fs.statSync(filepath);
+    // 24kHz 96kbps mono = ~12 KB/sec
+    const tahminSure = (stats.size / 12000) * 1000;
+    console.log(`  ⚠ ffprobe yok, dosya boyutundan tahmin: ${tahminSure.toFixed(0)}ms`);
+    return tahminSure;
   }
-  
-  return altyazilar;
 }
 
-// SRT formatına çevir
+// SRT formatla
 function srtFormatla(altyazilar) {
   return altyazilar.map((a, i) => {
     return `${i + 1}\n${msToSrtTime(a.startMs)} --> ${msToSrtTime(a.endMs)}\n${a.text}\n`;
@@ -133,30 +118,51 @@ async function main() {
     
     await jobGuncelle(JOB_ID, { altyazi_status: "running" });
     
-    // 1. TTS word boundaries
-    const boundaries = await ttsWordBoundaries(job.senaryo);
+    // 1. Senaryoyu altyazı satırlarına böl
+    const satirMetinleri = senaryoyuAltyaziSatirlarinaBol(job.senaryo, 7);
+    console.log(`${satirMetinleri.length} altyazı satırı oluşturuldu`);
     
-    if (boundaries.length === 0) {
-      throw new Error("Hiç word boundary alınamadı!");
+    // 2. Edge TTS ile MP3 üret (gerçek süreyi ölçmek için)
+    console.log("Edge TTS MP3 üretiyor (süre ölçümü için)...");
+    const tempMp3 = `/tmp/altyazi-temp-${Date.now()}.mp3`;
+    await ttsMp3Uret(job.senaryo, tempMp3);
+    
+    // 3. Süreyi ölç
+    const toplamSureMs = await mp3SuresiAl(tempMp3);
+    console.log(`Toplam ses süresi: ${(toplamSureMs / 1000).toFixed(1)}s`);
+    
+    // 4. Her satırın süresini karakter sayısına oranlı dağıt
+    const toplamKarakter = satirMetinleri.reduce((sum, s) => sum + s.length, 0);
+    
+    const altyazilar = [];
+    let mevcutMs = 0;
+    
+    for (const satir of satirMetinleri) {
+      const sureBuSatir = (satir.length / toplamKarakter) * toplamSureMs;
+      const startMs = mevcutMs;
+      const endMs = mevcutMs + sureBuSatir;
+      
+      altyazilar.push({ startMs, endMs, text: satir });
+      mevcutMs = endMs;
     }
     
-    // 2. Cümlelere böl
-    const altyazilar = bountaryleriCumleleryeBol(boundaries, 7);
-    console.log(`${altyazilar.length} altyazı satırı oluşturuldu.`);
-    
-    // 3. SRT formatla
+    // 5. SRT formatla
     const srtIcerik = srtFormatla(altyazilar);
     
-    // 4. Dosyaya yaz
+    // 6. SRT dosyasını oluştur
     const filename = `altyazi-${Date.now()}.srt`;
     const filepath = `/tmp/${filename}`;
     fs.writeFileSync(filepath, srtIcerik, "utf-8");
-    console.log(`✓ SRT oluşturuldu: ${filepath}`);
+    console.log(`✓ SRT oluşturuldu (${(fs.statSync(filepath).size / 1024).toFixed(1)}KB)`);
     
-    // 5. Drive'a yükle - "06-altyazi" klasörü (yoksa aç)
+    // 7. Temp MP3'ü sil
+    try { fs.unlinkSync(tempMp3); } catch (e) {}
+    
+    // 8. Drive'a yükle - "06-altyazi" klasörü (yoksa aç)
     let altKlasorler = await driveAltKlasorBul("06-altyazi", job.drive_folder_id);
     let altyaziKlasorId;
     if (altKlasorler.length === 0) {
+      console.log("06-altyazi klasörü oluşturuluyor...");
       const yeni = await driveKlasorAc("06-altyazi", job.drive_folder_id);
       altyaziKlasorId = yeni.id;
     } else {
