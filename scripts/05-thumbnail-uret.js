@@ -108,4 +108,27 @@ async function main() {
         
         if (v < 1) await delay(7000);
       } catch (e) {
-        console.error(`  ✗ Thu
+        console.error(`  ✗ Thumbnail ${v + 1}: ${e.message}`);
+      }
+    }
+    
+    const status = basariliSayisi === 2 ? "completed" : "partial";
+    await jobGuncelle(JOB_ID, { thumbnail_status: `${status}:${basariliSayisi}/2` });
+    
+    await telegram(job.chat_id, `🎯 *Thumbnail hazır:* ${basariliSayisi}/2`);
+    
+    console.log("✅ Thumbnail tamam.");
+    process.exit(0);
+    
+  } catch (error) {
+    console.error("HATA:", error.message);
+    try {
+      const job = await jobOku(JOB_ID);
+      await jobGuncelle(JOB_ID, { thumbnail_status: `error: ${error.message.substring(0, 100)}` });
+      await telegram(job.chat_id, `❌ *05-Thumbnail hatası:* ${error.message.substring(0, 300)}`);
+    } catch (e) {}
+    process.exit(1);
+  }
+}
+
+main();
