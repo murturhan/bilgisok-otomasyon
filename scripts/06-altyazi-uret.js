@@ -1,7 +1,7 @@
 /**
- * 06 - Altyazı Üretimi v3 (HİBRİT)
- * - Edge TTS senaryoyu sessiz okur, her kelimenin gerçek zamanını yakalar (metadataStream)
- * - Chirp HD'nin gerçek süresine SCALE ederek mükemmel senkron
+ * 06 - Altyazı Üretimi v4 (HİBRİT)
+ * - Edge TTS senaryoyu sessiz okur, kelime zamanlarını yakalar (wordBoundaryEnabled:true)
+ * - Chirp HD'nin gerçek süresine SCALE
  * - 5-7 kelime per altyazı satırı
  */
 
@@ -25,7 +25,7 @@ const execAsync = promisify(exec);
 const { JOB_ID } = process.env;
 const TMP_DIR = "/tmp/altyazi";
 
-const HEDEF_KELIME_PER_SATIR = 6; // 5-7 kelime hedef
+const HEDEF_KELIME_PER_SATIR = 6;
 
 async function driveKlasorIcerigi(klasorId, auth) {
   const drive = google.drive({ version: "v3", auth });
@@ -54,7 +54,6 @@ async function driveIndir(fileId, hedefYol, auth) {
   });
 }
 
-// Senaryoyu TTS'e göndermeden önce temizle (apostrof vb.)
 function metniTemizle(metin) {
   return metin
     .replace(/\s+/g, " ")
@@ -63,65 +62,92 @@ function metniTemizle(metin) {
     .trim();
 }
 
-// Edge TTS ile word-level boundaries al
 async function edgeTtsKelimeZamanlari(metin) {
   console.log("🎤 Edge TTS ile kelime zamanları alınıyor...");
   
   const tts = new MsEdgeTTS();
-  await tts.setMetadata("tr-TR-AhmetNeural", OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+  
+  // KRİTİK: wordBoundaryEnabled:true parametresi olmazsa metadataStream null gelir!
+  await tts.setMetadata(
+    "tr-TR-AhmetNeural",
+    OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3,
+    { wordBoundaryEnabled: true, sentenceBoundaryEnabled: false }
+  );
   
   return new Promise((resolve, reject) => {
     const kelimeler = [];
-    let buffer = Buffer.alloc(0);
+    let timeout;
     
     try {
       const stream = tts.toStream(metin);
       
-      stream.audioStream.on("data", (chunk) => {
-        buffer = Buffer.concat([buffer, chunk]);
-      });
+      if (!stream.metadataStream) {
+        return reject(new Error("metadataStream hâlâ null (wordBoundaryEnabled verildi ama gelmedi)"));
+      }
       
       stream.metadataStream.on("data", (md) => {
         try {
-          const obj = typeof md === "string" ? JSON.parse(md) : md;
-          const metadata = obj.Metadata || obj;
+          // md Buffer veya string olabilir
+          const str = md instanceof Buffer ? md.toString() : md;
+          const obj = typeof str === "string" ? JSON.parse(str) : str;
+          const metadata = obj.Metadata || (Array.isArray(obj) ? obj : null);
           
           if (Array.isArray(metadata)) {
             for (const item of metadata) {
               if (item.Type === "WordBoundary" && item.Data) {
+                const kelimeMetni = item.Data.text?.Text || item.Data.text || "";
                 kelimeler.push({
-                  kelime: item.Data.text?.Text || item.Data.text,
-                  offset: item.Data.Offset, // 100-nanosecond birimleri (1 saniye = 10,000,000)
-                  duration: item.Data.Duration,
+                  kelime: kelimeMetni,
+                  offset: item.Data.Offset,
+                  duration: item.Data.Duration || 0,
                 });
               }
             }
           }
         } catch (e) {
-          // metadata parse hatası göz ardı edilir
+          // parse hatası göz ardı
         }
       });
       
+      stream.audioStream.on("data", () => {}); // veriyi at, sadece sayar
+      
       stream.audioStream.on("end", () => {
+        clearTimeout(timeout);
         console.log(`  ✓ ${kelimeler.length} kelime zamanı alındı`);
-        resolve({ kelimeler, edgeAudioBuffer: buffer });
+        resolve(kelimeler);
       });
       
-      stream.audioStream.on("error", reject);
-      stream.metadataStream.on("error", reject);
+      stream.audioStream.on("error", (e) => {
+        clearTimeout(timeout);
+        reject(e);
+      });
+      
+      stream.metadataStream.on("error", (e) => {
+        clearTimeout(timeout);
+        reject(e);
+      });
+      
+      // 90 saniye timeout (uzun senaryolar için)
+      timeout = setTimeout(() => {
+        if (kelimeler.length > 0) {
+          console.log(`  ⚠ Timeout, ${kelimeler.length} kelime ile devam`);
+          resolve(kelimeler);
+        } else {
+          reject(new Error("Edge TTS timeout, hiç kelime gelmedi"));
+        }
+      }, 90000);
       
     } catch (e) {
+      clearTimeout(timeout);
       reject(e);
     }
   });
 }
 
-// 100-nanosecond → saniye
 function offsetToSeconds(offset) {
   return offset / 10_000_000;
 }
 
-// MP3'ün süresini ölç
 async function mp3Suresi(yol) {
   const { stdout } = await execAsync(
     `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${yol}"`
@@ -129,7 +155,6 @@ async function mp3Suresi(yol) {
   return parseFloat(stdout.trim());
 }
 
-// Kelimeleri 5-7 kelimelik satırlara grupla (cümle sınırlarına saygıyla)
 function kelimeleriSatirlaraGrupla(kelimeler, hedef = HEDEF_KELIME_PER_SATIR) {
   const satirlar = [];
   let mevcut = [];
@@ -141,7 +166,6 @@ function kelimeleriSatirlaraGrupla(kelimeler, hedef = HEDEF_KELIME_PER_SATIR) {
     const kelimeMetni = k.kelime || "";
     const cumleSonu = /[.!?…]$/.test(kelimeMetni);
     
-    // Satır uzunluğu hedefe ulaştıysa veya cümle bitiyorsa kapat
     if (mevcut.length >= hedef || (cumleSonu && mevcut.length >= 3)) {
       satirlar.push(mevcut);
       mevcut = [];
@@ -149,7 +173,6 @@ function kelimeleriSatirlaraGrupla(kelimeler, hedef = HEDEF_KELIME_PER_SATIR) {
   }
   
   if (mevcut.length > 0) {
-    // Son artıkları varsa, son satıra ekle
     if (satirlar.length > 0 && mevcut.length < 3) {
       satirlar[satirlar.length - 1] = satirlar[satirlar.length - 1].concat(mevcut);
     } else {
@@ -181,7 +204,7 @@ async function main() {
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
     fs.mkdirSync(TMP_DIR, { recursive: true });
     
-    // 1. Chirp HD MP3'ünü Drive'dan indir, gerçek süresini ölç
+    // 1. Chirp HD MP3
     console.log("📂 Chirp HD ses dosyası indiriliyor...");
     const oauthAuth = getOAuthClient();
     
@@ -191,7 +214,6 @@ async function main() {
     const sesler = await driveKlasorIcerigi(sesKlasorler[0].id, oauthAuth);
     if (sesler.length === 0) throw new Error("Ses dosyası yok!");
     
-    // En son yüklenen sesi al
     const sesDosya = sesler[sesler.length - 1];
     const sesYol = path.join(TMP_DIR, "chirp-ses.mp3");
     await driveIndir(sesDosya.id, sesYol, oauthAuth);
@@ -200,30 +222,29 @@ async function main() {
     const chirpSure = await mp3Suresi(sesYol);
     console.log(`📏 Chirp HD süresi: ${chirpSure.toFixed(2)}s`);
     
-    // 2. Edge TTS ile aynı metin (temizlenmiş) için word-level zamanları al
+    // 2. Edge TTS word boundaries
     const temizMetin = metniTemizle(job.senaryo);
-    const { kelimeler: edgeKelimeler } = await edgeTtsKelimeZamanlari(temizMetin);
+    const edgeKelimeler = await edgeTtsKelimeZamanlari(temizMetin);
     
     if (edgeKelimeler.length === 0) {
       throw new Error("Edge TTS hiç kelime zamanı veremedi!");
     }
     
-    // Edge'in toplam süresini hesapla (son kelimenin offset + duration)
     const sonKelime = edgeKelimeler[edgeKelimeler.length - 1];
-    const edgeSureRaw = offsetToSeconds(sonKelime.offset + (sonKelime.duration || 0));
+    const edgeSureRaw = offsetToSeconds(sonKelime.offset + sonKelime.duration);
     console.log(`📏 Edge TTS süresi: ${edgeSureRaw.toFixed(2)}s`);
     
-    // 3. SCALE: Edge zamanlarını Chirp'in toplam süresine map'le
+    // 3. Scale Edge zamanlarını Chirp'e
     const scale = chirpSure / edgeSureRaw;
     console.log(`⚖️ Scale faktör: ${scale.toFixed(3)} (Chirp/Edge)`);
     
     const chirpZamanli = edgeKelimeler.map(k => ({
       kelime: k.kelime,
       baslangic: offsetToSeconds(k.offset) * scale,
-      bitis: offsetToSeconds(k.offset + (k.duration || 0)) * scale,
+      bitis: offsetToSeconds(k.offset + k.duration) * scale,
     }));
     
-    // 4. Kelimeleri 5-7 kelimelik satırlara grupla
+    // 4. Satırlara grupla
     const satirGruplari = kelimeleriSatirlaraGrupla(chirpZamanli, HEDEF_KELIME_PER_SATIR);
     console.log(`📝 ${satirGruplari.length} altyazı satırı`);
     
@@ -234,13 +255,11 @@ async function main() {
       const baslangic = grup[0].baslangic;
       let bitis = grup[grup.length - 1].bitis;
       
-      // Sonraki satırın başlangıcına kadar uzat (boşluk kalmasın), max 0.3s ekstra
       if (i + 1 < satirGruplari.length) {
         const sonrakiBaslangic = satirGruplari[i + 1][0].baslangic;
         bitis = Math.min(sonrakiBaslangic - 0.05, bitis + 0.3);
       }
       
-      // Minimum 1 saniye görünür kalsın
       if (bitis - baslangic < 1.0) bitis = baslangic + 1.0;
       
       const metin = grup.map(g => g.kelime).join(" ").trim();
@@ -282,7 +301,7 @@ async function main() {
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
     
     await jobGuncelle(JOB_ID, { altyazi_status: `completed:${satirGruplari.length}satır` });
-    await telegram(job.chat_id, `📝 *Altyazı hazır* (word-level, ${satirGruplari.length} satır, ${chirpSure.toFixed(1)}s)`);
+    await telegram(job.chat_id, `📝 *Altyazı hazır* (word-level, ${satirGruplari.length} satır, scale=${scale.toFixed(2)})`);
     
     console.log("✅ Altyazı tamam.");
     process.exit(0);
