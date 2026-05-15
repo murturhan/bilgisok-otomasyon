@@ -1,9 +1,10 @@
 /**
- * 07 - Video Montaj v7 (SADE & HIZLI)
- * - Abone butonu KALDIRILDI (advance workflow'a)
- * - Müzik volume %12 → %5 (TTS ön planda)
- * - Ken Burns: ultrafast yerine fast preset (titreşim azalır)
- * - 2 aşamalı: Aşama A (video+ses+müzik), Aşama B (altyazı)
+ * 07 - Video Montaj v8
+ * - Font 24→20 (küçük)
+ * - MarginV 60→50
+ * - Müzik %5
+ * - Ken Burns smooth
+ * - 2 aşamalı
  */
 
 import fs from "fs";
@@ -85,12 +86,10 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
   }
 }
 
-// Ken Burns - DAHA SMOOTH (zoom hızı yavaşlatıldı, preset 'fast' kullanıldı)
 async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   const fps = 25;
   const frameSayisi = Math.ceil(sure * fps);
   
-  // Daha YAVAŞ zoom (0.0008 → 0.0005), titreşim azalır
   let zoomFiltre;
   switch (varyasyon % 4) {
     case 0:
@@ -107,8 +106,6 @@ async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
       break;
   }
   
-  // preset: ultrafast yerine fast - kalite daha iyi, titreşim az
-  // CRF: 28 yerine 23 (daha temiz)
   const args = `-loop 1 -i "${gorselPath}" \
     -vf "${zoomFiltre},format=yuv420p" \
     -t ${sure} \
@@ -144,14 +141,12 @@ async function videolariBirlestir(klipListesi, ciktiPath) {
   await ffmpegCalistir(args, "concat");
 }
 
-// Aşama A: Video + ses + müzik (video copy, sadece ses encode)
 async function asamaA_video_ses_muzik({ videoPath, sesPath, muzikPath, ciktiPath }) {
   const hasMusic = muzikPath && fs.existsSync(muzikPath);
   
   let filterComplex, mapArgs, muzikInput;
   
   if (hasMusic) {
-    // MÜZIK SESI %12 → %5 (TTS net duyulsun)
     filterComplex = `-filter_complex "[1:a]volume=1.0[tts];[2:a]volume=0.05,aloop=loop=-1:size=2e+09[music];[tts][music]amix=inputs=2:duration=first[aout]"`;
     mapArgs = `-map 0:v -map "[aout]"`;
     muzikInput = `-stream_loop -1 -i "${muzikPath}"`;
@@ -172,7 +167,6 @@ async function asamaA_video_ses_muzik({ videoPath, sesPath, muzikPath, ciktiPath
   await ffmpegCalistir(args, "asama-A");
 }
 
-// Aşama B: Altyazı bindir
 async function asamaB_altyazi({ videoPath, altyaziPath, ciktiPath }) {
   if (!altyaziPath || !fs.existsSync(altyaziPath)) {
     fs.copyFileSync(videoPath, ciktiPath);
@@ -182,9 +176,9 @@ async function asamaB_altyazi({ videoPath, altyaziPath, ciktiPath }) {
   
   const srtEscaped = altyaziPath.replace(/:/g, "\\:").replace(/'/g, "\\'");
   
-  // Altyazı stili: daha rahat okunur (FontSize 24, MarginV 60)
+  // FontSize 20 (önceden 24), MarginV 50 (önceden 60), Outline 2 (önceden 3)
   const args = `-i "${videoPath}" \
-    -vf "subtitles='${srtEscaped}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=3,Shadow=1,Alignment=2,MarginV=60'" \
+    -vf "subtitles='${srtEscaped}':force_style='FontName=Arial,FontSize=20,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=2,Shadow=1,Alignment=2,MarginV=50'" \
     -c:v libx264 -preset fast -crf 23 -threads 0 \
     -c:a copy \
     "${ciktiPath}"`;
@@ -193,13 +187,9 @@ async function asamaB_altyazi({ videoPath, altyaziPath, ciktiPath }) {
 }
 
 async function muzikSec(mood, saAuth) {
-  if (!GDRIVE_MUZIK_FOLDER_ID) {
-    console.log("⚠ GDRIVE_MUZIK_FOLDER_ID yok");
-    return null;
-  }
+  if (!GDRIVE_MUZIK_FOLDER_ID) return null;
   
   console.log(`🎵 Müzik, mood: "${mood}"`);
-  
   const moodKlasorler = await driveAltKlasorAraSA(mood, GDRIVE_MUZIK_FOLDER_ID, saAuth);
   
   let kaynakKlasorId;
@@ -254,7 +244,8 @@ async function main() {
     if (sesKlasorler.length === 0) throw new Error("02-ses yok");
     
     const gorseller = await driveKlasorIcerigi(gorselKlasorler[0].id, oauthAuth);
-    const sesler = await driveKlasorIcerigi(sesKlasorler[0].id, oauthAuth);
+    const sesDosyalar = await driveKlasorIcerigi(sesKlasorler[0].id, oauthAuth);
+    const sesler = sesDosyalar.filter(d => d.name.endsWith(".mp3"));
     const altyazilar = altyaziKlasorler.length > 0 ? await driveKlasorIcerigi(altyaziKlasorler[0].id, oauthAuth) : [];
     
     console.log(`📊 ${gorseller.length} görsel, ${sesler.length} ses, ${altyazilar.length} altyazı`);
@@ -262,7 +253,6 @@ async function main() {
     if (gorseller.length === 0) throw new Error("Görsel yok!");
     if (sesler.length === 0) throw new Error("Ses yok!");
     
-    // Paralel indirme
     console.log("⬇️ Paralel indirme...");
     const indirmeBaslangic = Date.now();
     
@@ -274,12 +264,16 @@ async function main() {
     }
     
     const sesYol = path.join(TMP_DIR, "ses.mp3");
-    indirmePromise.push(driveIndir(sesler[0].id, sesYol, oauthAuth));
+    indirmePromise.push(driveIndir(sesler[sesler.length - 1].id, sesYol, oauthAuth));
     
     let altyaziYol = null;
     if (altyazilar.length > 0) {
-      altyaziYol = path.join(TMP_DIR, "altyazi.srt");
-      indirmePromise.push(driveIndir(altyazilar[0].id, altyaziYol, oauthAuth));
+      // En son SRT
+      const srtler = altyazilar.filter(d => d.name.endsWith(".srt"));
+      if (srtler.length > 0) {
+        altyaziYol = path.join(TMP_DIR, "altyazi.srt");
+        indirmePromise.push(driveIndir(srtler[srtler.length - 1].id, altyaziYol, oauthAuth));
+      }
     }
     
     await Promise.all(indirmePromise);
@@ -293,7 +287,6 @@ async function main() {
       console.log(`  ✓ Müzik: ${secilenMuzik.name}`);
     }
     
-    // Ses süresi
     const { stdout: sesDurationStr } = await execAsync(
       `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${sesYol}"`
     );
@@ -301,18 +294,15 @@ async function main() {
     const gorselSure = sesDuration / gorselYollar.length;
     console.log(`📏 Ses: ${sesDuration.toFixed(1)}s, Görsel başı: ${gorselSure.toFixed(1)}s`);
     
-    // Ken Burns - paralel
     const kenBurnsBaslangic = Date.now();
     const klipYollar = gorselYollar.map((_, i) => path.join(TMP_DIR, `klip-${String(i + 1).padStart(3, "0")}.mp4`));
     await paralelKenBurns(gorselYollar, klipYollar, gorselSure);
     console.log(`  ✓ Ken Burns toplam: ${((Date.now() - kenBurnsBaslangic) / 1000).toFixed(1)}s`);
     
-    // Concat
     console.log("🔗 Birleştiriliyor...");
     const sessizVideoYol = path.join(TMP_DIR, "sessiz-video.mp4");
     await videolariBirlestir(klipYollar, sessizVideoYol);
     
-    // Aşama A
     console.log("🎬 Aşama A: Video + Ses + Müzik...");
     const asamaAYol = path.join(TMP_DIR, "asama-a.mp4");
     await asamaA_video_ses_muzik({
@@ -322,7 +312,6 @@ async function main() {
       ciktiPath: asamaAYol,
     });
     
-    // Aşama B
     console.log("🎬 Aşama B: Altyazı...");
     const finalYol = path.join(TMP_DIR, "final.mp4");
     await asamaB_altyazi({
@@ -334,7 +323,6 @@ async function main() {
     const finalStats = fs.statSync(finalYol);
     console.log(`✓ Final video: ${(finalStats.size / 1024 / 1024).toFixed(1)}MB`);
     
-    // Yükle
     let videoKlasorler = await driveAltKlasorBul("07-video", job.drive_folder_id);
     let videoKlasorId;
     if (videoKlasorler.length === 0) {
