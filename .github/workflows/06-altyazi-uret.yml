@@ -8,16 +8,20 @@ on:
         description: 'Job ID (run_id)'
         required: true
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   altyazi-uret:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: FFmpeg kur (ffprobe için)
+      - name: FFmpeg kur (süre ölçümü için)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg
@@ -56,3 +60,20 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
         run: node scripts/06-altyazi-uret.js
+      
+      # Altyazı bittikten sonra 07-Video Montaj otomatik tetikle
+      - name: 07-Video Montaj tetikle
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
+        run: |
+          # 60 saniye bekle - 02-gorsel ve 03-seslendirme bitmiş olsun
+          echo "60 saniye bekleniyor (diğer materyallerin bitmesi için)..."
+          sleep 60
+          
+          curl -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d "{\"event_type\":\"video_montaj\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
+          
+          echo "✅ 07-Video Montaj tetiklendi"
