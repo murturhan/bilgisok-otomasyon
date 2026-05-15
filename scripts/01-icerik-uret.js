@@ -1,7 +1,8 @@
 /**
- * 01 - İçerik Üretimi v5
+ * 01 - İçerik Üretimi v6
  * - Storytelling + modern öğe yasağı + müzik mood
- * - Senaryo SONUNDA abone iste kapanışı (yeni)
+ * - Senaryo SONUNDA abone iste kapanışı
+ * - Telegram'dan Veo klip istemi KALDIRILDI
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -56,7 +57,7 @@ SENARYO YAZIM KURALLARI - DİKKAT!
 Senaryonun SON 50-80 kelimesi şöyle olmalı:
 "...[konu kapanışı]. Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın. Bir sonraki videoda görüşmek üzere, hoşçakalın!"
 
-Veya benzer bir kapanış. Ama ŞU CÜMLE MUTLAKA OLMALI:
+ŞU CÜMLE MUTLAKA OLMALI:
 "Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın."
 
 ═══════════════════════════════════════════════════
@@ -105,7 +106,7 @@ JSON çıktısı:
   "thumbnail_prompt": "Thumbnail FLUX promptu - konuyla DİREKT ilgili, ancient period clothing, MrBeast YouTube thumbnail style, leave RIGHT THIRD empty for text. 16:9, NO TEXT",
   "muzik_mood": "epic / mysterious / calm / dramatic",
   "aciklama": "Video açıklaması, 200-300 kelime",
-  "senaryo": "TAM 850-1150 kelimelik STORYTELLING senaryo. Yukarıdaki kurallara UY. Hook ile başla, hikaye anlat, SONUNDA abone kapanışını ekle ('Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın')",
+  "senaryo": "TAM 850-1150 kelimelik STORYTELLING senaryo. Yukarıdaki kurallara UY. Hook ile başla, hikaye anlat, SONUNDA abone kapanışını ekle",
   "sahneler": [
     {
       "metin": "Senaryonun bir bölümü, 40-50 kelime",
@@ -154,11 +155,9 @@ KRİTİK KURALLAR:
         json.sahneler = json.sahneler.slice(0, 20);
       }
       
-      // Geriye uyumluluk
       json.ai_gorsel_prompts = json.sahneler.map(s => s.gorsel_prompt);
       json.pexels_anahtar_kelimeler = [];
       
-      // Fallback'ler
       if (!json.thumbnail_prompt) {
         json.thumbnail_prompt = `Hyperrealistic close-up dramatic face related to ${konu}, ancient period clothing, MrBeast YouTube thumbnail style, leave right third empty for text, 16:9, no text`;
       }
@@ -175,18 +174,16 @@ KRİTİK KURALLAR:
         json.thumbnail_alt_baslik = json.thumbnail_alt_baslik.substring(0, 20).trim();
       }
       
-      // Senaryoda abone cümlesi yoksa zorla ekle (güvence)
-      const aboneCumlesi = "Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın.";
+      // Senaryoda abone cümlesi yoksa zorla ekle
       if (!json.senaryo.toLowerCase().includes("abone")) {
         console.log("⚠️ Abone cümlesi senaryoda yok, manuel ekleniyor.");
-        json.senaryo = json.senaryo.trim() + " " + aboneCumlesi + " Bir sonraki videoda görüşmek üzere, hoşçakalın!";
+        json.senaryo = json.senaryo.trim() + " Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın. Bir sonraki videoda görüşmek üzere, hoşçakalın!";
       }
       
       console.log(`İçerik üretildi: ${json.baslik}`);
       console.log(`Thumbnail: "${json.thumbnail_baslik}" + "${json.thumbnail_alt_baslik}"`);
       console.log(`Müzik mood: ${json.muzik_mood}`);
       console.log(`${json.sahneler.length} sahne, senaryo ${json.senaryo.length} karakter`);
-      console.log(`Abone cümlesi: ${json.senaryo.toLowerCase().includes("abone") ? "✓" : "✗"}`);
       return json;
       
     } catch (error) {
@@ -212,7 +209,7 @@ async function main() {
     const konu = await konuHavuzundanAl(TARIH, INDEX);
     console.log(`Konu: ${konu}`);
     
-    await telegram(CHAT_ID, `🎬 *Yeni iş başlatıldı!*\n\n✅ *Konu:* ${konu}\n🆔 \`${JOB_ID}\`\n\n⏳ Gemini storytelling içerik üretiyor...`);
+    await telegram(CHAT_ID, `🎬 *Yeni iş başlatıldı!*\n\n✅ *Konu:* ${konu}\n🆔 \`${JOB_ID}\`\n\n⏳ Gemini içerik üretiyor...`);
     
     const icerik = await icerikUret(konu);
     
@@ -223,7 +220,6 @@ async function main() {
     const anaKlasor = await driveKlasorAc(klasorAdi);
     await driveKlasorAc("01-gorseller", anaKlasor.id);
     await driveKlasorAc("02-ses", anaKlasor.id);
-    const klipKlasor = await driveKlasorAc("04-veo-klipleri-buraya", anaKlasor.id);
     await driveKlasorAc("05-thumbnail", anaKlasor.id);
     
     await jobOlustur({
@@ -242,14 +238,11 @@ async function main() {
       ai_klip_prompts: icerik.ai_klip_prompts,
       pexels_anahtar_kelimeler: [],
       drive_folder_id: anaKlasor.id,
-      klip_klasor_id: klipKlasor.id,
+      klip_klasor_id: "",
       muzik_mood: icerik.muzik_mood,
     });
     
-    const klipPromptlari = icerik.ai_klip_prompts
-      .map((p, i) => `🎥 *KLİP ${i + 1}:*\n\`${p}\``)
-      .join("\n\n");
-    
+    // Veo klip istemi KALDIRILDI
     await telegram(
       CHAT_ID,
       `📝 *İçerik hazır!*\n\n` +
@@ -257,11 +250,7 @@ async function main() {
       `🎯 *Thumbnail:* ${icerik.thumbnail_baslik} | ${icerik.thumbnail_alt_baslik || ""}\n` +
       `🎵 *Müzik mood:* ${icerik.muzik_mood}\n\n` +
       `📂 [Drive klasörü](${anaKlasor.link})\n\n` +
-      `━━━━━━━━━━━━━━━\n\n` +
-      `🎬 *VEO STUDIO'DA 3 KLİP ÜRET:*\n\n${klipPromptlari}\n\n` +
-      `_Klipleri "04-veo-klipleri-buraya" klasörüne yükle._\n\n` +
-      `━━━━━━━━━━━━━━━\n\n` +
-      `⏳ Diğer materyaller paralel üretiliyor...`
+      `⏳ Materyaller paralel üretiliyor (görsel, ses, thumbnail, altyazı, video)...`
     );
     
     console.log("✅ İçerik üretimi tamam.");
