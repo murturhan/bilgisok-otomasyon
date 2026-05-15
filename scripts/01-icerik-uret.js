@@ -1,8 +1,8 @@
 /**
- * 01 - İçerik Üretimi v7
- * - Storytelling + tarihi DÖNEM DOĞRULUĞU (Konstantinopolis dönemi → minare yok!)
- * - Abone iste cümlesi KALDIRILDI (advance workflow'a)
- * - Müzik mood seçimi
+ * 01 - İçerik Üretimi v8
+ * - Storytelling + dönem doğruluğu + müzik mood
+ * - YENİ: tts_telaffuz alanı (yabancı isimler Türkçe okunuş)
+ * - YENİ: kısaltma yasağı (Gemini M.S. yazmasın, "milattan sonra" yazsın)
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -49,34 +49,74 @@ SENARYO YAZIM KURALLARI
 - DRAMATİK HOOK ile başla
 - HİKAYE anlat: karakterler, sahneler, çatışmalar
 - SES TONUNDA YAZ: "Hayal et", "Şimdi düşün", "İşte tam o anda"
-- KISA CÜMLELER, virgül ve nokta ile nefes
+- KISA CÜMLELER
 
 ═══════════════════════════════════════════════════
-TARİHİ DÖNEM DOĞRULUĞU - EN KRİTİK KURAL!!!
+TARİHİ DÖNEM DOĞRULUĞU - KRİTİK!
 ═══════════════════════════════════════════════════
 
-⛔⛔⛔ MUTLAKA UYGULAMAN GEREKİYOR:
-
-KONUYU OKU. Hangi tarihi dönem? Hangi yüzyıl? Hangi medeniyet?
+KONUYU OKU. Hangi yüzyıl? Hangi medeniyet? O dönemin mimarisi neye benzer?
 
 ÖRNEKLER:
-- "Konstantinopolis" konusu → BİZANS DÖNEMİ → Ayasofya'da MİNARE YOK, kubbe var. Bizans bayrakları (kartal), Bizans askerleri
-- "İstanbul'un Fethi" konusu → 1453 → Osmanlı askerleri, top mehmet, şehrin ÇİFTHALLİ durumu (kubbe + henüz minaresiz Ayasofya)
-- "Osmanlı klasik dönem" → 16-17. yy → Mimari Sinan, minareli camiler, kavuklu askerler, kılıçlar
-- "Antik Mısır" → MÖ 3000-1000 → piramitler, hieroglifler, beyaz kıyafetler
-- "Hititler" → MÖ 1700-1180 → Anadolu, taş tapınaklar, savaş arabaları
-- "Roma İmparatorluğu" → MÖ 27-MS 476 → Toga, lejyoner, marble heykeller
+- "Konstantinopolis" → BİZANS DÖNEMİ → Ayasofya'da MİNARE YOK, kubbe var
+- "İstanbul'un Fethi 1453" → Osmanlı askerleri, Bizans savunması
+- "Antik Mısır" → piramitler, hieroglifler
+- "Hititler" → MÖ 1700-1180, Anadolu, taş tapınaklar
+- "Roma" → toga, lejyoner
 
-GÖRSEL PROMPT'TA MUTLAKA:
-- Dönemin SPESİFİK ADI: "Byzantine era", "Ottoman era 16th century", "Hittite Bronze Age"
-- Dönem detayı: hangi yüzyıl, hangi hanedan
-- Mimari detay: kubbe? minare? piramit? mabet?
-- Kıyafet detayı: toga? kavuk? tunic? robe?
+GÖRSEL PROMPT'TA:
+- Dönem SPESİFİK adı: "Byzantine era", "Ottoman 16th century", "Hittite Bronze Age"
+- Mimari detay: kubbe/minare/piramit/mabet
+- Kıyafet: toga/kavuk/tunic/robe
+- ANACHRONISM YOK
 
-ASLA OLMAYACAKLAR:
-- Modern öğeler (telefon, araba, jeans)
-- Yanlış dönem öğeleri (Bizans'ta minare!, Antik Mısır'da kemerli kapı!, Hititler'de demir kale!)
-- Anachronism (zamanlamasız öğeler)
+═══════════════════════════════════════════════════
+🔥 TTS TELAFFUZ KURALLARI - ÇOK ÖNEMLİ!
+═══════════════════════════════════════════════════
+
+İKİ VERSİYON SENARYO YAZACAKSIN:
+
+**senaryo** alanı (GÖRSEL ALTYAZI için, GERÇEK YAZIM):
+- "M.S. 1453", "M.Ö. 1700"
+- "Teotihuacan", "Tutankhamun", "Roma"
+- Türkçe ek apostroflar: "Hititler'in", "Konstantinopolis'in"
+- Normal punctuation
+
+**tts_telaffuz** alanı (SES İÇİN, OKUNUŞ YAZIMI):
+SES bunu okuyacak. Bu yüzden TÜRKÇE OKUNUŞU yaz!
+
+KURALLAR:
+1. Kısaltma YOK:
+   - "M.S." YAZMA → "Milattan Sonra" yaz
+   - "M.Ö." YAZMA → "Milattan Önce" yaz
+   - "5. yy." YAZMA → "beşinci yüzyıl" yaz
+   - "vb." YAZMA → "ve benzeri" yaz
+
+2. Yabancı isimleri TÜRKÇE OKUNUŞU ile yaz:
+   - "Teotihuacan" → "Teotiakan"
+   - "Tutankhamun" → "Tutankamun"
+   - "Caesar" → "Sezar"
+   - "Pythagoras" → "Pisagor"
+   - "Babylon" → "Babil"
+   - "Mesopotamia" → "Mezopotamya"
+   - "Achilles" → "Aşil"
+   - "Tenochtitlan" → "Tenoçtitlan"
+   - "Machu Picchu" → "Maçu Piçu"
+   - "Hieroglif" → "hiyeroglif" (oluyor zaten)
+   - "Sphinx" → "Sfenks"
+
+3. Sayıları kelime olarak yaz (5'ten büyük):
+   - "MÖ 1700" → "Milattan Önce bin yedi yüz"
+   - "1453'te" → "bin dört yüz elli üçte"
+   - Küçük sayılar normal: "2 yıl", "3 sefer" olabilir
+
+4. Türkçe ek apostroflarını KALDIR:
+   - "Hititler'in" → "Hititlerin"
+   - "Konstantinopolis'i" → "Konstantinopolisi"
+
+ÖRNEK:
+senaryo: "M.Ö. 1700'de, Hititler'in başkenti Hattuşa'ya gelen tüccarlar..."
+tts_telaffuz: "Milattan Önce bin yedi yüzde, Hititlerin başkenti Hattuşaya gelen tüccarlar..."
 
 ═══════════════════════════════════════════════════
 MÜZIK MOOD
@@ -84,43 +124,39 @@ MÜZIK MOOD
 
 - "epic" → savaşlar, fetihler, kahramanlık
 - "mysterious" → sırlar, kayıp medeniyetler
-- "calm" → günlük yaşam, sanat, tapınaklar
-- "dramatic" → trajediler, çöküşler, ihanetler
+- "calm" → günlük yaşam, sanat
+- "dramatic" → trajediler, çöküşler
 
 ═══════════════════════════════════════════════════
 KONU: ${konu}
 ═══════════════════════════════════════════════════
 
-İLK ADIM (zihninde):
-1. Bu konunun TAM TARİHİ DÖNEMİ nedir? (yüzyıl, medeniyet)
-2. O dönemin mimarisi, kıyafetleri, askeri donanımı nedir?
-3. O dönemde NE OLAMAZ? (anachronism)
-
-ŞIMDI JSON çıktısı:
+JSON çıktısı:
 
 {
   "konu": "${konu}",
-  "tarihi_donem": "Bu konunun ait olduğu tarihi dönem (örn: 'Bizans dönemi, 4-15. yy', 'Osmanlı klasik dönem 16. yy')",
+  "tarihi_donem": "Tarihi dönem (örn: 'Bizans 4-15. yy', 'Aztek 14-16. yy')",
   "baslik": "MERAK UYANDIRICI başlık (60-70 karakter)",
   "thumbnail_baslik": "MAKS 15 karakter, BÜYÜK HARF",
-  "thumbnail_alt_baslik": "1-3 kelime: 'GERÇEK Mİ?', 'KEŞFEDİLDİ'",
-  "thumbnail_prompt": "Thumbnail FLUX prompt - konunun TAM DÖNEMİNE uygun (Bizans için kubbeli kilise minaresiz, Osmanlı için minareli cami). MrBeast style, leave right third empty, 16:9, NO TEXT",
+  "thumbnail_alt_baslik": "1-3 kelime",
+  "thumbnail_prompt": "Thumbnail FLUX prompt - dönem uygun, MrBeast style, right third empty, 16:9, NO TEXT",
   "muzik_mood": "epic / mysterious / calm / dramatic",
-  "aciklama": "Video açıklaması, 200-300 kelime",
-  "senaryo": "TAM 800-1100 kelimelik STORYTELLING senaryo. Hook ile başla, hikaye anlat. Türkçe ek apostrofları kullan ('Bizans'ın, Konstantinopolis'in)",
+  "aciklama": "200-300 kelime",
+  "senaryo": "800-1100 kelimelik senaryo - GÖRSEL YAZIM (M.S., yabancı isim orijinal, Türkçe ek apostrof)",
+  "tts_telaffuz": "AYNI senaryonun TÜRKÇE OKUNUŞ versiyonu - kısaltma açık, yabancı isim Türkçe, apostrof yok",
   "sahneler": [
     {
-      "metin": "Senaryonun bir bölümü, 40-50 kelime",
-      "gorsel_prompt": "BU SAHNENİN SOMUT görsel öğesi. ZORUNLU: dönem adı (Byzantine era / Ottoman 16th century / Hittite Bronze Age). DİKKAT: anachronism YOK (Bizans'ta minare yok!). FLUX İngilizce, cinematic photorealistic 16:9, period-accurate architecture and clothing"
+      "metin": "Senaryo bölümü, 40-50 kelime",
+      "gorsel_prompt": "BU SAHNENİN GÖRSEL ÖĞESİ. Dönem ADI mutlaka. ANACHRONISM YOK. FLUX İngilizce, cinematic photorealistic 16:9"
     }
     // TAM 20 sahne
   ]
 }
 
 KRİTİK KURALLAR:
-- sahneler: TAM 20 öğe
-- Her görsel_prompt mutlaka SPESİFİK dönem adı içermeli
-- ANACHRONISM YOK (yanlış dönem öğeleri)
+- sahneler TAM 20
+- senaryo VE tts_telaffuz **ayrı yazılacak** (telaffuz farklı)
+- tts_telaffuz YAKLAŞIK AYNI UZUNLUKTA olmalı (büyük fark olmasın)
 - thumbnail_baslik MAKS 15 KARAKTER`;
 
   const maxRetries = 5;
@@ -139,7 +175,7 @@ KRİTİK KURALLAR:
         generationConfig: {
           responseMimeType: "application/json",
           temperature: 0.8,
-          maxOutputTokens: 16384,
+          maxOutputTokens: 32768, // İki senaryo için arttırdık
         },
       });
       
@@ -155,12 +191,22 @@ KRİTİK KURALLAR:
         json.sahneler = json.sahneler.slice(0, 20);
       }
       
+      // tts_telaffuz yoksa senaryo'dan üret (fallback)
+      if (!json.tts_telaffuz || json.tts_telaffuz.length < 100) {
+        console.log("⚠ tts_telaffuz alanı yok/kısa, senaryo'dan otomatik üretiliyor");
+        json.tts_telaffuz = json.senaryo
+          .replace(/M\.\s*Ö\./gi, "Milattan Önce")
+          .replace(/M\.\s*S\./gi, "Milattan Sonra")
+          .replace(/MÖ/g, "Milattan Önce")
+          .replace(/MS/g, "Milattan Sonra");
+      }
+      
       json.ai_gorsel_prompts = json.sahneler.map(s => s.gorsel_prompt);
       json.pexels_anahtar_kelimeler = [];
-      json.ai_klip_prompts = []; // Veo klip prompt'u artık yok
+      json.ai_klip_prompts = [];
       
       if (!json.thumbnail_prompt) {
-        json.thumbnail_prompt = `Hyperrealistic close-up dramatic face related to ${konu}, period-accurate clothing, MrBeast YouTube thumbnail style, leave right third empty for text, 16:9, no text`;
+        json.thumbnail_prompt = `Hyperrealistic close-up dramatic face related to ${konu}, period-accurate clothing, MrBeast style, right third empty, 16:9, no text`;
       }
       if (!json.thumbnail_baslik) json.thumbnail_baslik = "GİZEM";
       if (!json.thumbnail_alt_baslik) json.thumbnail_alt_baslik = "AÇIKLANDI";
@@ -177,9 +223,8 @@ KRİTİK KURALLAR:
       
       console.log(`İçerik üretildi: ${json.baslik}`);
       console.log(`Tarihi dönem: ${json.tarihi_donem || 'belirtilmemiş'}`);
-      console.log(`Thumbnail: "${json.thumbnail_baslik}" + "${json.thumbnail_alt_baslik}"`);
-      console.log(`Müzik mood: ${json.muzik_mood}`);
-      console.log(`${json.sahneler.length} sahne, senaryo ${json.senaryo.length} karakter`);
+      console.log(`Müzik: ${json.muzik_mood}`);
+      console.log(`Senaryo: ${json.senaryo.length} karakter, TTS telaffuz: ${json.tts_telaffuz.length} karakter`);
       return json;
       
     } catch (error) {
@@ -205,7 +250,7 @@ async function main() {
     const konu = await konuHavuzundanAl(TARIH, INDEX);
     console.log(`Konu: ${konu}`);
     
-    await telegram(CHAT_ID, `🎬 *Yeni iş başlatıldı!*\n\n✅ *Konu:* ${konu}\n🆔 \`${JOB_ID}\`\n\n⏳ İçerik üretiliyor...`);
+    await telegram(CHAT_ID, `🎬 *Yeni iş*\n\n✅ *Konu:* ${konu}\n🆔 \`${JOB_ID}\`\n\n⏳ İçerik üretiliyor...`);
     
     const icerik = await icerikUret(konu);
     
@@ -229,6 +274,7 @@ async function main() {
       thumbnail_alt_baslik: icerik.thumbnail_alt_baslik || "",
       thumbnail_prompt: icerik.thumbnail_prompt,
       senaryo: icerik.senaryo,
+      tts_telaffuz: icerik.tts_telaffuz,
       aciklama: icerik.aciklama,
       ai_gorsel_prompts: icerik.ai_gorsel_prompts,
       ai_klip_prompts: [],
@@ -241,10 +287,10 @@ async function main() {
     await telegram(
       CHAT_ID,
       `📝 *İçerik hazır!*\n\n` +
-      `📌 *Başlık:* ${icerik.baslik}\n` +
-      `🏛 *Dönem:* ${icerik.tarihi_donem || '-'}\n` +
-      `🎯 *Thumbnail:* ${icerik.thumbnail_baslik} | ${icerik.thumbnail_alt_baslik || ""}\n` +
-      `🎵 *Müzik:* ${icerik.muzik_mood}\n\n` +
+      `📌 ${icerik.baslik}\n` +
+      `🏛 ${icerik.tarihi_donem || '-'}\n` +
+      `🎯 ${icerik.thumbnail_baslik} | ${icerik.thumbnail_alt_baslik || ""}\n` +
+      `🎵 ${icerik.muzik_mood}\n\n` +
       `📂 [Drive klasörü](${anaKlasor.link})\n\n` +
       `⏳ Görsel, ses, thumbnail, altyazı üretiliyor...`
     );
