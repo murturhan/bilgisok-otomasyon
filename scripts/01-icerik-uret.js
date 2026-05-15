@@ -1,8 +1,7 @@
 /**
- * 01 - İçerik Üretimi v3
- * - Storytelling odaklı senaryo (hook + drama + akış)
- * - Görseller senaryo cümleleriyle eşleşir (her bölüme özel)
- * - Pexels kaldırıldı
+ * 01 - İçerik Üretimi v5
+ * - Storytelling + modern öğe yasağı + müzik mood
+ * - Senaryo SONUNDA abone iste kapanışı (yeni)
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -42,70 +41,85 @@ SENARYO YAZIM KURALLARI - DİKKAT!
 
 ❌ ASLA YAPMA:
 - Wikipedia stili düz anlatım YOK
-- "Hititler MÖ 2. binyılda Ortadoğu'da kurulmuş bir medeniyettir" gibi kuru cümleler YOK
-- Sadece tarih, tarih, tarih sıralama YOK
-- "olmuştur, edilmiştir, kullanılmıştır" gibi formal dil YOK
+- Kuru tarih sıralaması YOK
+- "olmuştur, edilmiştir, kullanılmıştır" formal dil YOK
 
 ✅ YAP:
-- DRAMATİK HOOK ile başla: bir sahne, bir sır, bir soru, "Tahmin et ne oldu?"
-- HİKAYE anlat: karakterleri, sahneleri, çatışmaları olan
-- SORU VE CEVAP yapısı kullan: "Peki ya...? Cevap şaşırtıcı..."
-- SES TONUNDA YAZILIYORMUŞ GİBİ: "Hayal et", "Bir an düşün", "Şimdi şunu söylüyorum...", "Tam burada", "İşte tam o anda"
-- VURGU KELİMELERİ: "İnanılmaz", "Şoke edici", "Şaşırtıcı", "Sırlarla dolu"
-- SES BÖLÜMLENMESİ: Kısa cümleler, virgül ve nokta ile nefes verme
-- MERAK CÜMLELERİ ARASI: "Ve burada işler ilginçleşiyor...", "Ama bu yeterli değildi..."
-- KAPANIŞ: Düşündürücü, soru bırakan, abone olmaya yönlendiren
+- DRAMATİK HOOK ile başla: bir sahne, bir sır, bir soru
+- HİKAYE anlat: karakterler, sahneler, çatışmalar
+- SORU VE CEVAP yapısı: "Peki ya...? Cevap şaşırtıcı..."
+- SES TONUNDA YAZ: "Hayal et", "Şimdi şunu söylüyorum", "İşte tam o anda"
+- VURGU KELİMELERİ: "İnanılmaz", "Şoke edici", "Şaşırtıcı"
+- KISA CÜMLELER, virgül ve nokta ile nefes verme
 
-ÖRNEK BAŞLANGIÇ (Sadece tarz örneği, kopyalama):
-"Hayal et. MÖ 1.700. Anadolu'nun ortasında, sıradan görünen bir köy. Kimse farkında değil ama, bu insanlar tarihi değiştirecek. Çünkü onlar... demirin sırrını çözmek üzereler. Bu, sıradan bir hikaye değil. Bu, bir imparatorluğun nasıl doğduğunun hikayesi. Ve bugün anlatacaklarım, seni şaşırtacak."
+🎯 SENARYO SONUNDA MUTLAKA:
+Senaryonun SON 50-80 kelimesi şöyle olmalı:
+"...[konu kapanışı]. Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın. Bir sonraki videoda görüşmek üzere, hoşçakalın!"
+
+Veya benzer bir kapanış. Ama ŞU CÜMLE MUTLAKA OLMALI:
+"Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın."
 
 ═══════════════════════════════════════════════════
 GÖRSEL EŞLEŞTİRME - EN ÖNEMLİSİ!
 ═══════════════════════════════════════════════════
 
-Senaryoyu YAZDIKTAN SONRA, içeriği 20 SAHNEYE böl. Her sahne ~40-50 kelimelik bir bölüm olmalı (senaryo akışını koru).
+⛔ KESİN YASAK - GÖRSELLERDE ASLA OLMAYACAK:
+- Modern insanlar (jeansli, takım elbiseli, modern saç)
+- Modern teknoloji (telefon, bilgisayar, araba, uçak)
+- Modern mekanlar (şehir, ofis, ev, dükkan)
+- Modern kıyafet (tişört, ayakkabı, gözlük)
+- Modern aktiviteler (altın arama makineleri, fabrika)
+- 1900 sonrası HİÇBİR ŞEY
 
-Her sahne için, O SAHNENİN TAM İÇERİĞİNİ GÖSTEREN bir FLUX görsel promptu üret.
+✅ MUTLAKA OLACAK:
+- "ancient" veya dönem adıyla başlasın
+- "Bronze Age", "Hittite Empire", "Ancient Egypt" gibi dönem
+- "wearing ancient tunic/robe", "leather sandals", "bronze armor"
+- "ancient temple", "stone palace", "desert oasis"
+- "cinematic photorealistic, period-accurate"
 
-ÖRNEK:
-Senaryo bölümü: "Hititler demir işlemeyi öğrendiklerinde, bunu sadece silah yapmak için kullanmadılar. Onlar, demiri bir ekonomik avantaja çevirdiler."
-Görsel prompt: "Hittite blacksmith forging iron sword in dark workshop, glowing orange forge fire, sparks flying, dramatic chiaroscuro lighting, cinematic 16:9, photorealistic, ancient Anatolian setting"
+═══════════════════════════════════════════════════
+MÜZIK MOOD
+═══════════════════════════════════════════════════
 
-KRİTİK: Görsel prompt o sahnedeki SOMUT GÖRSEL ÖGEYI göstermeli (savaşçı dövüyor, kral konuşuyor, ordu yürüyor, harabe görüntüsü, vb.)
+- "epic" → büyük savaşlar, imparatorluk, fethedişler
+- "mysterious" → gizemler, kayıp medeniyetler, sırlar
+- "calm" → günlük yaşam, tapınaklar, sanat
+- "dramatic" → trajediler, çöküşler, ihanetler
 
 ═══════════════════════════════════════════════════
 KONU: ${konu}
 ═══════════════════════════════════════════════════
 
 GERÇEK BİLGİ ZORUNLULUĞU:
-- SADECE doğrulanmış tarihi ve arkeolojik bilgi kullan
-- UYDURMA YOK ama BU BİLGİLERİ HİKAYE GİBİ ANLAT
+- Doğrulanmış tarihi ve arkeolojik bilgi
+- UYDURMA YOK ama HİKAYE GİBİ ANLAT
 
-Şu JSON yapısında çıktı üret:
+JSON çıktısı:
 
 {
   "konu": "${konu}",
-  "baslik": "YouTube videosu için MERAK UYANDIRICI başlık (60-70 karakter, clickbait yakın olabilir)",
-  "thumbnail_baslik": "Thumbnail KISA başlık (MAKS 15 karakter, BÜYÜK HARF, 1-2 kelime). Örnek: 'HİTİTLER', 'PİRAMİT SIRRI', 'GİZLİ GERÇEK'",
-  "thumbnail_alt_baslik": "Alt başlık 1-3 kelime: 'GERÇEK Mİ?', 'KEŞFEDİLDİ', 'AÇIKLANDI'",
-  "thumbnail_prompt": "Thumbnail FLUX promptu - MUTLAKA konuyla doğrudan ilgili (Hitit konusunda Hitit savaşçısı/Anadolu kralı). Hyperrealistic close-up face shot, dramatic shocked/intense expression, cinematic lighting, MrBeast YouTube thumbnail style, leave RIGHT THIRD empty for text. 16:9, NO TEXT IN IMAGE",
-  "aciklama": "Video açıklaması, 200-300 kelime, ilk satır hook olsun",
-  "senaryo": "TAM 800-1100 kelimelik STORYTELLING senaryo. Yukarıdaki kurallara UY. Hook ile başla, hikaye anlat, soru sor, drama kur, kapanışla bağla. Cümleler arası nokta/virgüllere DİKKAT (TTS için).",
+  "baslik": "MERAK UYANDIRICI başlık (60-70 karakter)",
+  "thumbnail_baslik": "MAKS 15 karakter, BÜYÜK HARF, 1-2 kelime",
+  "thumbnail_alt_baslik": "1-3 kelime: 'GERÇEK Mİ?', 'KEŞFEDİLDİ'",
+  "thumbnail_prompt": "Thumbnail FLUX promptu - konuyla DİREKT ilgili, ancient period clothing, MrBeast YouTube thumbnail style, leave RIGHT THIRD empty for text. 16:9, NO TEXT",
+  "muzik_mood": "epic / mysterious / calm / dramatic",
+  "aciklama": "Video açıklaması, 200-300 kelime",
+  "senaryo": "TAM 850-1150 kelimelik STORYTELLING senaryo. Yukarıdaki kurallara UY. Hook ile başla, hikaye anlat, SONUNDA abone kapanışını ekle ('Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın')",
   "sahneler": [
     {
-      "metin": "Senaryonun 1. bölümünden ~40-50 kelimelik bir parça (senaryodaki cümlelerle birebir eşleşir)",
-      "gorsel_prompt": "Bu sahnenin SOMUT görsel öğesi - FLUX prompt İngilizce, cinematic, photorealistic, 16:9 widescreen"
+      "metin": "Senaryonun bir bölümü, 40-50 kelime",
+      "gorsel_prompt": "BU SAHNENİN SOMUT GÖRSEL ÖĞESİ. ASLA modern öğe. Mutlaka 'ancient' veya dönem adı. FLUX İngilizce prompt, cinematic photorealistic 16:9, period-accurate"
     }
-    // 20 sahne tam olarak
+    // TAM 20 sahne
   ],
-  "ai_klip_prompts": ["3 adet AI video klip promptu (İngilizce, Veo Studio için, 16:9)"]
+  "ai_klip_prompts": ["3 AI video klip promptu (İngilizce, period-accurate, 16:9)"]
 }
 
 KRİTİK KURALLAR:
 - sahneler: TAM 20 öğe
-- Her sahnenin metni senaryonun bir bölümüne karşılık gelmeli
-- Her sahnenin görsel_prompt'u O sahnedeki SOMUT görsel öğeyi göstermeli (alakasız genel kavram değil!)
-- ai_klip_prompts: TAM 3 öğe
+- Her görsel_prompt MUTLAKA "ancient" veya dönem adı içermeli
+- Senaryonun SONUNDA abone iste cümlesi MUTLAKA olmalı
 - thumbnail_baslik MAKS 15 KARAKTER`;
 
   const maxRetries = 5;
@@ -123,8 +137,8 @@ KRİTİK KURALLAR:
         model: modelAdi,
         generationConfig: {
           responseMimeType: "application/json",
-          temperature: 0.8, // Daha yaratıcı
-          maxOutputTokens: 16384, // Daha uzun çıktı için
+          temperature: 0.8,
+          maxOutputTokens: 16384,
         },
       });
       
@@ -132,7 +146,6 @@ KRİTİK KURALLAR:
       const text = result.response.text().trim();
       const json = JSON.parse(text);
       
-      // Validasyon
       if (!json.sahneler || json.sahneler.length < 20) {
         throw new Error(`Gemini ${json.sahneler?.length || 0} sahne verdi, 20 gerekli.`);
       }
@@ -141,16 +154,19 @@ KRİTİK KURALLAR:
         json.sahneler = json.sahneler.slice(0, 20);
       }
       
-      // Eski format uyumluluğu için ai_gorsel_prompts ve pexels'i de oluştur
+      // Geriye uyumluluk
       json.ai_gorsel_prompts = json.sahneler.map(s => s.gorsel_prompt);
-      json.pexels_anahtar_kelimeler = []; // Boş - pexels kullanmayacağız
+      json.pexels_anahtar_kelimeler = [];
       
       // Fallback'ler
       if (!json.thumbnail_prompt) {
-        json.thumbnail_prompt = `Hyperrealistic close-up dramatic shocked face shot related to ${konu}, vibrant cinematic lighting, high contrast, MrBeast YouTube thumbnail style, leave right third empty for text, 16:9 widescreen, no text`;
+        json.thumbnail_prompt = `Hyperrealistic close-up dramatic face related to ${konu}, ancient period clothing, MrBeast YouTube thumbnail style, leave right third empty for text, 16:9, no text`;
       }
       if (!json.thumbnail_baslik) json.thumbnail_baslik = "GİZEM";
       if (!json.thumbnail_alt_baslik) json.thumbnail_alt_baslik = "AÇIKLANDI";
+      if (!json.muzik_mood || !["epic", "mysterious", "calm", "dramatic"].includes(json.muzik_mood)) {
+        json.muzik_mood = "epic";
+      }
       
       if (json.thumbnail_baslik.length > 18) {
         json.thumbnail_baslik = json.thumbnail_baslik.substring(0, 18).trim();
@@ -159,9 +175,18 @@ KRİTİK KURALLAR:
         json.thumbnail_alt_baslik = json.thumbnail_alt_baslik.substring(0, 20).trim();
       }
       
+      // Senaryoda abone cümlesi yoksa zorla ekle (güvence)
+      const aboneCumlesi = "Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın.";
+      if (!json.senaryo.toLowerCase().includes("abone")) {
+        console.log("⚠️ Abone cümlesi senaryoda yok, manuel ekleniyor.");
+        json.senaryo = json.senaryo.trim() + " " + aboneCumlesi + " Bir sonraki videoda görüşmek üzere, hoşçakalın!";
+      }
+      
       console.log(`İçerik üretildi: ${json.baslik}`);
       console.log(`Thumbnail: "${json.thumbnail_baslik}" + "${json.thumbnail_alt_baslik}"`);
+      console.log(`Müzik mood: ${json.muzik_mood}`);
       console.log(`${json.sahneler.length} sahne, senaryo ${json.senaryo.length} karakter`);
+      console.log(`Abone cümlesi: ${json.senaryo.toLowerCase().includes("abone") ? "✓" : "✗"}`);
       return json;
       
     } catch (error) {
@@ -215,9 +240,10 @@ async function main() {
       aciklama: icerik.aciklama,
       ai_gorsel_prompts: icerik.ai_gorsel_prompts,
       ai_klip_prompts: icerik.ai_klip_prompts,
-      pexels_anahtar_kelimeler: [], // Boş - pexels'i tamamen kaldırdık
+      pexels_anahtar_kelimeler: [],
       drive_folder_id: anaKlasor.id,
       klip_klasor_id: klipKlasor.id,
+      muzik_mood: icerik.muzik_mood,
     });
     
     const klipPromptlari = icerik.ai_klip_prompts
@@ -228,13 +254,14 @@ async function main() {
       CHAT_ID,
       `📝 *İçerik hazır!*\n\n` +
       `📌 *Başlık:* ${icerik.baslik}\n` +
-      `🎯 *Thumbnail:* ${icerik.thumbnail_baslik} | ${icerik.thumbnail_alt_baslik || ""}\n\n` +
+      `🎯 *Thumbnail:* ${icerik.thumbnail_baslik} | ${icerik.thumbnail_alt_baslik || ""}\n` +
+      `🎵 *Müzik mood:* ${icerik.muzik_mood}\n\n` +
       `📂 [Drive klasörü](${anaKlasor.link})\n\n` +
       `━━━━━━━━━━━━━━━\n\n` +
       `🎬 *VEO STUDIO'DA 3 KLİP ÜRET:*\n\n${klipPromptlari}\n\n` +
       `_Klipleri "04-veo-klipleri-buraya" klasörüne yükle._\n\n` +
       `━━━━━━━━━━━━━━━\n\n` +
-      `⏳ Diğer materyaller (görsel, ses, thumbnail, altyazı) paralel üretiliyor...`
+      `⏳ Diğer materyaller paralel üretiliyor...`
     );
     
     console.log("✅ İçerik üretimi tamam.");
