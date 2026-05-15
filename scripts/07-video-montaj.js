@@ -1,10 +1,9 @@
 /**
- * 07 - Video Montaj v6 (FFmpeg) - 3 AŞAMALI
- * Final montajı parçaladık:
- * - Aşama A: Video + ses + müzik (basit)
- * - Aşama B: Üzerine altyazı (ayrı pass)
- * - Aşama C: Son 10sn abone butonu (sadece kısa kısım)
- * Bu sayede takılma riski sıfır.
+ * 07 - Video Montaj v7 (SADE & HIZLI)
+ * - Abone butonu KALDIRILDI (advance workflow'a)
+ * - Müzik volume %12 → %5 (TTS ön planda)
+ * - Ken Burns: ultrafast yerine fast preset (titreşim azalır)
+ * - 2 aşamalı: Aşama A (video+ses+müzik), Aşama B (altyazı)
  */
 
 import fs from "fs";
@@ -12,8 +11,6 @@ import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { google } from "googleapis";
-import axios from "axios";
-import sharp from "sharp";
 import {
   jobOku,
   jobGuncelle,
@@ -30,7 +27,6 @@ const execAsync = promisify(exec);
 const { JOB_ID, GDRIVE_MUZIK_FOLDER_ID } = process.env;
 
 const TMP_DIR = "/tmp/video-montaj";
-const ABONE_BUTTON_URL = "https://raw.githubusercontent.com/murturhan/bilgisok-otomasyon/main/abone-ol-button.png";
 const PARALEL_KEN_BURNS = 4;
 
 async function driveKlasorIcerigi(klasorId, auth) {
@@ -89,30 +85,34 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
   }
 }
 
+// Ken Burns - DAHA SMOOTH (zoom hızı yavaşlatıldı, preset 'fast' kullanıldı)
 async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   const fps = 25;
   const frameSayisi = Math.ceil(sure * fps);
   
+  // Daha YAVAŞ zoom (0.0008 → 0.0005), titreşim azalır
   let zoomFiltre;
   switch (varyasyon % 4) {
     case 0:
-      zoomFiltre = `zoompan=z='min(zoom+0.0008,1.3)':d=${frameSayisi}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720:fps=${fps}`;
+      zoomFiltre = `zoompan=z='min(zoom+0.0005,1.2)':d=${frameSayisi}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720:fps=${fps}`;
       break;
     case 1:
-      zoomFiltre = `zoompan=z='min(zoom+0.0008,1.3)':d=${frameSayisi}:x='iw/4':y='ih/4':s=1280x720:fps=${fps}`;
+      zoomFiltre = `zoompan=z='min(zoom+0.0005,1.2)':d=${frameSayisi}:x='iw/4':y='ih/4':s=1280x720:fps=${fps}`;
       break;
     case 2:
-      zoomFiltre = `zoompan=z='if(eq(on,0),1.3,zoom-0.0008)':d=${frameSayisi}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720:fps=${fps}`;
+      zoomFiltre = `zoompan=z='if(eq(on,0),1.2,zoom-0.0005)':d=${frameSayisi}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720:fps=${fps}`;
       break;
     case 3:
-      zoomFiltre = `zoompan=z='min(zoom+0.0008,1.3)':d=${frameSayisi}:x='iw*3/4-iw/zoom':y='ih*3/4-ih/zoom':s=1280x720:fps=${fps}`;
+      zoomFiltre = `zoompan=z='min(zoom+0.0005,1.2)':d=${frameSayisi}:x='iw*3/4-iw/zoom':y='ih*3/4-ih/zoom':s=1280x720:fps=${fps}`;
       break;
   }
   
+  // preset: ultrafast yerine fast - kalite daha iyi, titreşim az
+  // CRF: 28 yerine 23 (daha temiz)
   const args = `-loop 1 -i "${gorselPath}" \
     -vf "${zoomFiltre},format=yuv420p" \
     -t ${sure} \
-    -c:v libx264 -preset ultrafast -crf 28 \
+    -c:v libx264 -preset fast -crf 23 \
     -threads 2 \
     "${ciktiPath}"`;
   
@@ -144,57 +144,15 @@ async function videolariBirlestir(klipListesi, ciktiPath) {
   await ffmpegCalistir(args, "concat");
 }
 
-async function aboneButtonHazirla(ciktiPath) {
-  console.log("🔘 Abone butonu hazırlanıyor...");
-  
-  const indirilenYol = path.join(TMP_DIR, "abone-raw.png");
-  
-  try {
-    const response = await axios.get(ABONE_BUTTON_URL, { responseType: "arraybuffer", timeout: 10000 });
-    fs.writeFileSync(indirilenYol, response.data);
-  } catch (e) {
-    console.log(`⚠ Abone butonu indirilemedi: ${e.message}`);
-    return false;
-  }
-  
-  try {
-    const buf = await sharp(indirilenYol)
-      .resize(320, 160, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 0 } })
-      .ensureAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    
-    const { data, info } = buf;
-    const threshold = 240;
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i] >= threshold && data[i + 1] >= threshold && data[i + 2] >= threshold) {
-        data[i + 3] = 0;
-      }
-    }
-    
-    await sharp(data, {
-      raw: { width: info.width, height: info.height, channels: 4 }
-    }).png().toFile(ciktiPath);
-    
-    console.log("  ✓ Abone butonu hazır");
-    return true;
-  } catch (e) {
-    console.log(`⚠ Sharp başarısız: ${e.message}`);
-    fs.copyFileSync(indirilenYol, ciktiPath);
-    return true;
-  }
-}
-
-// ─── 3 AŞAMALI MONTAJ ─────────────────────────────────────────────
-
-// Aşama A: Sessiz video + ses + müzik (BASIT, ultra hızlı)
+// Aşama A: Video + ses + müzik (video copy, sadece ses encode)
 async function asamaA_video_ses_muzik({ videoPath, sesPath, muzikPath, ciktiPath }) {
   const hasMusic = muzikPath && fs.existsSync(muzikPath);
   
   let filterComplex, mapArgs, muzikInput;
   
   if (hasMusic) {
-    filterComplex = `-filter_complex "[1:a]volume=1.0[tts];[2:a]volume=0.12,aloop=loop=-1:size=2e+09[music];[tts][music]amix=inputs=2:duration=first[aout]"`;
+    // MÜZIK SESI %12 → %5 (TTS net duyulsun)
+    filterComplex = `-filter_complex "[1:a]volume=1.0[tts];[2:a]volume=0.05,aloop=loop=-1:size=2e+09[music];[tts][music]amix=inputs=2:duration=first[aout]"`;
     mapArgs = `-map 0:v -map "[aout]"`;
     muzikInput = `-stream_loop -1 -i "${muzikPath}"`;
   } else {
@@ -211,59 +169,27 @@ async function asamaA_video_ses_muzik({ videoPath, sesPath, muzikPath, ciktiPath
     -shortest \
     "${ciktiPath}"`;
   
-  await ffmpegCalistir(args, "asama-A-ses-muzik");
+  await ffmpegCalistir(args, "asama-A");
 }
 
-// Aşama B: Üzerine altyazı bindir
+// Aşama B: Altyazı bindir
 async function asamaB_altyazi({ videoPath, altyaziPath, ciktiPath }) {
   if (!altyaziPath || !fs.existsSync(altyaziPath)) {
-    // Altyazı yoksa direkt kopyala
     fs.copyFileSync(videoPath, ciktiPath);
-    console.log("[asama-B-altyazi] altyazı yok, atlandı");
+    console.log("[asama-B] altyazı yok, atlandı");
     return;
   }
   
   const srtEscaped = altyaziPath.replace(/:/g, "\\:").replace(/'/g, "\\'");
   
+  // Altyazı stili: daha rahat okunur (FontSize 24, MarginV 60)
   const args = `-i "${videoPath}" \
-    -vf "subtitles='${srtEscaped}':force_style='FontName=Arial,FontSize=22,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=3,Shadow=1,Alignment=2,MarginV=50'" \
-    -c:v libx264 -preset ultrafast -crf 25 -threads 0 \
+    -vf "subtitles='${srtEscaped}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=3,Shadow=1,Alignment=2,MarginV=60'" \
+    -c:v libx264 -preset fast -crf 23 -threads 0 \
     -c:a copy \
     "${ciktiPath}"`;
   
   await ffmpegCalistir(args, "asama-B-altyazi");
-}
-
-// Aşama C: Son 10 saniyeye abone butonu bindir (kısa kısım, hızlı)
-async function asamaC_abone({ videoPath, abonePath, toplamSure, ciktiPath }) {
-  if (!abonePath || !fs.existsSync(abonePath)) {
-    fs.copyFileSync(videoPath, ciktiPath);
-    console.log("[asama-C-abone] buton yok, atlandı");
-    return;
-  }
-  
-  // Basitleştirilmiş enable: sadece son 10 saniyede her saniyenin ilk yarısı görünür
-  // Mod fonksiyonu yerine basit aralık kontrolü
-  const baslangic = Math.max(0, toplamSure - 10);
-  
-  // Daha basit ve hızlı: yanıp sönmeyi 5 ayrı zaman dilimine bölelim
-  // t=baslangic..baslangic+0.5, baslangic+1..baslangic+1.5, vs.
-  const enableConditions = [];
-  for (let i = 0; i < 10; i++) {
-    const t1 = baslangic + i;
-    const t2 = baslangic + i + 0.5;
-    enableConditions.push(`between(t,${t1},${t2})`);
-  }
-  const enableExpr = enableConditions.join("+");
-  
-  const args = `-i "${videoPath}" -loop 1 -i "${abonePath}" \
-    -filter_complex "[0:v][1:v]overlay=x='main_w-overlay_w-30':y='main_h-overlay_h-30':enable='${enableExpr}'" \
-    -c:v libx264 -preset ultrafast -crf 25 -threads 0 \
-    -c:a copy \
-    -shortest \
-    "${ciktiPath}"`;
-  
-  await ffmpegCalistir(args, "asama-C-abone");
 }
 
 async function muzikSec(mood, saAuth) {
@@ -277,7 +203,6 @@ async function muzikSec(mood, saAuth) {
   const moodKlasorler = await driveAltKlasorAraSA(mood, GDRIVE_MUZIK_FOLDER_ID, saAuth);
   
   let kaynakKlasorId;
-  
   if (moodKlasorler.length > 0) {
     kaynakKlasorId = moodKlasorler[0].id;
     console.log(`  ✓ Mood klasörü: ${moodKlasorler[0].name}`);
@@ -292,7 +217,6 @@ async function muzikSec(mood, saAuth) {
   );
   
   if (muzikler.length === 0) return null;
-  
   console.log(`  ✓ ${muzikler.length} müzik`);
   return muzikler[Math.floor(Math.random() * muzikler.length)];
 }
@@ -369,9 +293,6 @@ async function main() {
       console.log(`  ✓ Müzik: ${secilenMuzik.name}`);
     }
     
-    const aboneYol = path.join(TMP_DIR, "abone.png");
-    const aboneHazir = await aboneButtonHazirla(aboneYol);
-    
     // Ses süresi
     const { stdout: sesDurationStr } = await execAsync(
       `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${sesYol}"`
@@ -391,11 +312,7 @@ async function main() {
     const sessizVideoYol = path.join(TMP_DIR, "sessiz-video.mp4");
     await videolariBirlestir(klipYollar, sessizVideoYol);
     
-    // ═════════════════════════════════════════════
-    // 3 AŞAMALI FINAL MONTAJ
-    // ═════════════════════════════════════════════
-    
-    // Aşama A: Video + Ses + Müzik
+    // Aşama A
     console.log("🎬 Aşama A: Video + Ses + Müzik...");
     const asamaAYol = path.join(TMP_DIR, "asama-a.mp4");
     await asamaA_video_ses_muzik({
@@ -405,22 +322,12 @@ async function main() {
       ciktiPath: asamaAYol,
     });
     
-    // Aşama B: Üzerine altyazı
+    // Aşama B
     console.log("🎬 Aşama B: Altyazı...");
-    const asamaBYol = path.join(TMP_DIR, "asama-b.mp4");
+    const finalYol = path.join(TMP_DIR, "final.mp4");
     await asamaB_altyazi({
       videoPath: asamaAYol,
       altyaziPath: altyaziYol,
-      ciktiPath: asamaBYol,
-    });
-    
-    // Aşama C: Abone butonu
-    console.log("🎬 Aşama C: Abone butonu...");
-    const finalYol = path.join(TMP_DIR, "final.mp4");
-    await asamaC_abone({
-      videoPath: asamaBYol,
-      abonePath: aboneHazir ? aboneYol : null,
-      toplamSure: sesDuration,
       ciktiPath: finalYol,
     });
     
@@ -451,11 +358,10 @@ async function main() {
     await telegram(
       job.chat_id,
       `🎬 *Video hazır!* 🎉\n\n` +
-      `📦 Boyut: ${(finalStats.size / 1024 / 1024).toFixed(1)} MB\n` +
-      `⏱ Süre: ~${Math.floor(sesDuration / 60)}:${String(Math.floor(sesDuration % 60)).padStart(2, "0")}\n` +
+      `📦 ${(finalStats.size / 1024 / 1024).toFixed(1)} MB\n` +
+      `⏱ ~${Math.floor(sesDuration / 60)}:${String(Math.floor(sesDuration % 60)).padStart(2, "0")}\n` +
       `⚡ Render: ${toplamSure}s\n` +
-      `🎵 ${secilenMuzik ? secilenMuzik.name : "müzik yok"}\n` +
-      `🔘 Abone btn: ${aboneHazir ? "var" : "yok"}\n\n` +
+      `🎵 ${secilenMuzik ? secilenMuzik.name : "müzik yok"}\n\n` +
       `📂 [Video'yu aç](${yuklenen.link})`
     );
     
