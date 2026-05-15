@@ -74,7 +74,7 @@ jobs:
           JOB_ID: ${{ steps.params.outputs.job_id }}
         run: node scripts/01-icerik-uret.js
       
-      # 01 başarılı bitince 4 paralel workflow'u tetikle (görsel, ses, stok, thumbnail)
+      # Alt workflow'ları tetikle (görsel, ses, thumbnail, altyazı) - STOK VIDEO KALDIRILDI
       - name: 02-Görsel tetikle
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
@@ -94,16 +94,6 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/dispatches" \
             -d "{\"event_type\":\"seslendirme_uret\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
-      
-      - name: 04-Stok video tetikle
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
-            -d "{\"event_type\":\"stok_video_indir\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
       
       - name: 05-Thumbnail tetikle
         env:
@@ -126,6 +116,4 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/dispatches" \
             -d "{\"event_type\":\"altyazi_uret\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
       
-      # 07-Video montaj burada TETİKLENMEZ - tüm önceki materyaller hazır olduktan sonra
-      # MANUEL veya başka bir koordinasyon workflow ile tetiklenecek
-      # (Çünkü video montaj görsel+ses+altyazı tamamlanmadan çalışmamalı)
+      # 07-Video montaj manuel tetiklenir (tüm materyaller hazır olunca)
