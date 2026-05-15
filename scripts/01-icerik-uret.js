@@ -1,8 +1,8 @@
 /**
- * 01 - İçerik Üretimi v6
- * - Storytelling + modern öğe yasağı + müzik mood
- * - Senaryo SONUNDA abone iste kapanışı
- * - Telegram'dan Veo klip istemi KALDIRILDI
+ * 01 - İçerik Üretimi v7
+ * - Storytelling + tarihi DÖNEM DOĞRULUĞU (Konstantinopolis dönemi → minare yok!)
+ * - Abone iste cümlesi KALDIRILDI (advance workflow'a)
+ * - Müzik mood seçimi
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -37,90 +37,90 @@ async function icerikUret(konu) {
 KONU: "${konu}"
 
 ═══════════════════════════════════════════════════
-SENARYO YAZIM KURALLARI - DİKKAT!
+SENARYO YAZIM KURALLARI
 ═══════════════════════════════════════════════════
 
 ❌ ASLA YAPMA:
 - Wikipedia stili düz anlatım YOK
 - Kuru tarih sıralaması YOK
-- "olmuştur, edilmiştir, kullanılmıştır" formal dil YOK
+- "olmuştur, edilmiştir" formal dil YOK
 
 ✅ YAP:
-- DRAMATİK HOOK ile başla: bir sahne, bir sır, bir soru
+- DRAMATİK HOOK ile başla
 - HİKAYE anlat: karakterler, sahneler, çatışmalar
-- SORU VE CEVAP yapısı: "Peki ya...? Cevap şaşırtıcı..."
-- SES TONUNDA YAZ: "Hayal et", "Şimdi şunu söylüyorum", "İşte tam o anda"
-- VURGU KELİMELERİ: "İnanılmaz", "Şoke edici", "Şaşırtıcı"
-- KISA CÜMLELER, virgül ve nokta ile nefes verme
-
-🎯 SENARYO SONUNDA MUTLAKA:
-Senaryonun SON 50-80 kelimesi şöyle olmalı:
-"...[konu kapanışı]. Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın. Bir sonraki videoda görüşmek üzere, hoşçakalın!"
-
-ŞU CÜMLE MUTLAKA OLMALI:
-"Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın."
+- SES TONUNDA YAZ: "Hayal et", "Şimdi düşün", "İşte tam o anda"
+- KISA CÜMLELER, virgül ve nokta ile nefes
 
 ═══════════════════════════════════════════════════
-GÖRSEL EŞLEŞTİRME - EN ÖNEMLİSİ!
+TARİHİ DÖNEM DOĞRULUĞU - EN KRİTİK KURAL!!!
 ═══════════════════════════════════════════════════
 
-⛔ KESİN YASAK - GÖRSELLERDE ASLA OLMAYACAK:
-- Modern insanlar (jeansli, takım elbiseli, modern saç)
-- Modern teknoloji (telefon, bilgisayar, araba, uçak)
-- Modern mekanlar (şehir, ofis, ev, dükkan)
-- Modern kıyafet (tişört, ayakkabı, gözlük)
-- Modern aktiviteler (altın arama makineleri, fabrika)
-- 1900 sonrası HİÇBİR ŞEY
+⛔⛔⛔ MUTLAKA UYGULAMAN GEREKİYOR:
 
-✅ MUTLAKA OLACAK:
-- "ancient" veya dönem adıyla başlasın
-- "Bronze Age", "Hittite Empire", "Ancient Egypt" gibi dönem
-- "wearing ancient tunic/robe", "leather sandals", "bronze armor"
-- "ancient temple", "stone palace", "desert oasis"
-- "cinematic photorealistic, period-accurate"
+KONUYU OKU. Hangi tarihi dönem? Hangi yüzyıl? Hangi medeniyet?
+
+ÖRNEKLER:
+- "Konstantinopolis" konusu → BİZANS DÖNEMİ → Ayasofya'da MİNARE YOK, kubbe var. Bizans bayrakları (kartal), Bizans askerleri
+- "İstanbul'un Fethi" konusu → 1453 → Osmanlı askerleri, top mehmet, şehrin ÇİFTHALLİ durumu (kubbe + henüz minaresiz Ayasofya)
+- "Osmanlı klasik dönem" → 16-17. yy → Mimari Sinan, minareli camiler, kavuklu askerler, kılıçlar
+- "Antik Mısır" → MÖ 3000-1000 → piramitler, hieroglifler, beyaz kıyafetler
+- "Hititler" → MÖ 1700-1180 → Anadolu, taş tapınaklar, savaş arabaları
+- "Roma İmparatorluğu" → MÖ 27-MS 476 → Toga, lejyoner, marble heykeller
+
+GÖRSEL PROMPT'TA MUTLAKA:
+- Dönemin SPESİFİK ADI: "Byzantine era", "Ottoman era 16th century", "Hittite Bronze Age"
+- Dönem detayı: hangi yüzyıl, hangi hanedan
+- Mimari detay: kubbe? minare? piramit? mabet?
+- Kıyafet detayı: toga? kavuk? tunic? robe?
+
+ASLA OLMAYACAKLAR:
+- Modern öğeler (telefon, araba, jeans)
+- Yanlış dönem öğeleri (Bizans'ta minare!, Antik Mısır'da kemerli kapı!, Hititler'de demir kale!)
+- Anachronism (zamanlamasız öğeler)
 
 ═══════════════════════════════════════════════════
 MÜZIK MOOD
 ═══════════════════════════════════════════════════
 
-- "epic" → büyük savaşlar, imparatorluk, fethedişler
-- "mysterious" → gizemler, kayıp medeniyetler, sırlar
-- "calm" → günlük yaşam, tapınaklar, sanat
+- "epic" → savaşlar, fetihler, kahramanlık
+- "mysterious" → sırlar, kayıp medeniyetler
+- "calm" → günlük yaşam, sanat, tapınaklar
 - "dramatic" → trajediler, çöküşler, ihanetler
 
 ═══════════════════════════════════════════════════
 KONU: ${konu}
 ═══════════════════════════════════════════════════
 
-GERÇEK BİLGİ ZORUNLULUĞU:
-- Doğrulanmış tarihi ve arkeolojik bilgi
-- UYDURMA YOK ama HİKAYE GİBİ ANLAT
+İLK ADIM (zihninde):
+1. Bu konunun TAM TARİHİ DÖNEMİ nedir? (yüzyıl, medeniyet)
+2. O dönemin mimarisi, kıyafetleri, askeri donanımı nedir?
+3. O dönemde NE OLAMAZ? (anachronism)
 
-JSON çıktısı:
+ŞIMDI JSON çıktısı:
 
 {
   "konu": "${konu}",
+  "tarihi_donem": "Bu konunun ait olduğu tarihi dönem (örn: 'Bizans dönemi, 4-15. yy', 'Osmanlı klasik dönem 16. yy')",
   "baslik": "MERAK UYANDIRICI başlık (60-70 karakter)",
-  "thumbnail_baslik": "MAKS 15 karakter, BÜYÜK HARF, 1-2 kelime",
+  "thumbnail_baslik": "MAKS 15 karakter, BÜYÜK HARF",
   "thumbnail_alt_baslik": "1-3 kelime: 'GERÇEK Mİ?', 'KEŞFEDİLDİ'",
-  "thumbnail_prompt": "Thumbnail FLUX promptu - konuyla DİREKT ilgili, ancient period clothing, MrBeast YouTube thumbnail style, leave RIGHT THIRD empty for text. 16:9, NO TEXT",
+  "thumbnail_prompt": "Thumbnail FLUX prompt - konunun TAM DÖNEMİNE uygun (Bizans için kubbeli kilise minaresiz, Osmanlı için minareli cami). MrBeast style, leave right third empty, 16:9, NO TEXT",
   "muzik_mood": "epic / mysterious / calm / dramatic",
   "aciklama": "Video açıklaması, 200-300 kelime",
-  "senaryo": "TAM 850-1150 kelimelik STORYTELLING senaryo. Yukarıdaki kurallara UY. Hook ile başla, hikaye anlat, SONUNDA abone kapanışını ekle",
+  "senaryo": "TAM 800-1100 kelimelik STORYTELLING senaryo. Hook ile başla, hikaye anlat. Türkçe ek apostrofları kullan ('Bizans'ın, Konstantinopolis'in)",
   "sahneler": [
     {
       "metin": "Senaryonun bir bölümü, 40-50 kelime",
-      "gorsel_prompt": "BU SAHNENİN SOMUT GÖRSEL ÖĞESİ. ASLA modern öğe. Mutlaka 'ancient' veya dönem adı. FLUX İngilizce prompt, cinematic photorealistic 16:9, period-accurate"
+      "gorsel_prompt": "BU SAHNENİN SOMUT görsel öğesi. ZORUNLU: dönem adı (Byzantine era / Ottoman 16th century / Hittite Bronze Age). DİKKAT: anachronism YOK (Bizans'ta minare yok!). FLUX İngilizce, cinematic photorealistic 16:9, period-accurate architecture and clothing"
     }
     // TAM 20 sahne
-  ],
-  "ai_klip_prompts": ["3 AI video klip promptu (İngilizce, period-accurate, 16:9)"]
+  ]
 }
 
 KRİTİK KURALLAR:
 - sahneler: TAM 20 öğe
-- Her görsel_prompt MUTLAKA "ancient" veya dönem adı içermeli
-- Senaryonun SONUNDA abone iste cümlesi MUTLAKA olmalı
+- Her görsel_prompt mutlaka SPESİFİK dönem adı içermeli
+- ANACHRONISM YOK (yanlış dönem öğeleri)
 - thumbnail_baslik MAKS 15 KARAKTER`;
 
   const maxRetries = 5;
@@ -157,9 +157,10 @@ KRİTİK KURALLAR:
       
       json.ai_gorsel_prompts = json.sahneler.map(s => s.gorsel_prompt);
       json.pexels_anahtar_kelimeler = [];
+      json.ai_klip_prompts = []; // Veo klip prompt'u artık yok
       
       if (!json.thumbnail_prompt) {
-        json.thumbnail_prompt = `Hyperrealistic close-up dramatic face related to ${konu}, ancient period clothing, MrBeast YouTube thumbnail style, leave right third empty for text, 16:9, no text`;
+        json.thumbnail_prompt = `Hyperrealistic close-up dramatic face related to ${konu}, period-accurate clothing, MrBeast YouTube thumbnail style, leave right third empty for text, 16:9, no text`;
       }
       if (!json.thumbnail_baslik) json.thumbnail_baslik = "GİZEM";
       if (!json.thumbnail_alt_baslik) json.thumbnail_alt_baslik = "AÇIKLANDI";
@@ -174,13 +175,8 @@ KRİTİK KURALLAR:
         json.thumbnail_alt_baslik = json.thumbnail_alt_baslik.substring(0, 20).trim();
       }
       
-      // Senaryoda abone cümlesi yoksa zorla ekle
-      if (!json.senaryo.toLowerCase().includes("abone")) {
-        console.log("⚠️ Abone cümlesi senaryoda yok, manuel ekleniyor.");
-        json.senaryo = json.senaryo.trim() + " Eğer bu videoyu beğendiyseniz, lütfen beğen butonuna basmayı ve kanalımıza abone olmayı unutmayın. Bir sonraki videoda görüşmek üzere, hoşçakalın!";
-      }
-      
       console.log(`İçerik üretildi: ${json.baslik}`);
+      console.log(`Tarihi dönem: ${json.tarihi_donem || 'belirtilmemiş'}`);
       console.log(`Thumbnail: "${json.thumbnail_baslik}" + "${json.thumbnail_alt_baslik}"`);
       console.log(`Müzik mood: ${json.muzik_mood}`);
       console.log(`${json.sahneler.length} sahne, senaryo ${json.senaryo.length} karakter`);
@@ -209,7 +205,7 @@ async function main() {
     const konu = await konuHavuzundanAl(TARIH, INDEX);
     console.log(`Konu: ${konu}`);
     
-    await telegram(CHAT_ID, `🎬 *Yeni iş başlatıldı!*\n\n✅ *Konu:* ${konu}\n🆔 \`${JOB_ID}\`\n\n⏳ Gemini içerik üretiyor...`);
+    await telegram(CHAT_ID, `🎬 *Yeni iş başlatıldı!*\n\n✅ *Konu:* ${konu}\n🆔 \`${JOB_ID}\`\n\n⏳ İçerik üretiliyor...`);
     
     const icerik = await icerikUret(konu);
     
@@ -235,22 +231,22 @@ async function main() {
       senaryo: icerik.senaryo,
       aciklama: icerik.aciklama,
       ai_gorsel_prompts: icerik.ai_gorsel_prompts,
-      ai_klip_prompts: icerik.ai_klip_prompts,
+      ai_klip_prompts: [],
       pexels_anahtar_kelimeler: [],
       drive_folder_id: anaKlasor.id,
       klip_klasor_id: "",
       muzik_mood: icerik.muzik_mood,
     });
     
-    // Veo klip istemi KALDIRILDI
     await telegram(
       CHAT_ID,
       `📝 *İçerik hazır!*\n\n` +
       `📌 *Başlık:* ${icerik.baslik}\n` +
+      `🏛 *Dönem:* ${icerik.tarihi_donem || '-'}\n` +
       `🎯 *Thumbnail:* ${icerik.thumbnail_baslik} | ${icerik.thumbnail_alt_baslik || ""}\n` +
-      `🎵 *Müzik mood:* ${icerik.muzik_mood}\n\n` +
+      `🎵 *Müzik:* ${icerik.muzik_mood}\n\n` +
       `📂 [Drive klasörü](${anaKlasor.link})\n\n` +
-      `⏳ Materyaller paralel üretiliyor (görsel, ses, thumbnail, altyazı, video)...`
+      `⏳ Görsel, ses, thumbnail, altyazı üretiliyor...`
     );
     
     console.log("✅ İçerik üretimi tamam.");
