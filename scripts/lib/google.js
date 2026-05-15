@@ -14,7 +14,6 @@ const {
   GDRIVE_FOLDER_ID,
 } = process.env;
 
-// Sheets için: Service Account (sadece spreadsheets scope)
 export function getServiceAccountAuth() {
   const credentials = JSON.parse(GDRIVE_SERVICE_ACCOUNT_JSON);
   return new google.auth.GoogleAuth({
@@ -26,7 +25,6 @@ export function getServiceAccountAuth() {
   });
 }
 
-// Drive için: OAuth user delegation (Drive write)
 export function getOAuthClient() {
   const oauth2Client = new google.auth.OAuth2(
     GOOGLE_OAUTH_CLIENT_ID,
@@ -46,7 +44,6 @@ export function getDrive() {
   return google.drive({ version: "v3", auth: getOAuthClient() });
 }
 
-// ─── KONU HAVUZU ─────────────────────────────────────────────────
 export async function konuHavuzundanAl(tarih, index) {
   const sheets = getSheets();
   const res = await sheets.spreadsheets.values.get({
@@ -73,7 +70,14 @@ export async function konuHavuzundanAl(tarih, index) {
   return matching[idx].konu;
 }
 
-const JOB_STATE_RANGE = "job_state!A:V";
+// job_state kolonları:
+// A=job_id, B=tarih, C=index, D=konu, E=baslik, F=thumb_baslik, G=thumb_prompt,
+// H=senaryo, I=aciklama, J=gorsel_prompts, K=klip_prompts, L=pexels_kw,
+// M=drive_folder_id, N=gorsel_status, O=ses_status, P=stok_status, Q=thumb_status,
+// R=created_at, S=updated_at, T=chat_id, U=klip_klasor_id, V=thumb_alt_baslik,
+// W=altyazi_status, X=video_status, Y=muzik_mood, Z=tts_telaffuz
+
+const JOB_STATE_RANGE = "job_state!A:Z";
 
 export async function jobOlustur(jobData) {
   const sheets = getSheets();
@@ -102,6 +106,10 @@ export async function jobOlustur(jobData) {
     String(jobData.chat_id || ""),
     jobData.klip_klasor_id || "",
     jobData.thumbnail_alt_baslik || "",
+    "",
+    "",
+    jobData.muzik_mood || "epic",
+    jobData.tts_telaffuz || "",  // Z kolonu
   ];
   
   await sheets.spreadsheets.values.append({
@@ -118,7 +126,7 @@ export async function jobOku(jobId) {
   const sheets = getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: GSHEETS_SPREADSHEET_ID,
-    range: "job_state!A:X", // X kolonuna kadar (video_status dahil)
+    range: JOB_STATE_RANGE,
   });
   
   const rows = res.data.values || [];
@@ -150,6 +158,8 @@ export async function jobOku(jobId) {
         thumbnail_alt_baslik: rows[i][21] || "",
         altyazi_status: rows[i][22] || "",
         video_status: rows[i][23] || "",
+        muzik_mood: rows[i][24] || "epic",
+        tts_telaffuz: rows[i][25] || "",
       };
     }
   }
@@ -173,6 +183,8 @@ export async function jobGuncelle(jobId, updates) {
     thumbnail_alt_baslik: 21,
     altyazi_status: 22,
     video_status: 23,
+    muzik_mood: 24,
+    tts_telaffuz: 25,
   };
   
   const updates2 = { ...updates, updated_at: new Date().toISOString() };
@@ -180,7 +192,6 @@ export async function jobGuncelle(jobId, updates) {
   for (const [key, value] of Object.entries(updates2)) {
     if (!(key in kolonHaritasi)) continue;
     const colIdx = kolonHaritasi[key];
-    // A=0, B=1, ... W=22, X=23
     const colLetter = colIdx < 26 
       ? String.fromCharCode(65 + colIdx)
       : "A" + String.fromCharCode(65 + (colIdx - 26));
@@ -194,7 +205,6 @@ export async function jobGuncelle(jobId, updates) {
   }
 }
 
-// ─── DRIVE: Klasör/Dosya ─────────────────────────────────────────
 export async function driveKlasorAc(ad, parentId) {
   const drive = getDrive();
   const res = await drive.files.create({
