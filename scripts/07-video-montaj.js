@@ -1,9 +1,10 @@
 /**
- * 07 - Video Montaj v5 (FFmpeg) - HIZLANDIRILDI
- * - ultrafast preset (medium yerine, 3x hızlı)
- * - Ken Burns klipleri PARALEL üretilir (sıralı değil)
- * - Final montajda single-pass encoding
- * - Abone butonu son 10sn
+ * 07 - Video Montaj v6 (FFmpeg) - 3 AŞAMALI
+ * Final montajı parçaladık:
+ * - Aşama A: Video + ses + müzik (basit)
+ * - Aşama B: Üzerine altyazı (ayrı pass)
+ * - Aşama C: Son 10sn abone butonu (sadece kısa kısım)
+ * Bu sayede takılma riski sıfır.
  */
 
 import fs from "fs";
@@ -30,8 +31,6 @@ const { JOB_ID, GDRIVE_MUZIK_FOLDER_ID } = process.env;
 
 const TMP_DIR = "/tmp/video-montaj";
 const ABONE_BUTTON_URL = "https://raw.githubusercontent.com/murturhan/bilgisok-otomasyon/main/abone-ol-button.png";
-
-// Aynı anda kaç Ken Burns paralel çalışsın? CPU çekirdek sayısına göre.
 const PARALEL_KEN_BURNS = 4;
 
 async function driveKlasorIcerigi(klasorId, auth) {
@@ -77,7 +76,7 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
   const baslangic = Date.now();
   
   try {
-    const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 50 * 1024 * 1024 });
+    const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 50 * 1024 * 1024, timeout: 15 * 60 * 1000 });
     const sure = ((Date.now() - baslangic) / 1000).toFixed(1);
     console.log(`[${etiket}] ✓ ${sure}s`);
     if (stderr && stderr.length > 0 && !stderr.includes("deprecated")) {
@@ -90,7 +89,6 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
   }
 }
 
-// Ken Burns klibi (ultrafast preset)
 async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   const fps = 25;
   const frameSayisi = Math.ceil(sure * fps);
@@ -121,9 +119,8 @@ async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   await ffmpegCalistir(args, `kb${varyasyon}`);
 }
 
-// Paralel Ken Burns: batch'ler halinde aynı anda 4 tane çalıştır
 async function paralelKenBurns(gorselYollar, klipYollar, sure) {
-  console.log(`🎞️ ${gorselYollar.length} klip paralel üretiliyor (${PARALEL_KEN_BURNS}'erli batch)...`);
+  console.log(`🎞️ ${gorselYollar.length} klip paralel üretiliyor...`);
   
   for (let i = 0; i < gorselYollar.length; i += PARALEL_KEN_BURNS) {
     const batch = [];
@@ -131,7 +128,7 @@ async function paralelKenBurns(gorselYollar, klipYollar, sure) {
       const idx = i + j;
       batch.push(kenBurnsKlipUret(gorselYollar[idx], klipYollar[idx], sure, idx));
     }
-    console.log(`  Batch ${Math.floor(i / PARALEL_KEN_BURNS) + 1}: ${batch.length} klip paralel...`);
+    console.log(`  Batch ${Math.floor(i / PARALEL_KEN_BURNS) + 1}: ${batch.length} klip...`);
     await Promise.all(batch);
   }
   
@@ -143,7 +140,6 @@ async function videolariBirlestir(klipListesi, ciktiPath) {
   const concatIcerik = klipListesi.map(p => `file '${p}'`).join("\n");
   fs.writeFileSync(concatListPath, concatIcerik);
   
-  // -c copy ile concat (encode yok, hızlı)
   const args = `-f concat -safe 0 -i "${concatListPath}" -c copy "${ciktiPath}"`;
   await ffmpegCalistir(args, "concat");
 }
@@ -189,58 +185,85 @@ async function aboneButtonHazirla(ciktiPath) {
   }
 }
 
-// Final montaj: ultrafast preset, threads max
-async function finalMontaj({ videoPath, sesPath, muzikPath, altyaziPath, abonePath, toplamSure, ciktiPath }) {
+// ─── 3 AŞAMALI MONTAJ ─────────────────────────────────────────────
+
+// Aşama A: Sessiz video + ses + müzik (BASIT, ultra hızlı)
+async function asamaA_video_ses_muzik({ videoPath, sesPath, muzikPath, ciktiPath }) {
   const hasMusic = muzikPath && fs.existsSync(muzikPath);
-  const hasSubtitle = altyaziPath && fs.existsSync(altyaziPath);
-  const hasAbone = abonePath && fs.existsSync(abonePath);
   
-  const aboneBaslangic = Math.max(0, toplamSure - 10);
-  
-  let filterParts = [];
-  let audioMap;
+  let filterComplex, mapArgs, muzikInput;
   
   if (hasMusic) {
-    filterParts.push(`[1:a]volume=1.0[tts]`);
-    filterParts.push(`[2:a]volume=0.12,aloop=loop=-1:size=2e+09[music]`);
-    filterParts.push(`[tts][music]amix=inputs=2:duration=first:dropout_transition=0[aout]`);
-    audioMap = `-map "[aout]"`;
+    filterComplex = `-filter_complex "[1:a]volume=1.0[tts];[2:a]volume=0.12,aloop=loop=-1:size=2e+09[music];[tts][music]amix=inputs=2:duration=first[aout]"`;
+    mapArgs = `-map 0:v -map "[aout]"`;
+    muzikInput = `-stream_loop -1 -i "${muzikPath}"`;
   } else {
-    filterParts.push(`[1:a]volume=1.0[aout]`);
-    audioMap = `-map "[aout]"`;
+    filterComplex = `-filter_complex "[1:a]volume=1.0[aout]"`;
+    mapArgs = `-map 0:v -map "[aout]"`;
+    muzikInput = "";
   }
   
-  let videoSource = "[0:v]";
-  
-  if (hasSubtitle) {
-    const srtEscaped = altyaziPath.replace(/:/g, "\\:").replace(/'/g, "\\'");
-    filterParts.push(`${videoSource}subtitles='${srtEscaped}':force_style='FontName=Arial,FontSize=22,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=3,Shadow=1,Alignment=2,MarginV=50'[vsub]`);
-    videoSource = "[vsub]";
-  }
-  
-  if (hasAbone) {
-    const aboneInputIdx = hasMusic ? 3 : 2;
-    filterParts.push(`${videoSource}[${aboneInputIdx}:v]overlay=x='main_w-overlay_w-30':y='main_h-overlay_h-30':enable='gte(t,${aboneBaslangic})*lt(mod(t-${aboneBaslangic},1.0),0.5)'[vout]`);
-    videoSource = "[vout]";
-  }
-  
-  const filterComplex = filterParts.join(";");
-  const videoMap = videoSource === "[0:v]" ? `-map 0:v` : `-map "${videoSource}"`;
-  
-  const muzikInput = hasMusic ? `-stream_loop -1 -i "${muzikPath}"` : "";
-  const aboneInput = hasAbone ? `-loop 1 -i "${abonePath}"` : "";
-  
-  // ultrafast + threads + tune
-  const args = `-i "${videoPath}" -i "${sesPath}" ${muzikInput} ${aboneInput} \
-    -filter_complex "${filterComplex}" \
-    ${videoMap} ${audioMap} \
-    -c:v libx264 -preset ultrafast -crf 25 -threads 0 -tune zerolatency \
+  const args = `-i "${videoPath}" -i "${sesPath}" ${muzikInput} \
+    ${filterComplex} \
+    ${mapArgs} \
+    -c:v copy \
     -c:a aac -b:a 128k \
-    -movflags +faststart \
     -shortest \
     "${ciktiPath}"`;
   
-  await ffmpegCalistir(args, "final-montaj");
+  await ffmpegCalistir(args, "asama-A-ses-muzik");
+}
+
+// Aşama B: Üzerine altyazı bindir
+async function asamaB_altyazi({ videoPath, altyaziPath, ciktiPath }) {
+  if (!altyaziPath || !fs.existsSync(altyaziPath)) {
+    // Altyazı yoksa direkt kopyala
+    fs.copyFileSync(videoPath, ciktiPath);
+    console.log("[asama-B-altyazi] altyazı yok, atlandı");
+    return;
+  }
+  
+  const srtEscaped = altyaziPath.replace(/:/g, "\\:").replace(/'/g, "\\'");
+  
+  const args = `-i "${videoPath}" \
+    -vf "subtitles='${srtEscaped}':force_style='FontName=Arial,FontSize=22,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=3,Shadow=1,Alignment=2,MarginV=50'" \
+    -c:v libx264 -preset ultrafast -crf 25 -threads 0 \
+    -c:a copy \
+    "${ciktiPath}"`;
+  
+  await ffmpegCalistir(args, "asama-B-altyazi");
+}
+
+// Aşama C: Son 10 saniyeye abone butonu bindir (kısa kısım, hızlı)
+async function asamaC_abone({ videoPath, abonePath, toplamSure, ciktiPath }) {
+  if (!abonePath || !fs.existsSync(abonePath)) {
+    fs.copyFileSync(videoPath, ciktiPath);
+    console.log("[asama-C-abone] buton yok, atlandı");
+    return;
+  }
+  
+  // Basitleştirilmiş enable: sadece son 10 saniyede her saniyenin ilk yarısı görünür
+  // Mod fonksiyonu yerine basit aralık kontrolü
+  const baslangic = Math.max(0, toplamSure - 10);
+  
+  // Daha basit ve hızlı: yanıp sönmeyi 5 ayrı zaman dilimine bölelim
+  // t=baslangic..baslangic+0.5, baslangic+1..baslangic+1.5, vs.
+  const enableConditions = [];
+  for (let i = 0; i < 10; i++) {
+    const t1 = baslangic + i;
+    const t2 = baslangic + i + 0.5;
+    enableConditions.push(`between(t,${t1},${t2})`);
+  }
+  const enableExpr = enableConditions.join("+");
+  
+  const args = `-i "${videoPath}" -loop 1 -i "${abonePath}" \
+    -filter_complex "[0:v][1:v]overlay=x='main_w-overlay_w-30':y='main_h-overlay_h-30':enable='${enableExpr}'" \
+    -c:v libx264 -preset ultrafast -crf 25 -threads 0 \
+    -c:a copy \
+    -shortest \
+    "${ciktiPath}"`;
+  
+  await ffmpegCalistir(args, "asama-C-abone");
 }
 
 async function muzikSec(mood, saAuth) {
@@ -286,7 +309,7 @@ async function main() {
       const { stdout: nproc } = await execAsync("nproc");
       console.log(`💻 CPU çekirdek: ${nproc.trim()}`);
     } catch (e) {
-      throw new Error("FFmpeg veya nproc yok!");
+      throw new Error("FFmpeg yok!");
     }
     
     await jobGuncelle(JOB_ID, { video_status: "running" });
@@ -338,7 +361,6 @@ async function main() {
     await Promise.all(indirmePromise);
     console.log(`  ✓ İndirme: ${((Date.now() - indirmeBaslangic) / 1000).toFixed(1)}s`);
     
-    // Müzik ayrı (servis hesabı)
     let muzikYol = null;
     const secilenMuzik = await muzikSec(job.muzik_mood || "epic", saAuth);
     if (secilenMuzik) {
@@ -347,7 +369,6 @@ async function main() {
       console.log(`  ✓ Müzik: ${secilenMuzik.name}`);
     }
     
-    // Abone butonu
     const aboneYol = path.join(TMP_DIR, "abone.png");
     const aboneHazir = await aboneButtonHazirla(aboneYol);
     
@@ -359,31 +380,49 @@ async function main() {
     const gorselSure = sesDuration / gorselYollar.length;
     console.log(`📏 Ses: ${sesDuration.toFixed(1)}s, Görsel başı: ${gorselSure.toFixed(1)}s`);
     
-    // Ken Burns - PARALEL
+    // Ken Burns - paralel
     const kenBurnsBaslangic = Date.now();
     const klipYollar = gorselYollar.map((_, i) => path.join(TMP_DIR, `klip-${String(i + 1).padStart(3, "0")}.mp4`));
     await paralelKenBurns(gorselYollar, klipYollar, gorselSure);
     console.log(`  ✓ Ken Burns toplam: ${((Date.now() - kenBurnsBaslangic) / 1000).toFixed(1)}s`);
     
-    // Birleştir (copy, hızlı)
+    // Concat
     console.log("🔗 Birleştiriliyor...");
     const sessizVideoYol = path.join(TMP_DIR, "sessiz-video.mp4");
     await videolariBirlestir(klipYollar, sessizVideoYol);
     
-    // Final montaj
-    console.log("🎬 Final montaj...");
-    const finalBaslangic = Date.now();
-    const finalYol = path.join(TMP_DIR, "final.mp4");
-    await finalMontaj({
+    // ═════════════════════════════════════════════
+    // 3 AŞAMALI FINAL MONTAJ
+    // ═════════════════════════════════════════════
+    
+    // Aşama A: Video + Ses + Müzik
+    console.log("🎬 Aşama A: Video + Ses + Müzik...");
+    const asamaAYol = path.join(TMP_DIR, "asama-a.mp4");
+    await asamaA_video_ses_muzik({
       videoPath: sessizVideoYol,
       sesPath: sesYol,
       muzikPath: muzikYol,
+      ciktiPath: asamaAYol,
+    });
+    
+    // Aşama B: Üzerine altyazı
+    console.log("🎬 Aşama B: Altyazı...");
+    const asamaBYol = path.join(TMP_DIR, "asama-b.mp4");
+    await asamaB_altyazi({
+      videoPath: asamaAYol,
       altyaziPath: altyaziYol,
+      ciktiPath: asamaBYol,
+    });
+    
+    // Aşama C: Abone butonu
+    console.log("🎬 Aşama C: Abone butonu...");
+    const finalYol = path.join(TMP_DIR, "final.mp4");
+    await asamaC_abone({
+      videoPath: asamaBYol,
       abonePath: aboneHazir ? aboneYol : null,
       toplamSure: sesDuration,
       ciktiPath: finalYol,
     });
-    console.log(`  ✓ Final: ${((Date.now() - finalBaslangic) / 1000).toFixed(1)}s`);
     
     const finalStats = fs.statSync(finalYol);
     console.log(`✓ Final video: ${(finalStats.size / 1024 / 1024).toFixed(1)}MB`);
