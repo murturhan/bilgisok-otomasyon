@@ -1,9 +1,9 @@
 /**
- * 07 - Video Montaj v4 (FFmpeg)
- * - 20 AI görsel + 4 farklı Ken Burns varyasyon
- * - Müzik mood'a göre seçim
- * - TTS + müzik (%12) + altyazı
- * - 🆕 Son 10 saniyede sağ alt köşede yanıp sönen ABONE OL butonu
+ * 07 - Video Montaj v5 (FFmpeg) - HIZLANDIRILDI
+ * - ultrafast preset (medium yerine, 3x hızlı)
+ * - Ken Burns klipleri PARALEL üretilir (sıralı değil)
+ * - Final montajda single-pass encoding
+ * - Abone butonu son 10sn
  */
 
 import fs from "fs";
@@ -30,6 +30,9 @@ const { JOB_ID, GDRIVE_MUZIK_FOLDER_ID } = process.env;
 
 const TMP_DIR = "/tmp/video-montaj";
 const ABONE_BUTTON_URL = "https://raw.githubusercontent.com/murturhan/bilgisok-otomasyon/main/abone-ol-button.png";
+
+// Aynı anda kaç Ken Burns paralel çalışsın? CPU çekirdek sayısına göre.
+const PARALEL_KEN_BURNS = 4;
 
 async function driveKlasorIcerigi(klasorId, auth) {
   const drive = google.drive({ version: "v3", auth });
@@ -71,14 +74,15 @@ async function driveIndir(fileId, hedefYol, auth) {
 
 async function ffmpegCalistir(args, etiket = "ffmpeg") {
   const cmd = `ffmpeg -y -hide_banner -loglevel error ${args}`;
-  console.log(`[${etiket}] başlıyor...`);
   const baslangic = Date.now();
   
   try {
     const { stdout, stderr } = await execAsync(cmd, { maxBuffer: 50 * 1024 * 1024 });
     const sure = ((Date.now() - baslangic) / 1000).toFixed(1);
-    console.log(`[${etiket}] ✓ tamam (${sure}s)`);
-    if (stderr && stderr.length > 0) console.log(`  stderr: ${stderr.substring(0, 300)}`);
+    console.log(`[${etiket}] ✓ ${sure}s`);
+    if (stderr && stderr.length > 0 && !stderr.includes("deprecated")) {
+      console.log(`  stderr: ${stderr.substring(0, 300)}`);
+    }
     return { stdout, stderr };
   } catch (e) {
     console.error(`[${etiket}] HATA: ${e.message.substring(0, 500)}`);
@@ -86,6 +90,7 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
   }
 }
 
+// Ken Burns klibi (ultrafast preset)
 async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   const fps = 25;
   const frameSayisi = Math.ceil(sure * fps);
@@ -109,10 +114,28 @@ async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   const args = `-loop 1 -i "${gorselPath}" \
     -vf "${zoomFiltre},format=yuv420p" \
     -t ${sure} \
-    -c:v libx264 -preset ultrafast -crf 23 \
+    -c:v libx264 -preset ultrafast -crf 28 \
+    -threads 2 \
     "${ciktiPath}"`;
   
   await ffmpegCalistir(args, `kb${varyasyon}`);
+}
+
+// Paralel Ken Burns: batch'ler halinde aynı anda 4 tane çalıştır
+async function paralelKenBurns(gorselYollar, klipYollar, sure) {
+  console.log(`🎞️ ${gorselYollar.length} klip paralel üretiliyor (${PARALEL_KEN_BURNS}'erli batch)...`);
+  
+  for (let i = 0; i < gorselYollar.length; i += PARALEL_KEN_BURNS) {
+    const batch = [];
+    for (let j = 0; j < PARALEL_KEN_BURNS && (i + j) < gorselYollar.length; j++) {
+      const idx = i + j;
+      batch.push(kenBurnsKlipUret(gorselYollar[idx], klipYollar[idx], sure, idx));
+    }
+    console.log(`  Batch ${Math.floor(i / PARALEL_KEN_BURNS) + 1}: ${batch.length} klip paralel...`);
+    await Promise.all(batch);
+  }
+  
+  console.log(`  ✓ ${gorselYollar.length} klip hazır`);
 }
 
 async function videolariBirlestir(klipListesi, ciktiPath) {
@@ -120,26 +143,24 @@ async function videolariBirlestir(klipListesi, ciktiPath) {
   const concatIcerik = klipListesi.map(p => `file '${p}'`).join("\n");
   fs.writeFileSync(concatListPath, concatIcerik);
   
+  // -c copy ile concat (encode yok, hızlı)
   const args = `-f concat -safe 0 -i "${concatListPath}" -c copy "${ciktiPath}"`;
   await ffmpegCalistir(args, "concat");
 }
 
-// Abone butonunu indir + arka planı saydam yap + boyutlandır
 async function aboneButtonHazirla(ciktiPath) {
-  console.log("🔘 Abone butonu indiriliyor ve işleniyor...");
+  console.log("🔘 Abone butonu hazırlanıyor...");
   
   const indirilenYol = path.join(TMP_DIR, "abone-raw.png");
   
   try {
-    const response = await axios.get(ABONE_BUTTON_URL, { responseType: "arraybuffer" });
+    const response = await axios.get(ABONE_BUTTON_URL, { responseType: "arraybuffer", timeout: 10000 });
     fs.writeFileSync(indirilenYol, response.data);
   } catch (e) {
     console.log(`⚠ Abone butonu indirilemedi: ${e.message}`);
     return false;
   }
   
-  // Sharp ile beyaz arka planı saydam yap + boyutlandır
-  // Hedef: video 1280x720, buton ~280x140 sağ alt köşede
   try {
     const buf = await sharp(indirilenYol)
       .resize(320, 160, { fit: "contain", background: { r: 255, g: 255, b: 255, alpha: 0 } })
@@ -147,12 +168,11 @@ async function aboneButtonHazirla(ciktiPath) {
       .raw()
       .toBuffer({ resolveWithObject: true });
     
-    // Beyaz/yakın beyaz pikselleri saydam yap
     const { data, info } = buf;
-    const threshold = 240; // 240'tan açık olan tüm pikseller saydam
+    const threshold = 240;
     for (let i = 0; i < data.length; i += 4) {
       if (data[i] >= threshold && data[i + 1] >= threshold && data[i + 2] >= threshold) {
-        data[i + 3] = 0; // alpha = 0 (saydam)
+        data[i + 3] = 0;
       }
     }
     
@@ -160,28 +180,23 @@ async function aboneButtonHazirla(ciktiPath) {
       raw: { width: info.width, height: info.height, channels: 4 }
     }).png().toFile(ciktiPath);
     
-    console.log("  ✓ Abone butonu hazır (saydam, 320x160)");
+    console.log("  ✓ Abone butonu hazır");
     return true;
   } catch (e) {
-    console.log(`⚠ Sharp işlemi başarısız: ${e.message}`);
-    // Sharp başarısız olduysa orijinali kullan
+    console.log(`⚠ Sharp başarısız: ${e.message}`);
     fs.copyFileSync(indirilenYol, ciktiPath);
     return true;
   }
 }
 
+// Final montaj: ultrafast preset, threads max
 async function finalMontaj({ videoPath, sesPath, muzikPath, altyaziPath, abonePath, toplamSure, ciktiPath }) {
   const hasMusic = muzikPath && fs.existsSync(muzikPath);
   const hasSubtitle = altyaziPath && fs.existsSync(altyaziPath);
   const hasAbone = abonePath && fs.existsSync(abonePath);
   
-  // Abone butonu son 10 saniyede sağ alt köşede + yanıp sönme
-  // overlay: x=ana_videoW-buton_w-30, y=ana_videoH-buton_h-30
-  // Yanıp sönme: enable='between(t, total-10, total)*(mod(t, 1.0) < 0.5)' (her saniye 0.5sn görünür)
-  
   const aboneBaslangic = Math.max(0, toplamSure - 10);
   
-  // Audio mix
   let filterParts = [];
   let audioMap;
   
@@ -195,37 +210,33 @@ async function finalMontaj({ videoPath, sesPath, muzikPath, altyaziPath, abonePa
     audioMap = `-map "[aout]"`;
   }
   
-  // Video filter chain
   let videoSource = "[0:v]";
   
-  // 1) Altyazı (varsa)
   if (hasSubtitle) {
     const srtEscaped = altyaziPath.replace(/:/g, "\\:").replace(/'/g, "\\'");
     filterParts.push(`${videoSource}subtitles='${srtEscaped}':force_style='FontName=Arial,FontSize=22,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=3,Shadow=1,Alignment=2,MarginV=50'[vsub]`);
     videoSource = "[vsub]";
   }
   
-  // 2) Abone butonu overlay (son 10 saniyede yanıp sönen)
   if (hasAbone) {
-    // Buton girişi: 3. veya 2. input (müziğe göre)
     const aboneInputIdx = hasMusic ? 3 : 2;
-    // 0.5 saniye görünür, 0.5 saniye gizli (1 sn döngü)
     filterParts.push(`${videoSource}[${aboneInputIdx}:v]overlay=x='main_w-overlay_w-30':y='main_h-overlay_h-30':enable='gte(t,${aboneBaslangic})*lt(mod(t-${aboneBaslangic},1.0),0.5)'[vout]`);
     videoSource = "[vout]";
   }
   
   const filterComplex = filterParts.join(";");
-  
   const videoMap = videoSource === "[0:v]" ? `-map 0:v` : `-map "${videoSource}"`;
   
   const muzikInput = hasMusic ? `-stream_loop -1 -i "${muzikPath}"` : "";
   const aboneInput = hasAbone ? `-loop 1 -i "${abonePath}"` : "";
   
+  // ultrafast + threads + tune
   const args = `-i "${videoPath}" -i "${sesPath}" ${muzikInput} ${aboneInput} \
     -filter_complex "${filterComplex}" \
     ${videoMap} ${audioMap} \
-    -c:v libx264 -preset medium -crf 23 \
-    -c:a aac -b:a 192k \
+    -c:v libx264 -preset ultrafast -crf 25 -threads 0 -tune zerolatency \
+    -c:a aac -b:a 128k \
+    -movflags +faststart \
     -shortest \
     "${ciktiPath}"`;
   
@@ -234,24 +245,22 @@ async function finalMontaj({ videoPath, sesPath, muzikPath, altyaziPath, abonePa
 
 async function muzikSec(mood, saAuth) {
   if (!GDRIVE_MUZIK_FOLDER_ID) {
-    console.log("⚠ GDRIVE_MUZIK_FOLDER_ID yok, müzik atlanıyor");
+    console.log("⚠ GDRIVE_MUZIK_FOLDER_ID yok");
     return null;
   }
   
-  console.log(`🎵 Müzik aranıyor, mood: "${mood}"`);
+  console.log(`🎵 Müzik, mood: "${mood}"`);
   
   const moodKlasorler = await driveAltKlasorAraSA(mood, GDRIVE_MUZIK_FOLDER_ID, saAuth);
   
-  let kaynakKlasorId = null;
-  let kaynakAd = "ana klasör";
+  let kaynakKlasorId;
   
   if (moodKlasorler.length > 0) {
     kaynakKlasorId = moodKlasorler[0].id;
-    kaynakAd = `${moodKlasorler[0].name} (mood eşleşti)`;
-    console.log(`  ✓ Mood klasörü bulundu: ${moodKlasorler[0].name}`);
+    console.log(`  ✓ Mood klasörü: ${moodKlasorler[0].name}`);
   } else {
     kaynakKlasorId = GDRIVE_MUZIK_FOLDER_ID;
-    console.log(`  ⚠ "${mood}" klasörü yok, ana klasörden rastgele`);
+    console.log(`  ⚠ Mood klasörü yok, ana klasörden`);
   }
   
   const tumDosyalar = await driveKlasorIcerigi(kaynakKlasorId, saAuth);
@@ -259,24 +268,25 @@ async function muzikSec(mood, saAuth) {
     d.mimeType && (d.mimeType.startsWith("audio/") || d.name.match(/\.(mp3|wav|m4a|ogg)$/i))
   );
   
-  if (muzikler.length === 0) {
-    console.log(`  ⚠ Müzik bulunamadı`);
-    return null;
-  }
+  if (muzikler.length === 0) return null;
   
-  console.log(`  ✓ ${muzikler.length} müzik var (${kaynakAd})`);
+  console.log(`  ✓ ${muzikler.length} müzik`);
   return muzikler[Math.floor(Math.random() * muzikler.length)];
 }
 
 async function main() {
+  const toplamBaslangic = Date.now();
+  
   try {
     console.log(`Job: ${JOB_ID}`);
     const job = await jobOku(JOB_ID);
     
     try {
       await execAsync("which ffmpeg");
+      const { stdout: nproc } = await execAsync("nproc");
+      console.log(`💻 CPU çekirdek: ${nproc.trim()}`);
     } catch (e) {
-      throw new Error("FFmpeg sistemde kurulu değil!");
+      throw new Error("FFmpeg veya nproc yok!");
     }
     
     await jobGuncelle(JOB_ID, { video_status: "running" });
@@ -287,48 +297,48 @@ async function main() {
     const oauthAuth = getOAuthClient();
     const saAuth = getServiceAccountAuth();
     
-    // 1. Materyalleri topla
     console.log("📂 Materyaller toplanıyor...");
     
     const gorselKlasorler = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
     const sesKlasorler = await driveAltKlasorBul("02-ses", job.drive_folder_id);
     const altyaziKlasorler = await driveAltKlasorBul("06-altyazi", job.drive_folder_id);
     
-    if (gorselKlasorler.length === 0) throw new Error("01-gorseller klasörü yok");
-    if (sesKlasorler.length === 0) throw new Error("02-ses klasörü yok");
+    if (gorselKlasorler.length === 0) throw new Error("01-gorseller yok");
+    if (sesKlasorler.length === 0) throw new Error("02-ses yok");
     
     const gorseller = await driveKlasorIcerigi(gorselKlasorler[0].id, oauthAuth);
     const sesler = await driveKlasorIcerigi(sesKlasorler[0].id, oauthAuth);
     const altyazilar = altyaziKlasorler.length > 0 ? await driveKlasorIcerigi(altyaziKlasorler[0].id, oauthAuth) : [];
     
-    console.log(`📊 Bulundu: ${gorseller.length} görsel, ${sesler.length} ses, ${altyazilar.length} altyazı`);
-    console.log(`🎵 Müzik mood: ${job.muzik_mood || 'epic'}`);
+    console.log(`📊 ${gorseller.length} görsel, ${sesler.length} ses, ${altyazilar.length} altyazı`);
     
-    if (gorseller.length === 0) throw new Error("Hiç görsel yok!");
-    if (sesler.length === 0) throw new Error("Hiç ses dosyası yok!");
+    if (gorseller.length === 0) throw new Error("Görsel yok!");
+    if (sesler.length === 0) throw new Error("Ses yok!");
     
-    // 2. İndir
-    console.log("⬇️ İndirme başlıyor...");
+    // Paralel indirme
+    console.log("⬇️ Paralel indirme...");
+    const indirmeBaslangic = Date.now();
     
-    const gorselYollar = [];
+    const gorselYollar = gorseller.map((_, i) => path.join(TMP_DIR, `gorsel-${String(i + 1).padStart(2, "0")}.jpg`));
+    const indirmePromise = [];
+    
     for (let i = 0; i < gorseller.length; i++) {
-      const yol = path.join(TMP_DIR, `gorsel-${String(i + 1).padStart(2, "0")}.jpg`);
-      await driveIndir(gorseller[i].id, yol, oauthAuth);
-      gorselYollar.push(yol);
+      indirmePromise.push(driveIndir(gorseller[i].id, gorselYollar[i], oauthAuth));
     }
-    console.log(`  ✓ ${gorselYollar.length} görsel`);
     
     const sesYol = path.join(TMP_DIR, "ses.mp3");
-    await driveIndir(sesler[0].id, sesYol, oauthAuth);
-    console.log(`  ✓ Ses`);
+    indirmePromise.push(driveIndir(sesler[0].id, sesYol, oauthAuth));
     
     let altyaziYol = null;
     if (altyazilar.length > 0) {
       altyaziYol = path.join(TMP_DIR, "altyazi.srt");
-      await driveIndir(altyazilar[0].id, altyaziYol, oauthAuth);
-      console.log(`  ✓ Altyazı`);
+      indirmePromise.push(driveIndir(altyazilar[0].id, altyaziYol, oauthAuth));
     }
     
+    await Promise.all(indirmePromise);
+    console.log(`  ✓ İndirme: ${((Date.now() - indirmeBaslangic) / 1000).toFixed(1)}s`);
+    
+    // Müzik ayrı (servis hesabı)
     let muzikYol = null;
     const secilenMuzik = await muzikSec(job.muzik_mood || "epic", saAuth);
     if (secilenMuzik) {
@@ -337,40 +347,32 @@ async function main() {
       console.log(`  ✓ Müzik: ${secilenMuzik.name}`);
     }
     
-    // Abone butonu hazırla
+    // Abone butonu
     const aboneYol = path.join(TMP_DIR, "abone.png");
     const aboneHazir = await aboneButtonHazirla(aboneYol);
     
-    // 3. Ses süresi
+    // Ses süresi
     const { stdout: sesDurationStr } = await execAsync(
       `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${sesYol}"`
     );
     const sesDuration = parseFloat(sesDurationStr.trim());
-    console.log(`📏 Ses süresi: ${sesDuration.toFixed(1)}s`);
-    
-    // 4. Görsel süreleri
     const gorselSure = sesDuration / gorselYollar.length;
-    console.log(`📐 Her görsel ≈ ${gorselSure.toFixed(1)}s`);
+    console.log(`📏 Ses: ${sesDuration.toFixed(1)}s, Görsel başı: ${gorselSure.toFixed(1)}s`);
     
-    // 5. Ken Burns klipleri
-    console.log("🎞️ Ken Burns klipleri üretiliyor...");
-    const klipYollar = [];
+    // Ken Burns - PARALEL
+    const kenBurnsBaslangic = Date.now();
+    const klipYollar = gorselYollar.map((_, i) => path.join(TMP_DIR, `klip-${String(i + 1).padStart(3, "0")}.mp4`));
+    await paralelKenBurns(gorselYollar, klipYollar, gorselSure);
+    console.log(`  ✓ Ken Burns toplam: ${((Date.now() - kenBurnsBaslangic) / 1000).toFixed(1)}s`);
     
-    for (let i = 0; i < gorselYollar.length; i++) {
-      const klipYol = path.join(TMP_DIR, `klip-${String(i + 1).padStart(3, "0")}.mp4`);
-      await kenBurnsKlipUret(gorselYollar[i], klipYol, gorselSure, i);
-      klipYollar.push(klipYol);
-    }
-    
-    console.log(`  ✓ ${klipYollar.length} klip hazır`);
-    
-    // 6. Birleştir
-    console.log("🔗 Klipler birleştiriliyor...");
+    // Birleştir (copy, hızlı)
+    console.log("🔗 Birleştiriliyor...");
     const sessizVideoYol = path.join(TMP_DIR, "sessiz-video.mp4");
     await videolariBirlestir(klipYollar, sessizVideoYol);
     
-    // 7. Final montaj
+    // Final montaj
     console.log("🎬 Final montaj...");
+    const finalBaslangic = Date.now();
     const finalYol = path.join(TMP_DIR, "final.mp4");
     await finalMontaj({
       videoPath: sessizVideoYol,
@@ -381,11 +383,12 @@ async function main() {
       toplamSure: sesDuration,
       ciktiPath: finalYol,
     });
+    console.log(`  ✓ Final: ${((Date.now() - finalBaslangic) / 1000).toFixed(1)}s`);
     
     const finalStats = fs.statSync(finalYol);
     console.log(`✓ Final video: ${(finalStats.size / 1024 / 1024).toFixed(1)}MB`);
     
-    // 8. Drive'a yükle
+    // Yükle
     let videoKlasorler = await driveAltKlasorBul("07-video", job.drive_folder_id);
     let videoKlasorId;
     if (videoKlasorler.length === 0) {
@@ -403,18 +406,21 @@ async function main() {
     
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
     
+    const toplamSure = ((Date.now() - toplamBaslangic) / 1000).toFixed(0);
+    
     await jobGuncelle(JOB_ID, { video_status: `completed:${(finalStats.size / 1024 / 1024).toFixed(1)}MB` });
     await telegram(
       job.chat_id,
       `🎬 *Video hazır!* 🎉\n\n` +
       `📦 Boyut: ${(finalStats.size / 1024 / 1024).toFixed(1)} MB\n` +
       `⏱ Süre: ~${Math.floor(sesDuration / 60)}:${String(Math.floor(sesDuration % 60)).padStart(2, "0")}\n` +
-      `🎵 Müzik: ${secilenMuzik ? secilenMuzik.name : "yok"}\n` +
-      `🔘 Abone butonu: ${aboneHazir ? "var (son 10sn)" : "yok"}\n\n` +
+      `⚡ Render: ${toplamSure}s\n` +
+      `🎵 ${secilenMuzik ? secilenMuzik.name : "müzik yok"}\n` +
+      `🔘 Abone btn: ${aboneHazir ? "var" : "yok"}\n\n` +
       `📂 [Video'yu aç](${yuklenen.link})`
     );
     
-    console.log("✅ Video montaj tamam.");
+    console.log(`✅ TOPLAM: ${toplamSure}s`);
     process.exit(0);
     
   } catch (error) {
