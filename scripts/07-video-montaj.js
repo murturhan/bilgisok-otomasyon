@@ -1,10 +1,9 @@
 /**
- * 07 - Video Montaj v8
- * - Font 24→20 (küçük)
- * - MarginV 60→50
+ * 07 - Video Montaj v9 - TİTREŞİMSİZ
+ * - Ken Burns: önce upscale, zoom uygula, sonra 1280x720'ye düşür → subpixel precision
+ * - Görseller arası 0.5s crossfade transition
  * - Müzik %5
- * - Ken Burns smooth
- * - 2 aşamalı
+ * - Font 20
  */
 
 import fs from "fs";
@@ -29,6 +28,7 @@ const { JOB_ID, GDRIVE_MUZIK_FOLDER_ID } = process.env;
 
 const TMP_DIR = "/tmp/video-montaj";
 const PARALEL_KEN_BURNS = 4;
+const TRANSITION_SURE = 0.5;
 
 async function driveKlasorIcerigi(klasorId, auth) {
   const drive = google.drive({ version: "v3", auth });
@@ -44,27 +44,17 @@ async function driveKlasorIcerigi(klasorId, auth) {
 async function driveAltKlasorAraSA(adKismi, parentId, auth) {
   const drive = google.drive({ version: "v3", auth });
   const q = `mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and name contains '${adKismi.replace(/'/g, "\\'")}' and trashed=false`;
-  const res = await drive.files.list({
-    q: q,
-    fields: "files(id, name)",
-    pageSize: 10,
-  });
+  const res = await drive.files.list({ q, fields: "files(id, name)", pageSize: 10 });
   return res.data.files || [];
 }
 
 async function driveIndir(fileId, hedefYol, auth) {
   const drive = google.drive({ version: "v3", auth });
-  const res = await drive.files.get(
-    { fileId, alt: "media" },
-    { responseType: "stream" }
-  );
+  const res = await drive.files.get({ fileId, alt: "media" }, { responseType: "stream" });
   
   return new Promise((resolve, reject) => {
     const writeStream = fs.createWriteStream(hedefYol);
-    res.data
-      .on("end", () => resolve())
-      .on("error", reject)
-      .pipe(writeStream);
+    res.data.on("end", () => resolve()).on("error", reject).pipe(writeStream);
   });
 }
 
@@ -86,30 +76,36 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
   }
 }
 
+// TİTREŞİMSİZ KEN BURNS: upscale → zoom → downscale
 async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   const fps = 25;
   const frameSayisi = Math.ceil(sure * fps);
   
+  const ICDEN_W = 2560;
+  const ICDEN_H = 1440;
+  const FINAL_W = 1280;
+  const FINAL_H = 720;
+  
   let zoomFiltre;
   switch (varyasyon % 4) {
     case 0:
-      zoomFiltre = `zoompan=z='min(zoom+0.0005,1.2)':d=${frameSayisi}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720:fps=${fps}`;
+      zoomFiltre = `scale=${ICDEN_W * 1.5}:${ICDEN_H * 1.5}:flags=lanczos,zoompan=z='min(zoom+0.0003,1.15)':d=${frameSayisi}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${ICDEN_W}x${ICDEN_H}:fps=${fps},scale=${FINAL_W}:${FINAL_H}:flags=lanczos`;
       break;
     case 1:
-      zoomFiltre = `zoompan=z='min(zoom+0.0005,1.2)':d=${frameSayisi}:x='iw/4':y='ih/4':s=1280x720:fps=${fps}`;
+      zoomFiltre = `scale=${ICDEN_W * 1.5}:${ICDEN_H * 1.5}:flags=lanczos,zoompan=z='min(zoom+0.0003,1.15)':d=${frameSayisi}:x='iw/3':y='ih/3':s=${ICDEN_W}x${ICDEN_H}:fps=${fps},scale=${FINAL_W}:${FINAL_H}:flags=lanczos`;
       break;
     case 2:
-      zoomFiltre = `zoompan=z='if(eq(on,0),1.2,zoom-0.0005)':d=${frameSayisi}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1280x720:fps=${fps}`;
+      zoomFiltre = `scale=${ICDEN_W * 1.5}:${ICDEN_H * 1.5}:flags=lanczos,zoompan=z='if(eq(on,0),1.15,zoom-0.0003)':d=${frameSayisi}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${ICDEN_W}x${ICDEN_H}:fps=${fps},scale=${FINAL_W}:${FINAL_H}:flags=lanczos`;
       break;
     case 3:
-      zoomFiltre = `zoompan=z='min(zoom+0.0005,1.2)':d=${frameSayisi}:x='iw*3/4-iw/zoom':y='ih*3/4-ih/zoom':s=1280x720:fps=${fps}`;
+      zoomFiltre = `scale=${ICDEN_W * 1.5}:${ICDEN_H * 1.5}:flags=lanczos,zoompan=z='min(zoom+0.0003,1.15)':d=${frameSayisi}:x='iw*2/3-iw/zoom':y='ih*2/3-ih/zoom':s=${ICDEN_W}x${ICDEN_H}:fps=${fps},scale=${FINAL_W}:${FINAL_H}:flags=lanczos`;
       break;
   }
   
   const args = `-loop 1 -i "${gorselPath}" \
     -vf "${zoomFiltre},format=yuv420p" \
     -t ${sure} \
-    -c:v libx264 -preset fast -crf 23 \
+    -c:v libx264 -preset fast -crf 22 \
     -threads 2 \
     "${ciktiPath}"`;
   
@@ -117,7 +113,7 @@ async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
 }
 
 async function paralelKenBurns(gorselYollar, klipYollar, sure) {
-  console.log(`🎞️ ${gorselYollar.length} klip paralel üretiliyor...`);
+  console.log(`🎞️ ${gorselYollar.length} klip paralel üretiliyor (titreşimsiz)...`);
   
   for (let i = 0; i < gorselYollar.length; i += PARALEL_KEN_BURNS) {
     const batch = [];
@@ -132,13 +128,37 @@ async function paralelKenBurns(gorselYollar, klipYollar, sure) {
   console.log(`  ✓ ${gorselYollar.length} klip hazır`);
 }
 
-async function videolariBirlestir(klipListesi, ciktiPath) {
-  const concatListPath = path.join(TMP_DIR, "concat.txt");
-  const concatIcerik = klipListesi.map(p => `file '${p}'`).join("\n");
-  fs.writeFileSync(concatListPath, concatIcerik);
+// FADE TRANSITIONS ile birleştirme
+async function videolariFadeIleBirlestir(klipListesi, gorselSure, ciktiPath) {
+  const N = klipListesi.length;
   
-  const args = `-f concat -safe 0 -i "${concatListPath}" -c copy "${ciktiPath}"`;
-  await ffmpegCalistir(args, "concat");
+  if (N === 1) {
+    fs.copyFileSync(klipListesi[0], ciktiPath);
+    return;
+  }
+  
+  const inputs = klipListesi.map(p => `-i "${p}"`).join(" ");
+  
+  const filterParts = [];
+  let prevLabel = "[0:v]";
+  
+  for (let i = 1; i < N; i++) {
+    const yeniLabel = `[v${i}]`;
+    const offset = i * gorselSure - i * TRANSITION_SURE;
+    filterParts.push(`${prevLabel}[${i}:v]xfade=transition=fade:duration=${TRANSITION_SURE}:offset=${offset.toFixed(3)}${yeniLabel}`);
+    prevLabel = yeniLabel;
+  }
+  
+  const filterComplex = filterParts.join(";");
+  
+  const args = `${inputs} \
+    -filter_complex "${filterComplex}" \
+    -map "${prevLabel}" \
+    -c:v libx264 -preset fast -crf 22 \
+    -pix_fmt yuv420p \
+    "${ciktiPath}"`;
+  
+  await ffmpegCalistir(args, "concat-fade");
 }
 
 async function asamaA_video_ses_muzik({ videoPath, sesPath, muzikPath, ciktiPath }) {
@@ -176,10 +196,9 @@ async function asamaB_altyazi({ videoPath, altyaziPath, ciktiPath }) {
   
   const srtEscaped = altyaziPath.replace(/:/g, "\\:").replace(/'/g, "\\'");
   
-  // FontSize 20 (önceden 24), MarginV 50 (önceden 60), Outline 2 (önceden 3)
   const args = `-i "${videoPath}" \
     -vf "subtitles='${srtEscaped}':force_style='FontName=Arial,FontSize=20,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=2,Shadow=1,Alignment=2,MarginV=50'" \
-    -c:v libx264 -preset fast -crf 23 -threads 0 \
+    -c:v libx264 -preset fast -crf 22 -threads 0 \
     -c:a copy \
     "${ciktiPath}"`;
   
@@ -268,7 +287,6 @@ async function main() {
     
     let altyaziYol = null;
     if (altyazilar.length > 0) {
-      // En son SRT
       const srtler = altyazilar.filter(d => d.name.endsWith(".srt"));
       if (srtler.length > 0) {
         altyaziYol = path.join(TMP_DIR, "altyazi.srt");
@@ -291,17 +309,20 @@ async function main() {
       `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${sesYol}"`
     );
     const sesDuration = parseFloat(sesDurationStr.trim());
-    const gorselSure = sesDuration / gorselYollar.length;
-    console.log(`📏 Ses: ${sesDuration.toFixed(1)}s, Görsel başı: ${gorselSure.toFixed(1)}s`);
+    
+    // Fade transitions için klip süresi
+    const N = gorselYollar.length;
+    const klipSure = (sesDuration + (N - 1) * TRANSITION_SURE) / N;
+    console.log(`📏 Ses: ${sesDuration.toFixed(1)}s, Klip başı: ${klipSure.toFixed(1)}s (${TRANSITION_SURE}s fade x${N-1})`);
     
     const kenBurnsBaslangic = Date.now();
     const klipYollar = gorselYollar.map((_, i) => path.join(TMP_DIR, `klip-${String(i + 1).padStart(3, "0")}.mp4`));
-    await paralelKenBurns(gorselYollar, klipYollar, gorselSure);
+    await paralelKenBurns(gorselYollar, klipYollar, klipSure);
     console.log(`  ✓ Ken Burns toplam: ${((Date.now() - kenBurnsBaslangic) / 1000).toFixed(1)}s`);
     
-    console.log("🔗 Birleştiriliyor...");
+    console.log("🔗 Fade transitions ile birleştiriliyor...");
     const sessizVideoYol = path.join(TMP_DIR, "sessiz-video.mp4");
-    await videolariBirlestir(klipYollar, sessizVideoYol);
+    await videolariFadeIleBirlestir(klipYollar, klipSure, sessizVideoYol);
     
     console.log("🎬 Aşama A: Video + Ses + Müzik...");
     const asamaAYol = path.join(TMP_DIR, "asama-a.mp4");
