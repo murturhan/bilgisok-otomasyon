@@ -56,8 +56,8 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
 
   try {
     const { stdout, stderr } = await execAsync(cmd, {
-      maxBuffer: 80 * 1024 * 1024,
-      timeout: 20 * 60 * 1000,
+      maxBuffer: 100 * 1024 * 1024,
+      timeout: 25 * 60 * 1000,
     });
 
     const sure = ((Date.now() - baslangic) / 1000).toFixed(1);
@@ -69,7 +69,7 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
 
     return { stdout, stderr };
   } catch (e) {
-    console.error(`[${etiket}] HATA: ${e.message.substring(0, 800)}`);
+    console.error(`[${etiket}] HATA: ${e.message.substring(0, 1000)}`);
     throw e;
   }
 }
@@ -77,40 +77,64 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
 function cinematicPreset(index) {
   const presets = [
     {
-      name: "slow_push_center",
-      zoom: "min(zoom+0.00024,1.13)",
-      x: "iw/2-(iw/zoom/2)+sin(on/38)*10",
-      y: "ih/2-(ih/zoom/2)+cos(on/45)*8",
+      name: "mystery_depth_push",
+      zoom: "min(zoom+0.00022,1.13)",
+      x: "iw/2-(iw/zoom/2)+sin(on/36)*12",
+      y: "ih/2-(ih/zoom/2)+cos(on/44)*9",
+      contrast: 1.08,
+      saturation: 1.04,
+      brightness: 0.0,
+      noise: 4,
     },
     {
-      name: "left_drift",
-      zoom: "min(zoom+0.00022,1.11)",
-      x: "iw/3-(iw/zoom/3)+sin(on/42)*8",
-      y: "ih/2-(ih/zoom/2)",
+      name: "epic_slow_dolly",
+      zoom: "min(zoom+0.00028,1.16)",
+      x: "iw/2-(iw/zoom/2)+sin(on/50)*8",
+      y: "ih*0.48-(ih/zoom/2)+cos(on/60)*6",
+      contrast: 1.1,
+      saturation: 1.08,
+      brightness: 0.005,
+      noise: 5,
     },
     {
-      name: "cinematic_pull_back",
-      zoom: "if(eq(on,0),1.15,max(zoom-0.00022,1.02))",
-      x: "iw/2-(iw/zoom/2)",
-      y: "ih/2-(ih/zoom/2)+sin(on/50)*7",
+      name: "ancient_left_orbit",
+      zoom: "min(zoom+0.00020,1.12)",
+      x: "iw/3-(iw/zoom/3)+sin(on/40)*14",
+      y: "ih/2-(ih/zoom/2)+cos(on/52)*8",
+      contrast: 1.07,
+      saturation: 1.06,
+      brightness: 0.002,
+      noise: 5,
     },
     {
-      name: "right_drift",
-      zoom: "min(zoom+0.00026,1.14)",
-      x: "iw*2/3-iw/zoom+cos(on/46)*8",
-      y: "ih/3+sin(on/55)*7",
+      name: "reveal_pull_back",
+      zoom: "if(eq(on,0),1.17,max(zoom-0.00024,1.03))",
+      x: "iw/2-(iw/zoom/2)+sin(on/46)*10",
+      y: "ih/2-(ih/zoom/2)+cos(on/58)*8",
+      contrast: 1.09,
+      saturation: 1.03,
+      brightness: 0.0,
+      noise: 4,
     },
     {
-      name: "low_mystery_push",
-      zoom: "min(zoom+0.00018,1.09)",
-      x: "iw/2-(iw/zoom/2)",
-      y: "ih*0.58-(ih/zoom/2)+sin(on/60)*6",
+      name: "war_handheld_soft",
+      zoom: "min(zoom+0.00032,1.18)",
+      x: "iw/2-(iw/zoom/2)+sin(on/8)*4+sin(on/37)*10",
+      y: "ih/2-(ih/zoom/2)+cos(on/9)*4+cos(on/41)*8",
+      contrast: 1.12,
+      saturation: 1.02,
+      brightness: -0.005,
+      noise: 6,
     },
     {
-      name: "documentary_float",
-      zoom: "min(zoom+0.00020,1.10)",
-      x: "iw/2-(iw/zoom/2)+sin(on/32)*12",
-      y: "ih/2-(ih/zoom/2)+cos(on/37)*10",
+      name: "emotional_float",
+      zoom: "min(zoom+0.00016,1.09)",
+      x: "iw/2-(iw/zoom/2)+sin(on/70)*10",
+      y: "ih/2-(ih/zoom/2)+cos(on/80)*10",
+      contrast: 1.05,
+      saturation: 1.07,
+      brightness: 0.008,
+      noise: 3,
     },
   ];
 
@@ -123,7 +147,10 @@ async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   const preset = cinematicPreset(varyasyon);
 
   const vf =
-    `scale=2304:1296:force_original_aspect_ratio=increase,crop=2304:1296,` +
+    `[0:v]scale=2560:1440:force_original_aspect_ratio=increase,crop=2560:1440,` +
+    `gblur=sigma=18,eq=contrast=1.04:saturation=0.95[bg];` +
+
+    `[0:v]scale=2304:1296:force_original_aspect_ratio=increase,crop=2304:1296,` +
     `zoompan=` +
     `z='${preset.zoom}':` +
     `d=${frameSayisi}:` +
@@ -131,21 +158,25 @@ async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
     `y='${preset.y}':` +
     `s=1280x720:` +
     `fps=${fps},` +
-    `eq=contrast=1.07:saturation=1.08:brightness=0.005,` +
-    `noise=alls=5:allf=t,` +
-    `vignette=PI/5,` +
-    `unsharp=5:5:0.7:3:3:0.35,` +
+    `eq=contrast=${preset.contrast}:saturation=${preset.saturation}:brightness=${preset.brightness},` +
+    `noise=alls=${preset.noise}:allf=t,` +
+    `unsharp=5:5:0.75:3:3:0.35[fg];` +
+
+    `[bg]scale=1280:720[bg2];` +
+    `[bg2][fg]blend=all_mode=overlay:all_opacity=0.18,` +
+    `vignette=PI/4,` +
+    `drawbox=x=0:y=0:w=iw:h=ih:color=black@0.06:t=fill,` +
     `format=yuv420p`;
 
   const args =
     `-loop 1 -i "${gorselPath}" ` +
-    `-vf "${vf}" ` +
+    `-filter_complex "${vf}" ` +
     `-t ${sure} ` +
     `-c:v libx264 -preset fast -crf 20 ` +
     `-threads 2 ` +
     `"${ciktiPath}"`;
 
-  await ffmpegCalistir(args, `cinematic-${varyasyon}-${preset.name}`);
+  await ffmpegCalistir(args, `stage2-${varyasyon}-${preset.name}`);
 }
 
 async function paralelKenBurns(gorselYollar, klipYollar, sure) {
@@ -167,7 +198,15 @@ async function paralelKenBurns(gorselYollar, klipYollar, sure) {
 }
 
 function transitionSec(index) {
-  const transitions = ["fade", "smoothleft", "smoothright", "fadeblack"];
+  const transitions = [
+    "fade",
+    "smoothleft",
+    "smoothright",
+    "hblur",
+    "fadeblack",
+    "distance",
+  ];
+
   return transitions[index % transitions.length];
 }
 
@@ -218,8 +257,8 @@ async function finalMontaj({ videoPath, sesPath, muzikPath, ciktiPath }) {
   if (hasMusic) {
     filterComplex =
       `-filter_complex "` +
-      `[1:a]volume=1.0,highpass=f=90,lowpass=f=13500[voice];` +
-      `[2:a]volume=0.12,afade=t=in:ss=0:d=2,aloop=loop=-1:size=2e+09[music];` +
+      `[1:a]volume=1.05,highpass=f=85,lowpass=f=14000,acompressor=threshold=-18dB:ratio=2.5:attack=20:release=250[voice];` +
+      `[2:a]volume=0.10,afade=t=in:ss=0:d=2,aloop=loop=-1:size=2e+09,lowpass=f=9000[music];` +
       `[voice][music]amix=inputs=2:duration=first:weights=1 0.35[aout]` +
       `"`;
 
@@ -228,7 +267,7 @@ async function finalMontaj({ videoPath, sesPath, muzikPath, ciktiPath }) {
   } else {
     filterComplex =
       `-filter_complex "` +
-      `[1:a]volume=1.0,highpass=f=90,lowpass=f=13500[aout]` +
+      `[1:a]volume=1.05,highpass=f=85,lowpass=f=14000,acompressor=threshold=-18dB:ratio=2.5:attack=20:release=250[aout]` +
       `"`;
 
     mapArgs = `-map 0:v -map "[aout]"`;
@@ -391,7 +430,7 @@ async function main() {
       videoKlasorId = videoKlasorler[0].id;
     }
 
-    const filename = `final-cinematic-${Date.now()}.mp4`;
+    const filename = `final-cinematic-stage2-${Date.now()}.mp4`;
     const filepath = path.join(TMP_DIR, filename);
 
     fs.renameSync(finalYol, filepath);
@@ -408,11 +447,12 @@ async function main() {
 
     await telegram(
       job.chat_id,
-      `🎬 *Cinematic video hazır!* 🎉\n\n` +
+      `🎬 *Cinematic Stage 2 video hazır!* 🎉\n\n` +
         `📌 ${job.baslik}\n` +
         `📦 ${(finalStats.size / 1024 / 1024).toFixed(1)} MB\n` +
         `⏱ ~${Math.floor(sesDuration / 60)}:${String(Math.floor(sesDuration % 60)).padStart(2, "0")}\n` +
         `⚡ Render: ${toplamSure}s\n` +
+        `🖼 Görsel: ${gorselYollar.length}\n` +
         `🎵 ${secilenMuzik ? secilenMuzik.name : "müzik yok"}\n\n` +
         `📂 [Video'yu izle](${yuklenen.link})\n\n` +
         `━━━━━━━━━━━━━━━\n\n` +
@@ -436,7 +476,7 @@ async function main() {
       });
       await telegram(
         job.chat_id,
-        `❌ *07-Video cinematic hatası:* ${error.message.substring(0, 300)}`
+        `❌ *07-Video cinematic stage2 hatası:* ${error.message.substring(0, 300)}`
       );
     } catch (e) {}
 
