@@ -1,7 +1,9 @@
 name: 07 - Video Montaj
+
 on:
   repository_dispatch:
     types: [video_montaj]
+
   workflow_dispatch:
     inputs:
       job_id:
@@ -12,21 +14,21 @@ jobs:
   video-montaj:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: FFmpeg kur
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
+
       - name: NPM dependencies
         run: |
           npm init -y
@@ -35,7 +37,7 @@ jobs:
             googleapis \
             axios \
             sharp
-      
+
       - name: Job ID belirle
         id: params
         run: |
@@ -44,7 +46,7 @@ jobs:
           else
             echo "job_id=${{ github.event.inputs.job_id }}" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Video montaj
         env:
           GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
@@ -56,4 +58,4 @@ jobs:
           GDRIVE_MUZIK_FOLDER_ID: ${{ secrets.GDRIVE_MUZIK_FOLDER_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
-       run: node scripts/07-video-montaj-v12-cinematic.js
+        run: node scripts/07-video-montaj-v12-cinematic.js
