@@ -1,17 +1,16 @@
 /**
- * 05 - Thumbnail Üretimi v4
- * - Videonun ANA BAŞLIĞINI (baslik) kullan, ":" ile ikiye böl
- * - Ana kısım: büyük punto, sarı
- * - Alt kısım: orta punto, beyaz
- * - Sağ blokta yarı saydam arka plan
- * - Sol altta BilgiSok logosu
+ * 05 - Thumbnail Üretimi v5 (GeniMini Kids Quiz)
+ * - fluxCagri kullanıyor (fluxUret yok artık)
+ * - Jess the Fox + tema görseli + büyük renkli text
+ * - Çocuk dostu canlı renkler (sarı/kırmızı yerine pembe/mavi/sarı/turuncu)
+ * - Bilgisok logosu kaldırıldı
+ * - Format: 1280x720 (16:9)
  */
 
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
-import axios from "axios";
-import { fluxUret } from "./lib/cloudflare.js";
+import { fluxCagri, getCfAccounts } from "./lib/cloudflare.js";
 import {
   jobOku,
   jobGuncelle,
@@ -22,33 +21,38 @@ import { telegram } from "./lib/telegram.js";
 
 const { JOB_ID } = process.env;
 const TMP_DIR = "/tmp/thumbnail";
-const LOGO_URL = "https://raw.githubusercontent.com/murturhan/bilgisok-otomasyon/main/bilgisok-logo.png.png";
 
 function delay(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-// Başlığı ":" ile böl
 function basligiBol(baslik) {
-  if (baslik.includes(":")) {
-    const [ana, ...rest] = baslik.split(":");
+  // Önce ":" sonra "?" sonra "!" ile böl
+  const seperators = [":", "?", "!"];
+  for (const sep of seperators) {
+    if (baslik.includes(sep)) {
+      const idx = baslik.indexOf(sep);
+      const ana = baslik.substring(0, idx).trim();
+      const alt = baslik.substring(idx + 1).trim();
+      if (ana && alt) return { ana, alt };
+    }
+  }
+  // Bölünmezse, kelime sayısına göre
+  const kelimeler = baslik.trim().split(/\s+/);
+  if (kelimeler.length >= 6) {
+    const yari = Math.ceil(kelimeler.length / 2);
     return {
-      ana: ana.trim(),
-      alt: rest.join(":").trim()
+      ana: kelimeler.slice(0, yari).join(" "),
+      alt: kelimeler.slice(yari).join(" "),
     };
   }
-  return {
-    ana: baslik.trim(),
-    alt: ""
-  };
+  return { ana: baslik.trim(), alt: "" };
 }
 
-// Kelimeleri satır karakter limitine göre satırlara böl
 function metniSatirlaraBol(metin, maksKarakter) {
   const kelimeler = metin.split(/\s+/);
   const satirlar = [];
   let mevcut = "";
-  
   for (const kelime of kelimeler) {
     if ((mevcut + " " + kelime).trim().length <= maksKarakter) {
       mevcut = (mevcut + " " + kelime).trim();
@@ -63,91 +67,92 @@ function metniSatirlaraBol(metin, maksKarakter) {
 
 function escapeXml(text) {
   return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
-// SVG metin overlay
+// Kids quiz tarzı renkli, eğlenceli thumbnail
 function metinSvg(baslikTam, width = 1280, height = 720) {
   const { ana, alt } = basligiBol(baslikTam);
   
-  // Sağ blok: 520 px genişlik
-  const blokGenislik = 520;
+  // Sağ blok, sol blok değil. Sağ üçte birde dramatik metin alanı.
+  const blokGenislik = 540;
   const blokX = width - blokGenislik;
   const padding = 30;
   
-  // Ana başlık font size - uzunluğa göre dinamik
+  // Ana başlık font size (uzunluğa göre)
   let anaFontSize;
   const anaLen = ana.length;
-  if (anaLen <= 12) anaFontSize = 78;
-  else if (anaLen <= 18) anaFontSize = 64;
-  else if (anaLen <= 25) anaFontSize = 54;
-  else if (anaLen <= 35) anaFontSize = 44;
-  else anaFontSize = 36;
+  if (anaLen <= 10) anaFontSize = 92;
+  else if (anaLen <= 16) anaFontSize = 76;
+  else if (anaLen <= 24) anaFontSize = 60;
+  else if (anaLen <= 34) anaFontSize = 48;
+  else anaFontSize = 40;
   
-  // Alt başlık font size
   let altFontSize = 0;
   if (alt) {
-    if (alt.length <= 20) altFontSize = 36;
-    else if (alt.length <= 35) altFontSize = 28;
-    else if (alt.length <= 50) altFontSize = 22;
-    else altFontSize = 18;
+    if (alt.length <= 16) altFontSize = 44;
+    else if (alt.length <= 30) altFontSize = 34;
+    else if (alt.length <= 50) altFontSize = 26;
+    else altFontSize = 22;
   }
   
-  // Satır başına karakter
-  const anaSatirKarakter = Math.floor((blokGenislik - padding * 2) / (anaFontSize * 0.55));
+  const anaSatirKarakter = Math.floor((blokGenislik - padding * 2) / (anaFontSize * 0.5));
   const altSatirKarakter = altFontSize > 0 ? Math.floor((blokGenislik - padding * 2) / (altFontSize * 0.5)) : 0;
   
   const anaSatirlar = metniSatirlaraBol(ana.toUpperCase(), anaSatirKarakter);
   const altSatirlar = alt ? metniSatirlaraBol(alt, altSatirKarakter) : [];
   
-  // Toplam yükseklik
   const anaSatirYukseklik = anaFontSize * 1.1;
   const altSatirYukseklik = altFontSize * 1.15;
   const totalAnaYukseklik = anaSatirlar.length * anaSatirYukseklik;
   const totalAltYukseklik = altSatirlar.length * altSatirYukseklik;
-  const aradaki = 25;
+  const aradaki = 30;
   const totalYukseklik = totalAnaYukseklik + (altSatirlar.length > 0 ? aradaki + totalAltYukseklik : 0);
   
-  // Dikey ortala
   const startY = (height - totalYukseklik) / 2;
   
-  // SVG
   let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
   
-  // Sağ blok yarı saydam arka plan
-  svg += `<rect x="${blokX}" y="0" width="${blokGenislik}" height="${height}" fill="rgba(0,0,0,0.6)"/>`;
+  // Sağ blok GRADIENT arka plan (pembe → mor)
+  svg += `<defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:rgba(255,87,166,0.85);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:rgba(123,76,221,0.85);stop-opacity:1" />
+    </linearGradient>
+  </defs>`;
+  svg += `<rect x="${blokX}" y="0" width="${blokGenislik}" height="${height}" fill="url(#bgGrad)"/>`;
   
-  // Sol kenar kırmızı vurgu
-  svg += `<rect x="${blokX}" y="0" width="6" height="${height}" fill="#FF0000"/>`;
+  // Sol kenar canlı sarı vurgu
+  svg += `<rect x="${blokX}" y="0" width="8" height="${height}" fill="#FFD700"/>`;
   
-  // Ana başlık (sarı, büyük, Impact font)
+  // Ana başlık (PARLAK SARI, büyük, kalın, siyah stroke)
   let currentY = startY + anaFontSize;
   for (const satir of anaSatirlar) {
-    svg += `<text x="${blokX + blokGenislik / 2}" y="${currentY}" 
-              font-family="Impact, 'Arial Black', sans-serif" 
-              font-size="${anaFontSize}" 
-              font-weight="900" 
-              fill="#FFEB3B" 
+    svg += `<text x="${blokX + blokGenislik / 2}" y="${currentY}"
+              font-family="'Fredoka One', 'Comic Sans MS', 'Arial Black', sans-serif"
+              font-size="${anaFontSize}"
+              font-weight="900"
+              fill="#FFEB3B"
               text-anchor="middle"
               stroke="#000000"
-              stroke-width="6"
+              stroke-width="7"
               paint-order="stroke">${escapeXml(satir)}</text>`;
     currentY += anaSatirYukseklik;
   }
   
-  // Alt başlık (beyaz, orta, normal case)
+  // Alt başlık (beyaz, daha küçük)
   if (altSatirlar.length > 0) {
     currentY += aradaki;
     for (const satir of altSatirlar) {
-      svg += `<text x="${blokX + blokGenislik / 2}" y="${currentY}" 
-                font-family="Arial, sans-serif" 
-                font-size="${altFontSize}" 
-                font-weight="700" 
-                fill="#FFFFFF" 
+      svg += `<text x="${blokX + blokGenislik / 2}" y="${currentY}"
+                font-family="'Comic Sans MS', Arial, sans-serif"
+                font-size="${altFontSize}"
+                font-weight="800"
+                fill="#FFFFFF"
                 text-anchor="middle"
                 stroke="#000000"
                 stroke-width="3"
@@ -156,46 +161,40 @@ function metinSvg(baslikTam, width = 1280, height = 720) {
     }
   }
   
+  // Sol üst köşede büyük "QUIZ!" rozeti
+  svg += `<g transform="translate(80, 80)">
+    <circle cx="0" cy="0" r="65" fill="#FF5722" stroke="#000000" stroke-width="5"/>
+    <text x="0" y="15" font-family="'Fredoka One', 'Comic Sans MS', sans-serif" 
+          font-size="36" font-weight="900" fill="#FFFFFF" text-anchor="middle"
+          stroke="#000000" stroke-width="2" paint-order="stroke">QUIZ!</text>
+  </g>`;
+  
+  // Sol alt köşede soru işareti rozeti
+  svg += `<g transform="translate(80, ${height - 80})">
+    <circle cx="0" cy="0" r="55" fill="#4FC3F7" stroke="#000000" stroke-width="5"/>
+    <text x="0" y="20" font-family="'Fredoka One', 'Comic Sans MS', sans-serif" 
+          font-size="68" font-weight="900" fill="#FFFFFF" text-anchor="middle"
+          stroke="#000000" stroke-width="3" paint-order="stroke">?</text>
+  </g>`;
+  
   svg += `</svg>`;
   return Buffer.from(svg);
 }
 
-async function logoEkle(thumbBuffer) {
-  try {
-    const logoResponse = await axios.get(LOGO_URL, { responseType: "arraybuffer", timeout: 10000 });
-    const logoBuffer = Buffer.from(logoResponse.data);
-    
-    const logoResized = await sharp(logoBuffer)
-      .resize(140, 140, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .png()
-      .toBuffer();
-    
-    return await sharp(thumbBuffer)
-      .composite([{ input: logoResized, top: 720 - 140 - 20, left: 20 }])
-      .jpeg({ quality: 92 })
-      .toBuffer();
-  } catch (e) {
-    console.log(`⚠ Logo eklenemedi: ${e.message}`);
-    return thumbBuffer;
-  }
-}
-
-async function thumbnailUret(prompt, baslikTam, deneme) {
-  console.log(`Thumbnail ${deneme} - FLUX'a istek atılıyor...`);
+async function thumbnailUret(prompt, baslikTam, deneme, hesap) {
+  console.log(`Thumbnail ${deneme} - FLUX (${hesap.name})...`);
   
-  const promptIyilestirilmis = `${prompt}, RIGHT THIRD of image EMPTY for text overlay, dramatic lighting, hyperrealistic, cinematic, professional thumbnail photography, 16:9 widescreen, high detail, NO TEXT IN IMAGE`;
+  const promptIyilestirilmis = `${prompt}, RIGHT THIRD of image EMPTY for text overlay, vibrant colors, Pixar 3D animation style, kid-friendly, cheerful, bright daylight, professional thumbnail, 16:9 widescreen, NO TEXT IN IMAGE, NO WORDS, NO LETTERS`;
   
-  const buffer = await fluxUret(promptIyilestirilmis, { width: 1280, height: 720 });
+  const buffer = await fluxCagri(promptIyilestirilmis, hesap, { width: 1280, height: 720 });
   console.log(`  ✓ FLUX görsel: ${(buffer.length / 1024).toFixed(0)}KB`);
   
   const svgBuffer = metinSvg(baslikTam);
   
-  let withText = await sharp(buffer)
+  const withText = await sharp(buffer)
     .composite([{ input: svgBuffer, top: 0, left: 0 }])
     .jpeg({ quality: 95 })
     .toBuffer();
-  
-  withText = await logoEkle(withText);
   
   return withText;
 }
@@ -209,19 +208,22 @@ async function main() {
     if (!job.baslik) throw new Error("Başlık yok!");
     
     const { ana, alt } = basligiBol(job.baslik);
-    console.log(`Ana başlık: "${ana}"`);
-    console.log(`Alt başlık: "${alt}"`);
+    console.log(`Ana: "${ana}" | Alt: "${alt}"`);
     
     await jobGuncelle(JOB_ID, { thumbnail_status: "running" });
     
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
     fs.mkdirSync(TMP_DIR, { recursive: true });
     
+    const accounts = getCfAccounts();
+    console.log(`${accounts.length} Cloudflare hesabı mevcut`);
+    
     const thumbnailler = [];
     
     for (let i = 1; i <= 2; i++) {
+      const hesap = accounts[(i - 1) % accounts.length];
       try {
-        const buffer = await thumbnailUret(job.thumbnail_prompt, job.baslik, i);
+        const buffer = await thumbnailUret(job.thumbnail_prompt, job.baslik, i, hesap);
         
         const filename = `thumbnail-${i}-${Date.now()}.jpg`;
         const filepath = path.join(TMP_DIR, filename);
@@ -248,7 +250,7 @@ async function main() {
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
     
     await jobGuncelle(JOB_ID, { thumbnail_status: `completed:${thumbnailler.length}` });
-    await telegram(job.chat_id, `🖼️ *Thumbnail hazır* (${thumbnailler.length} varyant)`);
+    await telegram(job.chat_id, `🖼️ *Thumbnail ready!* (${thumbnailler.length} variants)`);
     
     console.log("✅ Thumbnail tamam.");
     process.exit(0);
@@ -259,7 +261,7 @@ async function main() {
     try {
       const job = await jobOku(JOB_ID);
       await jobGuncelle(JOB_ID, { thumbnail_status: `error: ${error.message.substring(0, 100)}` });
-      await telegram(job.chat_id, `❌ *05-Thumbnail hatası:* ${error.message.substring(0, 300)}`);
+      await telegram(job.chat_id, `❌ *05-Thumbnail error:* ${error.message.substring(0, 300)}`);
     } catch (e) {}
     process.exit(1);
   }
