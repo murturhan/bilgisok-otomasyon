@@ -1,186 +1,203 @@
 /**
- * 05 - Thumbnail Üretimi v5 (Logo overlay eklendi)
+ * 05 - Thumbnail Üretimi v4
+ * - Videonun ANA BAŞLIĞINI (baslik) kullan, ":" ile ikiye böl
+ * - Ana kısım: büyük punto, sarı
+ * - Alt kısım: orta punto, beyaz
+ * - Sağ blokta yarı saydam arka plan
+ * - Sol altta BilgiSok logosu
  */
 
 import fs from "fs";
+import path from "path";
 import sharp from "sharp";
 import axios from "axios";
+import { fluxUret } from "./lib/cloudflare.js";
 import {
   jobOku,
   jobGuncelle,
   driveAltKlasorBul,
   driveDosyaYukle,
 } from "./lib/google.js";
-import { fluxCagri, getCfAccounts, delay } from "./lib/cloudflare.js";
 import { telegram } from "./lib/telegram.js";
 
 const { JOB_ID } = process.env;
-
-// Logo'nun GitHub raw URL'i (public repo)
+const TMP_DIR = "/tmp/thumbnail";
 const LOGO_URL = "https://raw.githubusercontent.com/murturhan/bilgisok-otomasyon/main/bilgisok-logo.png.png";
-const LOGO_BOYUT = 180; // Logo'nun thumbnail içindeki genişliği (px)
-const LOGO_MARGIN = 30; // Sol-alt köşeden boşluk
 
-function escapeXml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+function delay(ms) {
+  return new Promise(r => setTimeout(r, ms));
 }
 
+// Başlığı ":" ile böl
 function basligiBol(baslik) {
-  const trimmed = baslik.trim();
-  if (trimmed.length <= 6) return [trimmed];
+  if (baslik.includes(":")) {
+    const [ana, ...rest] = baslik.split(":");
+    return {
+      ana: ana.trim(),
+      alt: rest.join(":").trim()
+    };
+  }
+  return {
+    ana: baslik.trim(),
+    alt: ""
+  };
+}
+
+// Kelimeleri satır karakter limitine göre satırlara böl
+function metniSatirlaraBol(metin, maksKarakter) {
+  const kelimeler = metin.split(/\s+/);
+  const satirlar = [];
+  let mevcut = "";
   
-  const kelimeler = trimmed.split(/\s+/);
+  for (const kelime of kelimeler) {
+    if ((mevcut + " " + kelime).trim().length <= maksKarakter) {
+      mevcut = (mevcut + " " + kelime).trim();
+    } else {
+      if (mevcut) satirlar.push(mevcut);
+      mevcut = kelime;
+    }
+  }
+  if (mevcut) satirlar.push(mevcut);
+  return satirlar;
+}
+
+function escapeXml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// SVG metin overlay
+function metinSvg(baslikTam, width = 1280, height = 720) {
+  const { ana, alt } = basligiBol(baslikTam);
   
-  if (kelimeler.length === 1) {
-    const mid = Math.ceil(trimmed.length / 2);
-    return [trimmed.substring(0, mid), trimmed.substring(mid)];
+  // Sağ blok: 520 px genişlik
+  const blokGenislik = 520;
+  const blokX = width - blokGenislik;
+  const padding = 30;
+  
+  // Ana başlık font size - uzunluğa göre dinamik
+  let anaFontSize;
+  const anaLen = ana.length;
+  if (anaLen <= 12) anaFontSize = 78;
+  else if (anaLen <= 18) anaFontSize = 64;
+  else if (anaLen <= 25) anaFontSize = 54;
+  else if (anaLen <= 35) anaFontSize = 44;
+  else anaFontSize = 36;
+  
+  // Alt başlık font size
+  let altFontSize = 0;
+  if (alt) {
+    if (alt.length <= 20) altFontSize = 36;
+    else if (alt.length <= 35) altFontSize = 28;
+    else if (alt.length <= 50) altFontSize = 22;
+    else altFontSize = 18;
   }
   
-  let enIyiBolme = 1;
-  let enKucukFark = Infinity;
+  // Satır başına karakter
+  const anaSatirKarakter = Math.floor((blokGenislik - padding * 2) / (anaFontSize * 0.55));
+  const altSatirKarakter = altFontSize > 0 ? Math.floor((blokGenislik - padding * 2) / (altFontSize * 0.5)) : 0;
   
-  for (let i = 1; i < kelimeler.length; i++) {
-    const ilkSatir = kelimeler.slice(0, i).join(" ");
-    const ikinciSatir = kelimeler.slice(i).join(" ");
-    const fark = Math.abs(ilkSatir.length - ikinciSatir.length);
-    if (fark < enKucukFark) {
-      enKucukFark = fark;
-      enIyiBolme = i;
+  const anaSatirlar = metniSatirlaraBol(ana.toUpperCase(), anaSatirKarakter);
+  const altSatirlar = alt ? metniSatirlaraBol(alt, altSatirKarakter) : [];
+  
+  // Toplam yükseklik
+  const anaSatirYukseklik = anaFontSize * 1.1;
+  const altSatirYukseklik = altFontSize * 1.15;
+  const totalAnaYukseklik = anaSatirlar.length * anaSatirYukseklik;
+  const totalAltYukseklik = altSatirlar.length * altSatirYukseklik;
+  const aradaki = 25;
+  const totalYukseklik = totalAnaYukseklik + (altSatirlar.length > 0 ? aradaki + totalAltYukseklik : 0);
+  
+  // Dikey ortala
+  const startY = (height - totalYukseklik) / 2;
+  
+  // SVG
+  let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
+  
+  // Sağ blok yarı saydam arka plan
+  svg += `<rect x="${blokX}" y="0" width="${blokGenislik}" height="${height}" fill="rgba(0,0,0,0.6)"/>`;
+  
+  // Sol kenar kırmızı vurgu
+  svg += `<rect x="${blokX}" y="0" width="6" height="${height}" fill="#FF0000"/>`;
+  
+  // Ana başlık (sarı, büyük, Impact font)
+  let currentY = startY + anaFontSize;
+  for (const satir of anaSatirlar) {
+    svg += `<text x="${blokX + blokGenislik / 2}" y="${currentY}" 
+              font-family="Impact, 'Arial Black', sans-serif" 
+              font-size="${anaFontSize}" 
+              font-weight="900" 
+              fill="#FFEB3B" 
+              text-anchor="middle"
+              stroke="#000000"
+              stroke-width="6"
+              paint-order="stroke">${escapeXml(satir)}</text>`;
+    currentY += anaSatirYukseklik;
+  }
+  
+  // Alt başlık (beyaz, orta, normal case)
+  if (altSatirlar.length > 0) {
+    currentY += aradaki;
+    for (const satir of altSatirlar) {
+      svg += `<text x="${blokX + blokGenislik / 2}" y="${currentY}" 
+                font-family="Arial, sans-serif" 
+                font-size="${altFontSize}" 
+                font-weight="700" 
+                fill="#FFFFFF" 
+                text-anchor="middle"
+                stroke="#000000"
+                stroke-width="3"
+                paint-order="stroke">${escapeXml(satir)}</text>`;
+      currentY += altSatirYukseklik;
     }
   }
   
-  return [
-    kelimeler.slice(0, enIyiBolme).join(" "),
-    kelimeler.slice(enIyiBolme).join(" "),
-  ];
+  svg += `</svg>`;
+  return Buffer.from(svg);
 }
 
-function fontBoyutuHesapla(satir, maxGenislik) {
-  const oran = 0.70;
-  for (let size = 130; size >= 40; size -= 5) {
-    if (satir.length * size * oran <= maxGenislik) return size;
-  }
-  return 40;
-}
-
-function svgOverlayUret(baslik, altBaslik) {
-  const satirlar = basligiBol(baslik);
-  const altBaslikVar = altBaslik && altBaslik.trim().length > 0;
-  
-  const BLOK_BASLANGIC_X = 640;
-  const BLOK_GENISLIGI = 640;
-  const BLOK_ORTA_X = BLOK_BASLANGIC_X + BLOK_GENISLIGI / 2;
-  const KENAR_BOSLUK = 90;
-  const MAX_METIN_GENISLIGI = BLOK_GENISLIGI - KENAR_BOSLUK * 2;
-  
-  const enUzunSatir = satirlar.reduce((a, b) => a.length > b.length ? a : b);
-  const baslikFontSize = fontBoyutuHesapla(enUzunSatir, MAX_METIN_GENISLIGI);
-  const lineHeight = baslikFontSize * 1.05;
-  
-  const altFontSize = altBaslikVar 
-    ? Math.min(fontBoyutuHesapla(altBaslik, MAX_METIN_GENISLIGI - 40), Math.floor(baslikFontSize * 0.5))
-    : 0;
-  
-  const toplamBaslikYukseklik = satirlar.length * lineHeight;
-  const altBaslikBosluk = altBaslikVar ? altFontSize + 40 : 0;
-  const toplamYukseklik = toplamBaslikYukseklik + altBaslikBosluk;
-  
-  const baslangicY = (720 - toplamYukseklik) / 2 + baslikFontSize * 0.9;
-  
-  const baslikTextElements = satirlar.map((satir, i) => {
-    const y = baslangicY + i * lineHeight;
-    return `<text x="${BLOK_ORTA_X}" y="${y}" 
-            font-family="Impact, 'Arial Black', sans-serif" 
-            font-size="${baslikFontSize}" 
-            font-weight="900" 
-            fill="#FFEB3B" 
-            stroke="#000000" 
-            stroke-width="${Math.max(5, baslikFontSize * 0.07)}" 
-            paint-order="stroke fill"
-            text-anchor="middle"
-            letter-spacing="1"
-            filter="url(#dropShadow)">${escapeXml(satir)}</text>`;
-  }).join("\n");
-  
-  let altBaslikSvg = "";
-  if (altBaslikVar) {
-    const altY = baslangicY + toplamBaslikYukseklik + altFontSize * 0.6 + 10;
-    const seritGenislik = Math.min(altBaslik.length * altFontSize * 0.75 + 50, MAX_METIN_GENISLIGI);
-    altBaslikSvg = `
-      <rect x="${BLOK_ORTA_X - seritGenislik/2}" y="${altY - altFontSize}" 
-            width="${seritGenislik}" height="${altFontSize + 18}" 
-            fill="#E50914" rx="6"/>
-      <text x="${BLOK_ORTA_X}" y="${altY + 2}" 
-            font-family="Impact, 'Arial Black', sans-serif" 
-            font-size="${altFontSize}" 
-            font-weight="900" 
-            fill="#FFFFFF" 
-            text-anchor="middle"
-            letter-spacing="2">${escapeXml(altBaslik)}</text>`;
-  }
-  
-  return `<svg width="1280" height="720" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="rightBlock" x1="0%" y1="0%" x2="100%" y2="0%">
-        <stop offset="0%" style="stop-color:rgba(0,0,0,0.0)"/>
-        <stop offset="15%" style="stop-color:rgba(0,0,0,0.5)"/>
-        <stop offset="40%" style="stop-color:rgba(0,0,0,0.85)"/>
-        <stop offset="100%" style="stop-color:rgba(0,0,0,0.9)"/>
-      </linearGradient>
-      <filter id="dropShadow" x="-30%" y="-30%" width="160%" height="160%">
-        <feGaussianBlur in="SourceAlpha" stdDeviation="10"/>
-        <feOffset dx="8" dy="10" result="offsetblur"/>
-        <feComponentTransfer>
-          <feFuncA type="linear" slope="0.95"/>
-        </feComponentTransfer>
-        <feMerge>
-          <feMergeNode/>
-          <feMergeNode in="SourceGraphic"/>
-        </feMerge>
-      </filter>
-    </defs>
-    
-    <rect x="${BLOK_BASLANGIC_X}" y="0" width="${BLOK_GENISLIGI}" height="720" fill="url(#rightBlock)"/>
-    
-    <rect x="${BLOK_BASLANGIC_X + 60}" y="60" width="120" height="6" fill="#FFEB3B"/>
-    
-    ${baslikTextElements}
-    ${altBaslikSvg}
-    
-    <rect x="${BLOK_BASLANGIC_X + 60}" y="660" width="120" height="6" fill="#FFEB3B"/>
-  </svg>`;
-}
-
-// Logo'yu indir + boyutlandır, sol alt köşe için hazırla
-let logoBufferCache = null;
-async function logoYukle() {
-  if (logoBufferCache) return logoBufferCache;
-  
+async function logoEkle(thumbBuffer) {
   try {
-    console.log("Logo indiriliyor...");
-    const response = await axios.get(LOGO_URL, {
-      responseType: "arraybuffer",
-      timeout: 30000,
-    });
+    const logoResponse = await axios.get(LOGO_URL, { responseType: "arraybuffer", timeout: 10000 });
+    const logoBuffer = Buffer.from(logoResponse.data);
     
-    // Logo'yu LOGO_BOYUT genişliğine resize et (aspect ratio korur)
-    const resized = await sharp(Buffer.from(response.data))
-      .resize({ width: LOGO_BOYUT, height: LOGO_BOYUT, fit: "inside" })
+    const logoResized = await sharp(logoBuffer)
+      .resize(140, 140, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer();
     
-    logoBufferCache = resized;
-    console.log(`✓ Logo yüklendi (${(resized.length / 1024).toFixed(0)}KB resized)`);
-    return resized;
+    return await sharp(thumbBuffer)
+      .composite([{ input: logoResized, top: 720 - 140 - 20, left: 20 }])
+      .jpeg({ quality: 92 })
+      .toBuffer();
   } catch (e) {
-    console.error(`Logo yükleme hatası: ${e.message}`);
-    return null;
+    console.log(`⚠ Logo eklenemedi: ${e.message}`);
+    return thumbBuffer;
   }
+}
+
+async function thumbnailUret(prompt, baslikTam, deneme) {
+  console.log(`Thumbnail ${deneme} - FLUX'a istek atılıyor...`);
+  
+  const promptIyilestirilmis = `${prompt}, RIGHT THIRD of image EMPTY for text overlay, dramatic lighting, hyperrealistic, cinematic, professional thumbnail photography, 16:9 widescreen, high detail, NO TEXT IN IMAGE`;
+  
+  const buffer = await fluxUret(promptIyilestirilmis, { width: 1280, height: 720 });
+  console.log(`  ✓ FLUX görsel: ${(buffer.length / 1024).toFixed(0)}KB`);
+  
+  const svgBuffer = metinSvg(baslikTam);
+  
+  let withText = await sharp(buffer)
+    .composite([{ input: svgBuffer, top: 0, left: 0 }])
+    .jpeg({ quality: 95 })
+    .toBuffer();
+  
+  withText = await logoEkle(withText);
+  
+  return withText;
 }
 
 async function main() {
@@ -188,86 +205,57 @@ async function main() {
     console.log(`Job: ${JOB_ID}`);
     const job = await jobOku(JOB_ID);
     
-    if (!job.thumbnail_prompt || !job.thumbnail_baslik) {
-      throw new Error("thumbnail_prompt veya thumbnail_baslik boş!");
-    }
+    if (!job.thumbnail_prompt) throw new Error("Thumbnail prompt yok!");
+    if (!job.baslik) throw new Error("Başlık yok!");
+    
+    const { ana, alt } = basligiBol(job.baslik);
+    console.log(`Ana başlık: "${ana}"`);
+    console.log(`Alt başlık: "${alt}"`);
     
     await jobGuncelle(JOB_ID, { thumbnail_status: "running" });
     
-    const altKlasorler = await driveAltKlasorBul("05-thumbnail", job.drive_folder_id);
-    if (altKlasorler.length === 0) throw new Error("05-thumbnail klasörü bulunamadı.");
-    const thumbnailKlasorId = altKlasorler[0].id;
+    fs.rmSync(TMP_DIR, { recursive: true, force: true });
+    fs.mkdirSync(TMP_DIR, { recursive: true });
     
-    const accounts = getCfAccounts();
-    const aktifHesap = accounts[0];
-    const altBaslik = job.thumbnail_alt_baslik || "";
+    const thumbnailler = [];
     
-    console.log(`Thumbnail: "${job.thumbnail_baslik}" | "${altBaslik}"`);
-    const satirlar = basligiBol(job.thumbnail_baslik);
-    console.log(`Satırlara bölündü: ${satirlar.join(" / ")}`);
-    
-    const svg = svgOverlayUret(job.thumbnail_baslik, altBaslik);
-    
-    // Logo'yu indir (cache'lenir)
-    const logoBuffer = await logoYukle();
-    
-    let basariliSayisi = 0;
-    
-    for (let v = 0; v < 2; v++) {
+    for (let i = 1; i <= 2; i++) {
       try {
-        console.log(`Thumbnail varyantı ${v + 1}/2...`);
-        const imageBuffer = await fluxCagri(job.thumbnail_prompt, aktifHesap, {
-          width: 1280,
-          height: 720,
-        });
+        const buffer = await thumbnailUret(job.thumbnail_prompt, job.baslik, i);
         
-        const filename = `thumbnail-${String(v + 1).padStart(2, "0")}-${Date.now()}.jpg`;
-        const filepath = `/tmp/${filename}`;
+        const filename = `thumbnail-${i}-${Date.now()}.jpg`;
+        const filepath = path.join(TMP_DIR, filename);
+        fs.writeFileSync(filepath, buffer);
+        thumbnailler.push({ filename, filepath });
         
-        // Composite katmanları: önce FLUX görseli, üstüne SVG text overlay, üstüne LOGO
-        const composites = [
-          { input: Buffer.from(svg), top: 0, left: 0 },
-        ];
+        console.log(`  ✓ Thumbnail ${i} kaydedildi: ${filename}`);
         
-        // Logo'yu sol alt köşeye ekle
-        if (logoBuffer) {
-          composites.push({
-            input: logoBuffer,
-            top: 720 - LOGO_BOYUT - LOGO_MARGIN,
-            left: LOGO_MARGIN,
-            blend: "over",
-          });
-        }
-        
-        await sharp(imageBuffer)
-          .composite(composites)
-          .jpeg({ quality: 92 })
-          .toFile(filepath);
-        
-        const stats = fs.statSync(filepath);
-        console.log(`  ✓ ${v + 1}: ${(stats.size / 1024).toFixed(0)}KB`);
-        
-        await driveDosyaYukle({ filename, filepath }, thumbnailKlasorId, "image/jpeg");
-        try { fs.unlinkSync(filepath); } catch (e) {}
-        
-        basariliSayisi++;
-        
-        if (v < 1) await delay(7000);
+        if (i < 2) await delay(3000);
       } catch (e) {
-        console.error(`  ✗ Thumbnail ${v + 1}: ${e.message}`);
+        console.error(`Thumbnail ${i} hatası: ${e.message}`);
       }
     }
     
-    const status = basariliSayisi === 2 ? "completed" : "partial";
-    await jobGuncelle(JOB_ID, { thumbnail_status: `${status}:${basariliSayisi}/2` });
+    if (thumbnailler.length === 0) throw new Error("Hiç thumbnail üretilemedi!");
     
-    await telegram(job.chat_id, `🎯 *Thumbnail hazır:* ${basariliSayisi}/2`);
+    const altKlasorler = await driveAltKlasorBul("05-thumbnail", job.drive_folder_id);
+    if (altKlasorler.length === 0) throw new Error("05-thumbnail klasörü yok");
+    
+    for (const t of thumbnailler) {
+      await driveDosyaYukle(t, altKlasorler[0].id, "image/jpeg");
+    }
+    
+    fs.rmSync(TMP_DIR, { recursive: true, force: true });
+    
+    await jobGuncelle(JOB_ID, { thumbnail_status: `completed:${thumbnailler.length}` });
+    await telegram(job.chat_id, `🖼️ *Thumbnail hazır* (${thumbnailler.length} varyant)`);
     
     console.log("✅ Thumbnail tamam.");
     process.exit(0);
     
   } catch (error) {
     console.error("HATA:", error.message);
+    console.error(error.stack);
     try {
       const job = await jobOku(JOB_ID);
       await jobGuncelle(JOB_ID, { thumbnail_status: `error: ${error.message.substring(0, 100)}` });
