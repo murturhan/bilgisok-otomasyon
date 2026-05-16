@@ -1,8 +1,8 @@
 /**
- * 07 - Video Montaj v10
- * - Altyazı KALDIRILDI (YouTube otomatik altyazı kullanılacak)
- * - Tek aşamalı montaj: video + ses + müzik (hızlı, basit)
+ * 07 - Video Montaj v11
+ * - Altyazısız, tek aşamalı
  * - Titreşimsiz Ken Burns + fade transitions
+ * - Bittiğinde Telegram'a "/yukle JOB_ID" komutu bilgisi
  */
 
 import fs from "fs";
@@ -75,7 +75,6 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
   }
 }
 
-// Titreşimsiz Ken Burns
 async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   const fps = 25;
   const frameSayisi = Math.ceil(sure * fps);
@@ -112,7 +111,7 @@ async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
 }
 
 async function paralelKenBurns(gorselYollar, klipYollar, sure) {
-  console.log(`🎞️ ${gorselYollar.length} klip paralel üretiliyor (titreşimsiz)...`);
+  console.log(`🎞️ ${gorselYollar.length} klip paralel üretiliyor...`);
   
   for (let i = 0; i < gorselYollar.length; i += PARALEL_KEN_BURNS) {
     const batch = [];
@@ -127,7 +126,6 @@ async function paralelKenBurns(gorselYollar, klipYollar, sure) {
   console.log(`  ✓ ${gorselYollar.length} klip hazır`);
 }
 
-// Fade transitions ile birleştirme
 async function videolariFadeIleBirlestir(klipListesi, gorselSure, ciktiPath) {
   const N = klipListesi.length;
   
@@ -160,7 +158,6 @@ async function videolariFadeIleBirlestir(klipListesi, gorselSure, ciktiPath) {
   await ffmpegCalistir(args, "concat-fade");
 }
 
-// Tek aşamalı final: video + ses + müzik
 async function finalMontaj({ videoPath, sesPath, muzikPath, ciktiPath }) {
   const hasMusic = muzikPath && fs.existsSync(muzikPath);
   
@@ -247,7 +244,7 @@ async function main() {
     const sesDosyalar = await driveKlasorIcerigi(sesKlasorler[0].id, oauthAuth);
     const sesler = sesDosyalar.filter(d => d.name.endsWith(".mp3"));
     
-    console.log(`📊 ${gorseller.length} görsel, ${sesler.length} ses (altyazı YOK - YouTube otomatik)`);
+    console.log(`📊 ${gorseller.length} görsel, ${sesler.length} ses`);
     
     if (gorseller.length === 0) throw new Error("Görsel yok!");
     if (sesler.length === 0) throw new Error("Ses yok!");
@@ -283,7 +280,7 @@ async function main() {
     
     const N = gorselYollar.length;
     const klipSure = (sesDuration + (N - 1) * TRANSITION_SURE) / N;
-    console.log(`📏 Ses: ${sesDuration.toFixed(1)}s, Klip başı: ${klipSure.toFixed(1)}s (${TRANSITION_SURE}s fade x${N-1})`);
+    console.log(`📏 Ses: ${sesDuration.toFixed(1)}s, Klip başı: ${klipSure.toFixed(1)}s`);
     
     const kenBurnsBaslangic = Date.now();
     const klipYollar = gorselYollar.map((_, i) => path.join(TMP_DIR, `klip-${String(i + 1).padStart(3, "0")}.mp4`));
@@ -294,7 +291,6 @@ async function main() {
     const sessizVideoYol = path.join(TMP_DIR, "sessiz-video.mp4");
     await videolariFadeIleBirlestir(klipYollar, klipSure, sessizVideoYol);
     
-    // Tek aşama: video + ses + müzik (altyazı yok)
     console.log("🎬 Final montaj (ses + müzik)...");
     const finalYol = path.join(TMP_DIR, "final.mp4");
     await finalMontaj({
@@ -327,15 +323,23 @@ async function main() {
     const toplamSure = ((Date.now() - toplamBaslangic) / 1000).toFixed(0);
     
     await jobGuncelle(JOB_ID, { video_status: `completed:${(finalStats.size / 1024 / 1024).toFixed(1)}MB` });
+    
+    // Telegram'a video hazır + YouTube upload komutu
     await telegram(
       job.chat_id,
       `🎬 *Video hazır!* 🎉\n\n` +
+      `📌 ${job.baslik}\n` +
       `📦 ${(finalStats.size / 1024 / 1024).toFixed(1)} MB\n` +
       `⏱ ~${Math.floor(sesDuration / 60)}:${String(Math.floor(sesDuration % 60)).padStart(2, "0")}\n` +
       `⚡ Render: ${toplamSure}s\n` +
-      `🎵 ${secilenMuzik ? secilenMuzik.name : "müzik yok"}\n` +
-      `📝 Altyazı: YouTube otomatik\n\n` +
-      `📂 [Video'yu aç](${yuklenen.link})`
+      `🎵 ${secilenMuzik ? secilenMuzik.name : "müzik yok"}\n\n` +
+      `📂 [Video'yu izle](${yuklenen.link})\n\n` +
+      `━━━━━━━━━━━━━━━\n\n` +
+      `▶️ *YouTube'a yüklemek için:*\n\n` +
+      `\`/yukle ${JOB_ID}\` _(private)_\n` +
+      `\`/yukle ${JOB_ID} unlisted\` _(linki olanlar)_\n` +
+      `\`/yukle ${JOB_ID} public\` _(yayında)_\n\n` +
+      `Komutu kopyala yapıştır 👆`
     );
     
     console.log(`✅ TOPLAM: ${toplamSure}s`);
