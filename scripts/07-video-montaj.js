@@ -1,9 +1,8 @@
 /**
- * 07 - Video Montaj v9 - TİTREŞİMSİZ
- * - Ken Burns: önce upscale, zoom uygula, sonra 1280x720'ye düşür → subpixel precision
- * - Görseller arası 0.5s crossfade transition
- * - Müzik %5
- * - Font 20
+ * 07 - Video Montaj v10
+ * - Altyazı KALDIRILDI (YouTube otomatik altyazı kullanılacak)
+ * - Tek aşamalı montaj: video + ses + müzik (hızlı, basit)
+ * - Titreşimsiz Ken Burns + fade transitions
  */
 
 import fs from "fs";
@@ -76,7 +75,7 @@ async function ffmpegCalistir(args, etiket = "ffmpeg") {
   }
 }
 
-// TİTREŞİMSİZ KEN BURNS: upscale → zoom → downscale
+// Titreşimsiz Ken Burns
 async function kenBurnsKlipUret(gorselPath, ciktiPath, sure, varyasyon) {
   const fps = 25;
   const frameSayisi = Math.ceil(sure * fps);
@@ -128,7 +127,7 @@ async function paralelKenBurns(gorselYollar, klipYollar, sure) {
   console.log(`  ✓ ${gorselYollar.length} klip hazır`);
 }
 
-// FADE TRANSITIONS ile birleştirme
+// Fade transitions ile birleştirme
 async function videolariFadeIleBirlestir(klipListesi, gorselSure, ciktiPath) {
   const N = klipListesi.length;
   
@@ -161,7 +160,8 @@ async function videolariFadeIleBirlestir(klipListesi, gorselSure, ciktiPath) {
   await ffmpegCalistir(args, "concat-fade");
 }
 
-async function asamaA_video_ses_muzik({ videoPath, sesPath, muzikPath, ciktiPath }) {
+// Tek aşamalı final: video + ses + müzik
+async function finalMontaj({ videoPath, sesPath, muzikPath, ciktiPath }) {
   const hasMusic = muzikPath && fs.existsSync(muzikPath);
   
   let filterComplex, mapArgs, muzikInput;
@@ -184,25 +184,7 @@ async function asamaA_video_ses_muzik({ videoPath, sesPath, muzikPath, ciktiPath
     -shortest \
     "${ciktiPath}"`;
   
-  await ffmpegCalistir(args, "asama-A");
-}
-
-async function asamaB_altyazi({ videoPath, altyaziPath, ciktiPath }) {
-  if (!altyaziPath || !fs.existsSync(altyaziPath)) {
-    fs.copyFileSync(videoPath, ciktiPath);
-    console.log("[asama-B] altyazı yok, atlandı");
-    return;
-  }
-  
-  const srtEscaped = altyaziPath.replace(/:/g, "\\:").replace(/'/g, "\\'");
-  
-  const args = `-i "${videoPath}" \
-    -vf "subtitles='${srtEscaped}':force_style='FontName=Arial,FontSize=20,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,Outline=2,Shadow=1,Alignment=2,MarginV=50'" \
-    -c:v libx264 -preset fast -crf 22 -threads 0 \
-    -c:a copy \
-    "${ciktiPath}"`;
-  
-  await ffmpegCalistir(args, "asama-B-altyazi");
+  await ffmpegCalistir(args, "final-montaj");
 }
 
 async function muzikSec(mood, saAuth) {
@@ -257,7 +239,6 @@ async function main() {
     
     const gorselKlasorler = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
     const sesKlasorler = await driveAltKlasorBul("02-ses", job.drive_folder_id);
-    const altyaziKlasorler = await driveAltKlasorBul("06-altyazi", job.drive_folder_id);
     
     if (gorselKlasorler.length === 0) throw new Error("01-gorseller yok");
     if (sesKlasorler.length === 0) throw new Error("02-ses yok");
@@ -265,9 +246,8 @@ async function main() {
     const gorseller = await driveKlasorIcerigi(gorselKlasorler[0].id, oauthAuth);
     const sesDosyalar = await driveKlasorIcerigi(sesKlasorler[0].id, oauthAuth);
     const sesler = sesDosyalar.filter(d => d.name.endsWith(".mp3"));
-    const altyazilar = altyaziKlasorler.length > 0 ? await driveKlasorIcerigi(altyaziKlasorler[0].id, oauthAuth) : [];
     
-    console.log(`📊 ${gorseller.length} görsel, ${sesler.length} ses, ${altyazilar.length} altyazı`);
+    console.log(`📊 ${gorseller.length} görsel, ${sesler.length} ses (altyazı YOK - YouTube otomatik)`);
     
     if (gorseller.length === 0) throw new Error("Görsel yok!");
     if (sesler.length === 0) throw new Error("Ses yok!");
@@ -285,15 +265,6 @@ async function main() {
     const sesYol = path.join(TMP_DIR, "ses.mp3");
     indirmePromise.push(driveIndir(sesler[sesler.length - 1].id, sesYol, oauthAuth));
     
-    let altyaziYol = null;
-    if (altyazilar.length > 0) {
-      const srtler = altyazilar.filter(d => d.name.endsWith(".srt"));
-      if (srtler.length > 0) {
-        altyaziYol = path.join(TMP_DIR, "altyazi.srt");
-        indirmePromise.push(driveIndir(srtler[srtler.length - 1].id, altyaziYol, oauthAuth));
-      }
-    }
-    
     await Promise.all(indirmePromise);
     console.log(`  ✓ İndirme: ${((Date.now() - indirmeBaslangic) / 1000).toFixed(1)}s`);
     
@@ -310,7 +281,6 @@ async function main() {
     );
     const sesDuration = parseFloat(sesDurationStr.trim());
     
-    // Fade transitions için klip süresi
     const N = gorselYollar.length;
     const klipSure = (sesDuration + (N - 1) * TRANSITION_SURE) / N;
     console.log(`📏 Ses: ${sesDuration.toFixed(1)}s, Klip başı: ${klipSure.toFixed(1)}s (${TRANSITION_SURE}s fade x${N-1})`);
@@ -324,20 +294,13 @@ async function main() {
     const sessizVideoYol = path.join(TMP_DIR, "sessiz-video.mp4");
     await videolariFadeIleBirlestir(klipYollar, klipSure, sessizVideoYol);
     
-    console.log("🎬 Aşama A: Video + Ses + Müzik...");
-    const asamaAYol = path.join(TMP_DIR, "asama-a.mp4");
-    await asamaA_video_ses_muzik({
+    // Tek aşama: video + ses + müzik (altyazı yok)
+    console.log("🎬 Final montaj (ses + müzik)...");
+    const finalYol = path.join(TMP_DIR, "final.mp4");
+    await finalMontaj({
       videoPath: sessizVideoYol,
       sesPath: sesYol,
       muzikPath: muzikYol,
-      ciktiPath: asamaAYol,
-    });
-    
-    console.log("🎬 Aşama B: Altyazı...");
-    const finalYol = path.join(TMP_DIR, "final.mp4");
-    await asamaB_altyazi({
-      videoPath: asamaAYol,
-      altyaziPath: altyaziYol,
       ciktiPath: finalYol,
     });
     
@@ -370,7 +333,8 @@ async function main() {
       `📦 ${(finalStats.size / 1024 / 1024).toFixed(1)} MB\n` +
       `⏱ ~${Math.floor(sesDuration / 60)}:${String(Math.floor(sesDuration % 60)).padStart(2, "0")}\n` +
       `⚡ Render: ${toplamSure}s\n` +
-      `🎵 ${secilenMuzik ? secilenMuzik.name : "müzik yok"}\n\n` +
+      `🎵 ${secilenMuzik ? secilenMuzik.name : "müzik yok"}\n` +
+      `📝 Altyazı: YouTube otomatik\n\n` +
       `📂 [Video'yu aç](${yuklenen.link})`
     );
     
