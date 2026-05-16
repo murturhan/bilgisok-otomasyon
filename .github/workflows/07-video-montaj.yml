@@ -56,4 +56,4 @@ jobs:
           GDRIVE_MUZIK_FOLDER_ID: ${{ secrets.GDRIVE_MUZIK_FOLDER_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
-        run: node scripts/07-video-montaj.js
+       run: node scripts/07-video-montaj-v12-cinematic.js
