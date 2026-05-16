@@ -1,12 +1,3 @@
-# 07-video-montaj-v12-cinematic.js
-
-Aşağıdaki dosyanın tamamını kopyalayıp GitHub'da:
-
-`scripts/07-video-montaj-v12-cinematic.js`
-
-dosyasına yapıştır.
-
-```javascript
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
@@ -70,31 +61,29 @@ async function cinematicClip(gorselPath, ciktiPath, sure, index) {
 
   const preset = motionPreset(index);
 
-  const vf = `
-scale=2200:1238:flags=lanczos,
-zoompan=
- z='${preset.zoom}':
- d=${frameSayisi}:
- x='${preset.x}':
- y='${preset.y}':
- s=1280x720:
- fps=${fps},
- eq=contrast=1.06:saturation=1.08:brightness=0.01,
- noise=alls=6:allf=t,
- vignette=PI/5,
- unsharp=5:5:0.8:3:3:0.4,
- format=yuv420p
-`.replace(/\n/g, "");
+  const vf =
+    `scale=2200:1238:flags=lanczos,` +
+    `zoompan=` +
+    `z='${preset.zoom}':` +
+    `d=${frameSayisi}:` +
+    `x='${preset.x}':` +
+    `y='${preset.y}':` +
+    `s=1280x720:` +
+    `fps=${fps},` +
+    `eq=contrast=1.06:saturation=1.08:brightness=0.01,` +
+    `noise=alls=6:allf=t,` +
+    `vignette=PI/5,` +
+    `unsharp=5:5:0.8:3:3:0.4,` +
+    `format=yuv420p`;
 
-  const args = `
--loop 1 -i "${gorselPath}"
--vf "${vf}"
--t ${sure}
--c:v libx264
--preset medium
--crf 20
-"${ciktiPath}"
-`;
+  const args =
+    `-loop 1 -i "${gorselPath}" ` +
+    `-vf "${vf}" ` +
+    `-t ${sure} ` +
+    `-c:v libx264 ` +
+    `-preset medium ` +
+    `-crf 20 ` +
+    `"${ciktiPath}"`;
 
   await ffmpegCalistir(args, `scene-${index}`);
 }
@@ -105,34 +94,24 @@ async function finalMontaj({
   muzikPath,
   ciktiPath,
 }) {
-  const args = `
--i "${videoPath}"
--i "${sesPath}"
--stream_loop -1 -i "${muzikPath}"
--filter_complex "
-[1:a]volume=1.0,highpass=f=120,lowpass=f=12000[voice];
-[2:a]volume=0.18,afade=t=in:ss=0:d=2[music];
-[voice][music]amix=inputs=2:duration=first:weights=1 0.35[aout]
-"
--map 0:v
--map "[aout]"
--c:v copy
--c:a aac
--b:a 192k
--shortest
-"${ciktiPath}"
-`;
+  const args =
+    `-i "${videoPath}" ` +
+    `-i "${sesPath}" ` +
+    `-stream_loop -1 -i "${muzikPath}" ` +
+    `-filter_complex "` +
+    `[1:a]volume=1.0,highpass=f=120,lowpass=f=12000[voice];` +
+    `[2:a]volume=0.18,afade=t=in:ss=0:d=2[music];` +
+    `[voice][music]amix=inputs=2:duration=first:weights=1 0.35[aout]` +
+    `" ` +
+    `-map 0:v ` +
+    `-map "[aout]" ` +
+    `-c:v copy ` +
+    `-c:a aac ` +
+    `-b:a 192k ` +
+    `-shortest ` +
+    `"${ciktiPath}"`;
 
   await ffmpegCalistir(args, "final-cinematic");
 }
 
 console.log("v12 cinematic engine hazır");
-```
-
-Bu dosya eklendikten sonra workflow dosyasında eski:
-
-```yaml
-run: node scripts/07-video-montaj.js
-```
-
-satırını daha sonra değiştireceğiz.
