@@ -8,13 +8,17 @@ on:
         description: 'Tarih (örn: 13.05.2026)'
         required: true
       index:
-        description: 'Konu indexi (0-4)'
+        description: 'Konu indexi (0-2)'
         required: true
         default: '0'
       chat_id:
         description: 'Telegram chat ID'
         required: false
         default: '6090600843'
+      video_format:
+        description: 'Format: shorts veya long'
+        required: false
+        default: 'long'
 
 permissions:
   actions: write
@@ -50,10 +54,12 @@ jobs:
             echo "tarih=${{ github.event.client_payload.tarih }}" >> $GITHUB_OUTPUT
             echo "index=${{ github.event.client_payload.index }}" >> $GITHUB_OUTPUT
             echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
+            echo "video_format=${{ github.event.client_payload.video_format || 'long' }}" >> $GITHUB_OUTPUT
           else
             echo "tarih=${{ github.event.inputs.tarih }}" >> $GITHUB_OUTPUT
             echo "index=${{ github.event.inputs.index }}" >> $GITHUB_OUTPUT
             echo "chat_id=${{ github.event.inputs.chat_id }}" >> $GITHUB_OUTPUT
+            echo "video_format=${{ github.event.inputs.video_format || 'long' }}" >> $GITHUB_OUTPUT
           fi
           echo "job_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
       
@@ -72,9 +78,10 @@ jobs:
           INDEX: ${{ steps.params.outputs.index }}
           CHAT_ID: ${{ steps.params.outputs.chat_id }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
+          VIDEO_FORMAT: ${{ steps.params.outputs.video_format }}
         run: node scripts/01-icerik-uret.js
       
-      # Alt workflow'ları tetikle (görsel, ses, thumbnail) - ALTYAZI YOK
+      # Alt workflow'ları tetikle (görsel, ses, thumbnail)
       - name: 02-Görsel tetikle
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
