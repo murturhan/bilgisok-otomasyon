@@ -1,9 +1,11 @@
 /**
- * 03 - Seslendirme v3 (Google Cloud TTS Chirp 3 HD Algenib)
- * - Apostrof temizleme
- * - Kısaltma açma (M.S. → milattan sonra, yy. → yüzyıl)
- * - Yabancı isim → Türkçe okunuş (Gemini'den gelen tts_telaffuz alanı varsa kullan)
- * - Her parçanın süresini kaydet (06-altyazı için)
+ * 03 - Seslendirme v4 (Google Cloud TTS Chirp3 HD Kore - İngilizce)
+ * - Dil: en-US
+ * - Ses: en-US-Chirp3-HD-Kore (neşeli kadın ses)
+ * - Pitch shift: +2 semitone (FFmpeg rubberband) → Jess the Fox çocuksu ses
+ * - Kısaltma açma (Mr. → Mister, Dr. → Doctor, vs.)
+ * - Sayı/yıl okuma desteği (Gemini tts_telaffuz alanı varsa onu kullan)
+ * - Her parçanın süresini kaydet (altyazı veya video montaj için)
  */
 
 import fs from "fs";
@@ -22,35 +24,40 @@ import { telegram } from "./lib/telegram.js";
 const execAsync = promisify(exec);
 const { JOB_ID } = process.env;
 
-const VOICE_NAME = "tr-TR-Chirp3-HD-Algenib";
-const LANGUAGE_CODE = "tr-TR";
+const VOICE_NAME = "en-US-Chirp3-HD-Kore";
+const LANGUAGE_CODE = "en-US";
 const MAX_CHARS_PER_REQUEST = 900;
+const PITCH_SHIFT_SEMITONES = 2; // +2 semitone = çocuksu ton
 
-// ─── KISALTMA AÇMA ───────────────────────────────────────────────
+// ─── İNGİLİZCE KISALTMA AÇMA ─────────────────────────────────────
 function kisaltmalariAc(metin) {
-  // Sıralama önemli: önce uzun ve özel olanlar
   const kisaltmalar = [
-    // Tarih
-    [/\bM\.\s*Ö\./gi, "Milattan Önce"],
-    [/\bM\.\s*S\./gi, "Milattan Sonra"],
-    [/\bM\.Ö\b/gi, "Milattan Önce"],
-    [/\bM\.S\b/gi, "Milattan Sonra"],
-    [/\bMÖ\b/g, "Milattan Önce"],
-    [/\bMS\b/g, "Milattan Sonra"],
-    // Yüzyıl
-    [/\b(\d+)\.\s*yy\./gi, "$1. yüzyıl"],
-    [/\b(\d+)\.\s*yy\b/gi, "$1. yüzyıl"],
-    [/\byy\./gi, "yüzyıl"],
-    // Genel
-    [/\bvb\./gi, "ve benzeri"],
-    [/\bvs\./gi, "ve saire"],
-    [/\bör\./gi, "örneğin"],
-    [/\bbkz\./gi, "bakınız"],
-    [/\bsf\./gi, "sayfa"],
-    [/\bmü\./gi, "müdür"],
-    [/\bdr\./gi, "doktor"],
-    [/\bprof\./gi, "profesör"],
-    // Sayı + nokta (1., 2.) kalsın - bunlar sıra
+    // Titles
+    [/\bMr\./g, "Mister"],
+    [/\bMrs\./g, "Misses"],
+    [/\bMs\./g, "Miss"],
+    [/\bDr\./g, "Doctor"],
+    [/\bProf\./g, "Professor"],
+    [/\bSt\./g, "Saint"],
+    // Common abbreviations
+    [/\be\.g\./gi, "for example"],
+    [/\bi\.e\./gi, "that is"],
+    [/\betc\./gi, "etcetera"],
+    [/\bvs\./gi, "versus"],
+    [/\bapprox\./gi, "approximately"],
+    [/\bno\./gi, "number"],
+    // Units (sayıdan sonra geliyorsa)
+    [/(\d+)\s*km\b/gi, "$1 kilometers"],
+    [/(\d+)\s*cm\b/gi, "$1 centimeters"],
+    [/(\d+)\s*mm\b/gi, "$1 millimeters"],
+    [/(\d+)\s*kg\b/gi, "$1 kilograms"],
+    [/(\d+)\s*lbs\b/gi, "$1 pounds"],
+    [/(\d+)\s*ft\b/gi, "$1 feet"],
+    // Time eras
+    [/\bB\.C\./g, "B C"],
+    [/\bA\.D\./g, "A D"],
+    [/\bBCE\b/g, "B C E"],
+    [/\bCE\b/g, "C E"],
   ];
   
   let sonuc = metin;
@@ -60,19 +67,23 @@ function kisaltmalariAc(metin) {
   return sonuc;
 }
 
-// ─── APOSTROF TEMİZLEME ──────────────────────────────────────────
-function apostrofTemizle(metin) {
+// ─── EMOJİ TEMİZLE (TTS okumasın) ────────────────────────────────
+function emojiTemizle(metin) {
   return metin
-    .replace(/(\p{L}|\d)'(\p{L})/gu, "$1$2")
-    .replace(/(\p{L}|\d)'(?=\s|$)/gu, "$1");
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, "")
+    .replace(/[\u{2600}-\u{26FF}]/gu, "")
+    .replace(/[\u{2700}-\u{27BF}]/gu, "")
+    .replace(/[\u{1F000}-\u{1F02F}]/gu, "")
+    .replace(/[\u{1F0A0}-\u{1F0FF}]/gu, "")
+    .replace(/[\u{1F100}-\u{1F1FF}]/gu, "");
 }
 
 // ─── TTS İÇİN TOPLU METIN TEMİZLEME ──────────────────────────────
 function ttsMetinHazirla(senaryo, tts_telaffuz) {
   let sonuc = senaryo;
   
-  // 1. Eğer Gemini'den tts_telaffuz alanı geldiyse onu kullan (telaffuzlu versiyon)
-  if (tts_telaffuz && typeof tts_telaffuz === "string" && tts_telaffuz.length > 100) {
+  // 1. Eğer Gemini'den tts_telaffuz alanı geldiyse onu kullan
+  if (tts_telaffuz && typeof tts_telaffuz === "string" && tts_telaffuz.length > 50) {
     console.log("✓ Gemini'den tts_telaffuz alanı geldi, onu kullanıyoruz");
     sonuc = tts_telaffuz;
   }
@@ -80,8 +91,8 @@ function ttsMetinHazirla(senaryo, tts_telaffuz) {
   // 2. Kısaltmaları aç
   sonuc = kisaltmalariAc(sonuc);
   
-  // 3. Apostrof temizle (Türkçe ek apostrofları)
-  sonuc = apostrofTemizle(sonuc);
+  // 3. Emojileri temizle
+  sonuc = emojiTemizle(sonuc);
   
   // 4. Boşluk normalize
   sonuc = sonuc.replace(/\s+/g, " ").trim();
@@ -149,6 +160,27 @@ async function ttsParcaSesle(metin, accessToken) {
   return Buffer.from(data.audioContent, "base64");
 }
 
+// ─── PITCH SHIFT (FFmpeg rubberband, ses süresi sabit kalır) ────
+async function pitchShiftUygula(girdiYol, ciktiYol, semitone = PITCH_SHIFT_SEMITONES) {
+  // rubberband filter: pitch shift süreyi değiştirmez (asetrate'den farklı olarak)
+  // semitone → pitch ratio: 2^(semitone/12)
+  const pitchRatio = Math.pow(2, semitone / 12);
+  
+  // rubberband mevcut değilse asetrate+atempo fallback'ı
+  const cmd = `ffmpeg -y -hide_banner -loglevel error -i "${girdiYol}" -af "rubberband=pitch=${pitchRatio.toFixed(6)}" -ar 24000 "${ciktiYol}"`;
+  
+  try {
+    await execAsync(cmd);
+  } catch (e) {
+    // rubberband yoksa asetrate fallback (kalite biraz düşer ama çalışır)
+    console.warn("⚠ rubberband filter yok, asetrate fallback kullanılıyor");
+    const sampleRateMultiplier = pitchRatio;
+    const tempoCompensation = 1 / pitchRatio;
+    const fallbackCmd = `ffmpeg -y -hide_banner -loglevel error -i "${girdiYol}" -af "asetrate=24000*${sampleRateMultiplier.toFixed(6)},atempo=${tempoCompensation.toFixed(6)},aresample=24000" "${ciktiYol}"`;
+    await execAsync(fallbackCmd);
+  }
+}
+
 // MP3 süresini ölç
 async function mp3Suresi(yol) {
   const { stdout } = await execAsync(
@@ -157,12 +189,14 @@ async function mp3Suresi(yol) {
   return parseFloat(stdout.trim());
 }
 
+// Pitch-shifted parçaları birleştir (re-encode, çünkü asetrate fallback uyuşmazlık yaratabilir)
 async function mp3leriBirlestir(parcaYollari, ciktiYol) {
   const concatListPath = `/tmp/concat-${Date.now()}.txt`;
   const concatIcerik = parcaYollari.map(p => `file '${p}'`).join("\n");
   fs.writeFileSync(concatListPath, concatIcerik);
   
-  const cmd = `ffmpeg -y -hide_banner -loglevel error -f concat -safe 0 -i "${concatListPath}" -c copy "${ciktiYol}"`;
+  // re-encode (copy değil) - pitch shift sonrası uyumluluk için
+  const cmd = `ffmpeg -y -hide_banner -loglevel error -f concat -safe 0 -i "${concatListPath}" -c:a libmp3lame -b:a 128k -ar 24000 "${ciktiYol}"`;
   await execAsync(cmd);
   
   try { fs.unlinkSync(concatListPath); } catch (e) {}
@@ -180,9 +214,8 @@ async function main() {
     // 1. TTS için metin hazırla
     const ttsMetin = ttsMetinHazirla(job.senaryo, job.tts_telaffuz);
     console.log(`Senaryo: ${job.senaryo.length} → ${ttsMetin.length} karakter`);
-    console.log(`Ses: ${VOICE_NAME}`);
+    console.log(`Ses: ${VOICE_NAME} (pitch shift +${PITCH_SHIFT_SEMITONES} semitone)`);
     
-    // Örnek dönüşüm log'u
     const ornek = ttsMetin.substring(0, 200);
     console.log(`İlk 200 karakter: "${ornek}..."`);
     
@@ -202,46 +235,59 @@ async function main() {
     if (!accessToken) throw new Error("Access token alınamadı!");
     console.log("✓ Access token alındı");
     
-    // 4. Her parçayı seslendir + süre ölç
-    const parcaYollari = [];
-    const parcaBilgileri = []; // {sira, metin, sure} - 06 için
+    // 4. Her parçayı seslendir → pitch shift uygula → süre ölç
+    const pitchShiftedYollar = [];
+    const parcaBilgileri = [];
     
     for (let i = 0; i < parcalar.length; i++) {
       console.log(`Parça ${i + 1}/${parcalar.length} (${parcalar[i].length} karakter)...`);
       
+      // TTS sentez
       const buffer = await ttsParcaSesle(parcalar[i], accessToken);
-      const yol = `/tmp/tts-parca-${String(i + 1).padStart(3, "0")}.mp3`;
-      fs.writeFileSync(yol, buffer);
-      parcaYollari.push(yol);
+      const ham_yol = `/tmp/tts-ham-${String(i + 1).padStart(3, "0")}.mp3`;
+      fs.writeFileSync(ham_yol, buffer);
       
-      const sure = await mp3Suresi(yol);
+      // Pitch shift
+      const shifted_yol = `/tmp/tts-shifted-${String(i + 1).padStart(3, "0")}.mp3`;
+      await pitchShiftUygula(ham_yol, shifted_yol, PITCH_SHIFT_SEMITONES);
+      pitchShiftedYollar.push(shifted_yol);
+      
+      // Süre ölç (pitch shift sonrası - kullanılacak final süre)
+      const sure = await mp3Suresi(shifted_yol);
       parcaBilgileri.push({
         sira: i + 1,
         metin: parcalar[i],
         sure: sure,
       });
       
-      console.log(`  ✓ ${(buffer.length / 1024).toFixed(0)}KB, ${sure.toFixed(2)}s`);
+      // Ham dosyayı temizle
+      try { fs.unlinkSync(ham_yol); } catch (e) {}
+      
+      const stats = fs.statSync(shifted_yol);
+      console.log(`  ✓ ${(stats.size / 1024).toFixed(0)}KB, ${sure.toFixed(2)}s (pitch+${PITCH_SHIFT_SEMITONES})`);
     }
     
     // 5. Birleştir
     console.log("MP3 parçaları birleştiriliyor...");
     const filename = `seslendirme-${Date.now()}.mp3`;
     const filepath = `/tmp/${filename}`;
-    await mp3leriBirlestir(parcaYollari, filepath);
+    await mp3leriBirlestir(pitchShiftedYollar, filepath);
     
-    for (const yol of parcaYollari) {
+    for (const yol of pitchShiftedYollar) {
       try { fs.unlinkSync(yol); } catch (e) {}
     }
     
     const stats = fs.statSync(filepath);
-    console.log(`✓ Final MP3: ${(stats.size / 1024).toFixed(0)}KB`);
+    const toplamSure = parcaBilgileri.reduce((sum, p) => sum + p.sure, 0);
+    console.log(`✓ Final MP3: ${(stats.size / 1024).toFixed(0)}KB, ${toplamSure.toFixed(2)}s`);
     
-    // 6. Parça bilgilerini JSON olarak yan dosya yaz (06 için)
+    // 6. Parça bilgilerini JSON olarak yan dosya yaz
     const parcaJsonAdi = `parca-bilgileri-${Date.now()}.json`;
     const parcaJsonYol = `/tmp/${parcaJsonAdi}`;
     fs.writeFileSync(parcaJsonYol, JSON.stringify({ 
-      toplam_sure: parcaBilgileri.reduce((sum, p) => sum + p.sure, 0),
+      toplam_sure: toplamSure,
+      voice: VOICE_NAME,
+      pitch_shift_semitones: PITCH_SHIFT_SEMITONES,
       parcalar: parcaBilgileri 
     }, null, 2));
     
@@ -256,7 +302,7 @@ async function main() {
     try { fs.unlinkSync(parcaJsonYol); } catch (e) {}
     
     await jobGuncelle(JOB_ID, { ses_status: "completed" });
-    await telegram(job.chat_id, `🔊 *Seslendirme hazır* (${parcalar.length} parça, ${(stats.size / 1024).toFixed(0)}KB)`);
+    await telegram(job.chat_id, `🦊 *Jess konuşuyor!* (${parcalar.length} parça, ${toplamSure.toFixed(1)}s, pitch+${PITCH_SHIFT_SEMITONES})`);
     
     console.log("✅ Seslendirme tamam.");
     process.exit(0);
