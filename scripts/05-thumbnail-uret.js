@@ -2,7 +2,7 @@
  * 05 - Thumbnail Üretimi v5 (GeniMini Kids Quiz)
  * - fluxCagri kullanıyor (fluxUret yok artık)
  * - Jess the Fox + tema görseli + büyük renkli text
- * - Çocuk dostu canlı renkler (sarı/kırmızı yerine pembe/mavi/sarı/turuncu)
+ * - Çocuk dostu canlı renkler (sarı/pembe/mor/mavi)
  * - Bilgisok logosu kaldırıldı
  * - Format: 1280x720 (16:9)
  */
@@ -78,7 +78,7 @@ function escapeXml(text) {
 function metinSvg(baslikTam, width = 1280, height = 720) {
   const { ana, alt } = basligiBol(baslikTam);
   
-  // Sağ blok, sol blok değil. Sağ üçte birde dramatik metin alanı.
+  // Sağ blokta dramatik metin alanı
   const blokGenislik = 540;
   const blokX = width - blokGenislik;
   const padding = 30;
@@ -120,8 +120,8 @@ function metinSvg(baslikTam, width = 1280, height = 720) {
   // Sağ blok GRADIENT arka plan (pembe → mor)
   svg += `<defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:rgba(255,87,166,0.85);stop-opacity:1" />
-      <stop offset="100%" style="stop-color:rgba(123,76,221,0.85);stop-opacity:1" />
+      <stop offset="0%" style="stop-color:rgba(255,87,166,0.88);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:rgba(123,76,221,0.88);stop-opacity:1" />
     </linearGradient>
   </defs>`;
   svg += `<rect x="${blokX}" y="0" width="${blokGenislik}" height="${height}" fill="url(#bgGrad)"/>`;
@@ -133,7 +133,7 @@ function metinSvg(baslikTam, width = 1280, height = 720) {
   let currentY = startY + anaFontSize;
   for (const satir of anaSatirlar) {
     svg += `<text x="${blokX + blokGenislik / 2}" y="${currentY}"
-              font-family="'Fredoka One', 'Comic Sans MS', 'Arial Black', sans-serif"
+              font-family="'Comic Sans MS', 'Arial Black', sans-serif"
               font-size="${anaFontSize}"
               font-weight="900"
               fill="#FFEB3B"
@@ -164,7 +164,7 @@ function metinSvg(baslikTam, width = 1280, height = 720) {
   // Sol üst köşede büyük "QUIZ!" rozeti
   svg += `<g transform="translate(80, 80)">
     <circle cx="0" cy="0" r="65" fill="#FF5722" stroke="#000000" stroke-width="5"/>
-    <text x="0" y="15" font-family="'Fredoka One', 'Comic Sans MS', sans-serif" 
+    <text x="0" y="15" font-family="'Comic Sans MS', sans-serif"
           font-size="36" font-weight="900" fill="#FFFFFF" text-anchor="middle"
           stroke="#000000" stroke-width="2" paint-order="stroke">QUIZ!</text>
   </g>`;
@@ -172,7 +172,7 @@ function metinSvg(baslikTam, width = 1280, height = 720) {
   // Sol alt köşede soru işareti rozeti
   svg += `<g transform="translate(80, ${height - 80})">
     <circle cx="0" cy="0" r="55" fill="#4FC3F7" stroke="#000000" stroke-width="5"/>
-    <text x="0" y="20" font-family="'Fredoka One', 'Comic Sans MS', sans-serif" 
+    <text x="0" y="20" font-family="'Comic Sans MS', sans-serif"
           font-size="68" font-weight="900" fill="#FFFFFF" text-anchor="middle"
           stroke="#000000" stroke-width="3" paint-order="stroke">?</text>
   </g>`;
