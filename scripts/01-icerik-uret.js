@@ -1,8 +1,9 @@
 /**
- * 01 - İçerik Üretimi v12
+ * 01 - İçerik Üretimi v13
  * - Storytelling + dönem doğruluğu + müzik mood + tts_telaffuz
  * - thumbnail_baslik & thumbnail_alt_baslik KALDIRILDI
  * - Sadece `baslik` alanı, MUTLAKA ":" ile bölünmüş (ana: alt açıklama)
+ * - 30 sahne / 30 görsel
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -68,36 +69,6 @@ ALT AÇIKLAMA kısmı:
 - Konunun "ne olduğunu" anlatan
 - "Sır, Bedel, Gerçek, Yalan, Gizem" gibi kelimeler
 
-ÖRNEKLER:
-
-KONU: Firavunların Laneti
-✅ baslik: "Firavunların Laneti: Mısır'ın Bin Yıllık Sırrı ve Ölümcül Bedeller"
-(Ana: "Firavunların Laneti" / Alt: "Mısır'ın Bin Yıllık Sırrı ve Ölümcül Bedeller")
-
-KONU: Hititler ve Demir
-✅ baslik: "Hititlerin Gizli Silahı: Demirin İmparatorluk Yapan Sırrı"
-(Ana: "Hititlerin Gizli Silahı" / Alt: "Demirin İmparatorluk Yapan Sırrı")
-
-KONU: Truva Savaşı
-✅ baslik: "Truva Hikayesi Yalanmış: Tarihteki En Büyük Aldatmaca"
-(Ana: "Truva Hikayesi Yalanmış" / Alt: "Tarihteki En Büyük Aldatmaca")
-
-KONU: Atlantis
-✅ baslik: "Atlantis Bulundu mu: Kayıp Medeniyetin Şaşırtıcı Gerçeği"
-(Ana: "Atlantis Bulundu mu" / Alt: "Kayıp Medeniyetin Şaşırtıcı Gerçeği")
-
-KONU: Konstantinopolis Düşüşü
-✅ baslik: "Bizans Neden Düştü: Tarihin En Acı Çöküşünün Gerçek Nedeni"
-(Ana: "Bizans Neden Düştü" / Alt: "Tarihin En Acı Çöküşünün Gerçek Nedeni")
-
-KONU: Pompeii Felaketi
-✅ baslik: "Pompei 1 Dakikada Yok Oldu: Vezüv'ün Şok Edici Sırrı"
-(Ana: "Pompei 1 Dakikada Yok Oldu" / Alt: "Vezüv'ün Şok Edici Sırrı")
-
-KONU: Tutankhamun
-✅ baslik: "Tutankhamun'un Lanetli Mezarı: 100 Yıllık Bilmece"
-(Ana: "Tutankhamun'un Lanetli Mezarı" / Alt: "100 Yıllık Bilmece")
-
 KRİTİK KURALLAR:
 - baslik MUTLAKA ":" içerecek (sadece bir tane)
 - Ana başlık 2-4 kelime, ALT açıklama 5-12 kelime
@@ -111,12 +82,6 @@ TARİHİ DÖNEM DOĞRULUĞU - KRİTİK!
 
 KONUYU OKU. Hangi yüzyıl? Hangi medeniyet?
 
-ÖRNEKLER:
-- "Konstantinopolis" → BİZANS → Ayasofya'da MİNARE YOK, kubbe var
-- "İstanbul'un Fethi 1453" → Osmanlı askerleri
-- "Antik Mısır" → piramitler, hieroglifler
-- "Hititler" → MÖ 1700-1180, Anadolu
-
 GÖRSEL PROMPT'TA:
 - Dönem ADI: "Byzantine era", "Ottoman 16th century"
 - Mimari: kubbe/minare/piramit
@@ -129,18 +94,15 @@ GÖRSEL PROMPT'TA:
 
 İKİ VERSİYON SENARYO:
 
-**senaryo** (GÖRSEL ALTYAZI, gerçek yazım):
+**senaryo**:
 - "M.S. 1453", "M.Ö. 1700"
-- "Teotihuacan", "Caesar"
-- Türkçe ek apostroflar: "Hititler'in"
+- Türkçe ek apostroflar korunur
 
-**tts_telaffuz** (SES, okunuş yazımı):
+**tts_telaffuz**:
 - "M.S." → "Milattan Sonra"
 - "M.Ö." → "Milattan Önce"
-- "Teotihuacan" → "Teotiakan"
-- "Caesar" → "Sezar"
 - "1453'te" → "bin dört yüz elli üçte"
-- Apostroflar KALDIR: "Hititler'in" → "Hititlerin"
+- Apostroflar KALDIR
 
 ═══════════════════════════════════════════════════
 MÜZIK MOOD
@@ -150,10 +112,6 @@ MÜZIK MOOD
 - "mysterious" → sırlar, kayıp medeniyetler
 - "calm" → günlük yaşam
 - "dramatic" → trajediler, çöküşler
-
-═══════════════════════════════════════════════════
-KONU: ${konu}
-═══════════════════════════════════════════════════
 
 JSON çıktısı:
 
@@ -168,17 +126,17 @@ JSON çıktısı:
   "tts_telaffuz": "AYNI senaryonun TÜRKÇE OKUNUŞ versiyonu",
   "sahneler": [
     {
-      "metin": "Senaryo bölümü, 40-50 kelime",
+      "metin": "Senaryo bölümü, 30-40 kelime",
       "gorsel_prompt": "Sahne görseli - dönem ADI mutlaka. FLUX İngilizce, cinematic photorealistic 16:9"
     }
-    // TAM 20 sahne
+    // TAM 30 sahne
   ]
 }
 
 KRİTİK KURALLAR:
-- sahneler TAM 20
+- sahneler TAM 30
 - baslik MUTLAKA ":" içerecek
-- baslik Türkçe gramer doğru (kesik kelime yok)
+- baslik Türkçe gramer doğru
 - senaryo VE tts_telaffuz ayrı yazılacak`;
 
   const maxRetries = 5;
@@ -205,12 +163,12 @@ KRİTİK KURALLAR:
       const text = result.response.text().trim();
       const json = JSON.parse(text);
       
-      if (!json.sahneler || json.sahneler.length < 20) {
-        throw new Error(`Gemini ${json.sahneler?.length || 0} sahne verdi, 20 gerekli.`);
+      if (!json.sahneler || json.sahneler.length < 30) {
+        throw new Error(`Gemini ${json.sahneler?.length || 0} sahne verdi, 30 gerekli.`);
       }
       
-      if (json.sahneler.length > 20) {
-        json.sahneler = json.sahneler.slice(0, 20);
+      if (json.sahneler.length > 30) {
+        json.sahneler = json.sahneler.slice(0, 30);
       }
       
       if (!json.tts_telaffuz || json.tts_telaffuz.length < 100) {
@@ -230,13 +188,11 @@ KRİTİK KURALLAR:
         json.thumbnail_prompt = `Hyperrealistic close-up dramatic face related to ${konu}, period-accurate clothing, MrBeast style, right third empty, 16:9, no text`;
       }
       
-      // Başlıkta ":" yoksa otomatik ekle (fallback)
       if (!json.baslik || !json.baslik.includes(":")) {
         const yeniBaslik = json.baslik || konu;
         console.log(`⚠ baslık ":" içermiyor, otomatik bölünüyor: "${yeniBaslik}"`);
-        // Yarıya böl
         const kelimeler = yeniBaslik.split(/\s+/);
-        const yari = Math.ceil(kelimeler.length / 3); // ilk 1/3'ü ana başlık
+        const yari = Math.ceil(kelimeler.length / 3);
         const ana = kelimeler.slice(0, yari).join(" ");
         const alt = kelimeler.slice(yari).join(" ") || "Şaşırtıcı Bir Hikaye";
         json.baslik = `${ana}: ${alt}`;
@@ -247,7 +203,7 @@ KRİTİK KURALLAR:
       }
       
       console.log(`İçerik üretildi: ${json.baslik}`);
-      console.log(`Tarihi dönem: ${json.tarihi_donem || 'belirtilmemiş'}`);
+      console.log(`Tarihi dönem: ${json.tarihi_donem || "belirtilmemiş"}`);
       console.log(`Müzik: ${json.muzik_mood}`);
       console.log(`Senaryo: ${json.senaryo.length} karakter, TTS: ${json.tts_telaffuz.length} karakter`);
       return json;
@@ -295,7 +251,7 @@ async function main() {
       chat_id: CHAT_ID,
       konu: konu,
       baslik: icerik.baslik,
-      thumbnail_baslik: "", // KALDIRILDI - artık baslik kullanılıyor
+      thumbnail_baslik: "",
       thumbnail_alt_baslik: "",
       thumbnail_prompt: icerik.thumbnail_prompt,
       senaryo: icerik.senaryo,
@@ -313,8 +269,9 @@ async function main() {
       CHAT_ID,
       `📝 *İçerik hazır!*\n\n` +
       `📌 ${icerik.baslik}\n` +
-      `🏛 ${icerik.tarihi_donem || '-'}\n` +
-      `🎵 ${icerik.muzik_mood}\n\n` +
+      `🏛 ${icerik.tarihi_donem || "-"}\n` +
+      `🎵 ${icerik.muzik_mood}\n` +
+      `🖼 30 sahne / 30 görsel\n\n` +
       `📂 [Drive klasörü](${anaKlasor.link})\n\n` +
       `⏳ Görsel, ses, thumbnail, altyazı üretiliyor...`
     );
