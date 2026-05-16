@@ -1,9 +1,9 @@
 /**
- * 01 - İçerik Üretimi v13
- * - Storytelling + dönem doğruluğu + müzik mood + tts_telaffuz
- * - thumbnail_baslik & thumbnail_alt_baslik KALDIRILDI
- * - Sadece `baslik` alanı, MUTLAKA ":" ile bölünmüş (ana: alt açıklama)
- * - 30 sahne / 30 görsel
+ * 01 - İçerik Üretimi v13 (GeniMini Tests Kids Quiz)
+ * - Gemini'den İngilizce çocuk quiz üretir
+ * - 25 soru (long) veya 5 soru (shorts)
+ * - Her soru: question + 4 options + correct answer + difficulty + image prompt
+ * - Mascot: Jess the Fox
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -11,6 +11,7 @@ import {
   konuHavuzundanAl,
   jobOlustur,
   driveKlasorAc,
+  driveDosyaYukle,
 } from "./lib/google.js";
 import { telegram } from "./lib/telegram.js";
 
@@ -21,123 +22,135 @@ const {
   INDEX,
   CHAT_ID,
   JOB_ID,
+  VIDEO_FORMAT,
 } = process.env;
+
+const FORMAT = VIDEO_FORMAT || "long";
+const QUESTION_COUNT = FORMAT === "shorts" ? 5 : 25;
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
 async function icerikUret(konu) {
-  console.log("Gemini storytelling içerik üretiyor...");
+  console.log(`Gemini quiz üretiyor: "${konu}", format: ${FORMAT}, ${QUESTION_COUNT} soru`);
   
   const geminiKeys = [GEMINI_API_KEY];
   if (GEMINI_API_KEY_2) geminiKeys.push(GEMINI_API_KEY_2);
   
-  const prompt = `Sen, YouTube'da antik tarih ve gizemler üzerine Türkçe içerik üreten DENEYİMLİ bir senaryist ve belgesel anlatıcısısın. Discovery, National Geographic, BBC kalitesinde içerik yazıyorsun.
+  const prompt = `You are an expert content creator for "GeniMini Tests" - educational quiz YouTube channel for kids ages 4-12.
 
-KONU: "${konu}"
+Channel mascot: **Jess the Fox** - cute, friendly Pixar-style fox who hosts the quiz.
 
-═══════════════════════════════════════════════════
-SENARYO YAZIM KURALLARI
-═══════════════════════════════════════════════════
-
-❌ ASLA YAPMA:
-- Wikipedia stili düz anlatım YOK
-- Kuru tarih sıralaması YOK
-- "olmuştur, edilmiştir" formal dil YOK
-
-✅ YAP:
-- DRAMATİK HOOK ile başla
-- HİKAYE anlat
-- SES TONUNDA YAZ: "Hayal et", "Şimdi düşün", "İşte tam o anda"
-- KISA CÜMLELER
+TOPIC: "${konu}"
+FORMAT: ${FORMAT === "shorts" ? "YouTube Shorts (60 seconds, 5 quick questions)" : "Long video (10-12 minutes, 25 questions with mixed difficulty)"}
 
 ═══════════════════════════════════════════════════
-📌 BAŞLIK FORMATI - ÇOK ÖNEMLİ!
+QUIZ STRUCTURE
 ═══════════════════════════════════════════════════
 
-baslik alanı MUTLAKA İKİ KISMI olacak, ":" ile ayrılmış:
-**[ANA BAŞLIK]: [ALT AÇIKLAMA]**
+You will create:
+1. **Intro** (Jess greets viewers)
+2. **${QUESTION_COUNT} questions** with 4 multiple choice answers each
+3. **Outro** (Jess says goodbye)
 
-ANA BAŞLIK kısmı:
-- 2-4 kelime
-- ŞOK VEYA MERAK uyandıran
-- Konunun en güçlü kelimesi
+DIFFICULTY DISTRIBUTION (for ${QUESTION_COUNT} questions):
+${FORMAT === "shorts" ? `- Easy: 3 questions (ages 4-7)
+- Medium: 2 questions (ages 7-12)` : `- Easy: 8 questions (ages 4-7, basic recognition)
+- Medium: 12 questions (ages 7-10, knowledge)
+- Hard: 5 questions (ages 10-12, challenging)
 
-ALT AÇIKLAMA kısmı:
-- 5-12 kelime
-- Konunun "ne olduğunu" anlatan
-- "Sır, Bedel, Gerçek, Yalan, Gizem" gibi kelimeler
-
-KRİTİK KURALLAR:
-- baslik MUTLAKA ":" içerecek (sadece bir tane)
-- Ana başlık 2-4 kelime, ALT açıklama 5-12 kelime
-- TOPLAM 50-75 karakter
-- Türkçe gramer DOĞRU (kesik kelime YOK)
-- Soyut değil, KONU adı içermeli
+QUESTIONS MUST PROGRESS from easy → medium → hard.`}
 
 ═══════════════════════════════════════════════════
-TARİHİ DÖNEM DOĞRULUĞU - KRİTİK!
+QUESTION FORMAT
 ═══════════════════════════════════════════════════
 
-KONUYU OKU. Hangi yüzyıl? Hangi medeniyet?
+Each question must have:
+- **question_text**: Question in English (e.g., "Which animal is this?")
+- **image_prompt**: FLUX prompt for question's main image (Pixar-style, kid-friendly)
+- **options**: Array of 4 short answers (1-3 words each)
+- **correct_answer**: Index 0, 1, 2, or 3
+- **difficulty**: "easy", "medium", or "hard"
+- **fun_fact**: Short fun fact about answer (1 sentence)
 
-GÖRSEL PROMPT'TA:
-- Dönem ADI: "Byzantine era", "Ottoman 16th century"
-- Mimari: kubbe/minare/piramit
-- Kıyafet: toga/kavuk/tunic
-- ANACHRONISM YOK
-
-═══════════════════════════════════════════════════
-🔥 TTS TELAFFUZ KURALLARI
-═══════════════════════════════════════════════════
-
-İKİ VERSİYON SENARYO:
-
-**senaryo**:
-- "M.S. 1453", "M.Ö. 1700"
-- Türkçe ek apostroflar korunur
-
-**tts_telaffuz**:
-- "M.S." → "Milattan Sonra"
-- "M.Ö." → "Milattan Önce"
-- "1453'te" → "bin dört yüz elli üçte"
-- Apostroflar KALDIR
+EXAMPLE for "Animals":
+{
+  "question_text": "Which animal is this?",
+  "image_prompt": "Cute Pixar-style lion cub illustration, golden mane, big eyes, vibrant savanna, 16:9, child-friendly cartoon",
+  "options": ["Tiger", "Lion", "Cheetah", "Leopard"],
+  "correct_answer": 1,
+  "difficulty": "easy",
+  "fun_fact": "Lions are the only cats that live in groups called prides!"
+}
 
 ═══════════════════════════════════════════════════
-MÜZIK MOOD
+INTRO & OUTRO (Jess speaking)
 ═══════════════════════════════════════════════════
 
-- "epic" → savaşlar, fetihler
-- "mysterious" → sırlar, kayıp medeniyetler
-- "calm" → günlük yaşam
-- "dramatic" → trajediler, çöküşler
+**intro_text**: Jess greets kids (2-3 sentences)
+Example: "Hi friends! I'm Jess the Fox! Today we're exploring amazing animals! Can you guess them all? Let's play!"
 
-JSON çıktısı:
+**outro_text**: Jess says goodbye (2-3 sentences)
+Example: "Wow, you did amazing! Don't forget to subscribe and join Jess for more fun quizzes! See you next time, friends!"
+
+═══════════════════════════════════════════════════
+TITLE & METADATA
+═══════════════════════════════════════════════════
+
+**baslik** (YouTube title): Click-worthy with emoji
+Example: "🦁 Can YOU Guess All 25 Animals? Kids Quiz with Jess the Fox!"
+
+**aciklama** (description): 150-250 words with hashtags
+Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
+
+**thumbnail_prompt**: FLUX prompt
+- Jess the Fox prominently featured
+- Question mark, excited expression
+- Big colorful theme image
+- 16:9, NO text in image, leave right third empty for text overlay
+
+═══════════════════════════════════════════════════
+SAFETY (Made for Kids)
+═══════════════════════════════════════════════════
+
+- NO scary content, violence, weapons
+- All Pixar/Disney 3D cartoon style, vibrant colors
+- All content appropriate for ages 4-12
+
+═══════════════════════════════════════════════════
+TOPIC: ${konu}
+QUESTION COUNT: ${QUESTION_COUNT}
+═══════════════════════════════════════════════════
+
+JSON OUTPUT:
 
 {
   "konu": "${konu}",
-  "tarihi_donem": "Tarihi dönem",
-  "baslik": "ANA BAŞLIK: ALT AÇIKLAMA formatında (':' ZORUNLU), 50-75 karakter",
-  "thumbnail_prompt": "Thumbnail FLUX prompt - dönem uygun, MrBeast style, RIGHT THIRD EMPTY for text, 16:9, NO TEXT IN IMAGE",
-  "muzik_mood": "epic / mysterious / calm / dramatic",
-  "aciklama": "200-300 kelime",
-  "senaryo": "800-1100 kelimelik senaryo - GÖRSEL YAZIM",
-  "tts_telaffuz": "AYNI senaryonun TÜRKÇE OKUNUŞ versiyonu",
-  "sahneler": [
+  "format": "${FORMAT}",
+  "baslik": "YouTube title with emoji",
+  "thumbnail_prompt": "FLUX prompt",
+  "aciklama": "200 word description with hashtags",
+  "intro_text": "Jess greets",
+  "outro_text": "Jess goodbye",
+  "questions": [
     {
-      "metin": "Senaryo bölümü, 30-40 kelime",
-      "gorsel_prompt": "Sahne görseli - dönem ADI mutlaka. FLUX İngilizce, cinematic photorealistic 16:9"
+      "question_text": "Which X is this?",
+      "image_prompt": "Pixar-style ... 16:9 cartoon",
+      "options": ["A", "B", "C", "D"],
+      "correct_answer": 0,
+      "difficulty": "easy",
+      "fun_fact": "Short fact."
     }
-    // TAM 30 sahne
   ]
 }
 
-KRİTİK KURALLAR:
-- sahneler TAM 30
-- baslik MUTLAKA ":" içerecek
-- baslik Türkçe gramer doğru
-- senaryo VE tts_telaffuz ayrı yazılacak`;
+CRITICAL:
+- EXACTLY ${QUESTION_COUNT} questions
+- All in English
+- Image prompts MUST be PIXAR/3D CARTOON, never realistic
+- All child-safe
+- Answers SHORT (1-3 words)`;
 
   const maxRetries = 5;
   const modeller = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
@@ -163,49 +176,59 @@ KRİTİK KURALLAR:
       const text = result.response.text().trim();
       const json = JSON.parse(text);
       
-      if (!json.sahneler || json.sahneler.length < 30) {
-        throw new Error(`Gemini ${json.sahneler?.length || 0} sahne verdi, 30 gerekli.`);
+      if (!json.questions || json.questions.length < QUESTION_COUNT) {
+        throw new Error(`Gemini ${json.questions?.length || 0} soru verdi, ${QUESTION_COUNT} gerekli.`);
       }
       
-      if (json.sahneler.length > 30) {
-        json.sahneler = json.sahneler.slice(0, 30);
+      if (json.questions.length > QUESTION_COUNT) {
+        json.questions = json.questions.slice(0, QUESTION_COUNT);
       }
       
-      if (!json.tts_telaffuz || json.tts_telaffuz.length < 100) {
-        console.log("⚠ tts_telaffuz alanı yok/kısa, otomatik dönüştürülüyor");
-        json.tts_telaffuz = json.senaryo
-          .replace(/M\.\s*Ö\./gi, "Milattan Önce")
-          .replace(/M\.\s*S\./gi, "Milattan Sonra")
-          .replace(/MÖ/g, "Milattan Önce")
-          .replace(/MS/g, "Milattan Sonra");
+      // Validation
+      for (let i = 0; i < json.questions.length; i++) {
+        const q = json.questions[i];
+        if (!q.question_text) throw new Error(`Soru ${i+1}: question_text yok`);
+        if (!q.image_prompt) throw new Error(`Soru ${i+1}: image_prompt yok`);
+        if (!q.options || q.options.length !== 4) throw new Error(`Soru ${i+1}: 4 option olmalı`);
+        if (q.correct_answer === undefined || q.correct_answer < 0 || q.correct_answer > 3) {
+          throw new Error(`Soru ${i+1}: correct_answer 0-3 arası olmalı`);
+        }
+        if (!q.difficulty) q.difficulty = "medium";
+        if (!q.fun_fact) q.fun_fact = "";
       }
       
-      json.ai_gorsel_prompts = json.sahneler.map(s => s.gorsel_prompt);
-      json.pexels_anahtar_kelimeler = [];
-      json.ai_klip_prompts = [];
-      
+      if (!json.intro_text) json.intro_text = "Hi friends! I'm Jess the Fox! Let's play a fun quiz!";
+      if (!json.outro_text) json.outro_text = "Great job! Subscribe for more fun! See you next time!";
+      if (!json.baslik) json.baslik = `${konu} Quiz for Kids!`;
       if (!json.thumbnail_prompt) {
-        json.thumbnail_prompt = `Hyperrealistic close-up dramatic face related to ${konu}, period-accurate clothing, MrBeast style, right third empty, 16:9, no text`;
+        json.thumbnail_prompt = `Jess the Fox Pixar-style mascot pointing at colorful ${konu} themed image, question marks, excited expression, vibrant colors, kid-friendly cartoon, 16:9, leave right third empty for text, NO text in image`;
       }
       
-      if (!json.baslik || !json.baslik.includes(":")) {
-        const yeniBaslik = json.baslik || konu;
-        console.log(`⚠ baslık ":" içermiyor, otomatik bölünüyor: "${yeniBaslik}"`);
-        const kelimeler = yeniBaslik.split(/\s+/);
-        const yari = Math.ceil(kelimeler.length / 3);
-        const ana = kelimeler.slice(0, yari).join(" ");
-        const alt = kelimeler.slice(yari).join(" ") || "Şaşırtıcı Bir Hikaye";
-        json.baslik = `${ana}: ${alt}`;
-      }
+      json.ai_gorsel_prompts = json.questions.map(q => q.image_prompt);
+      json.ai_klip_prompts = [];
+      json.pexels_anahtar_kelimeler = [];
       
-      if (!json.muzik_mood || !["epic", "mysterious", "calm", "dramatic"].includes(json.muzik_mood)) {
-        json.muzik_mood = "epic";
-      }
+      // Senaryo: TTS için ham metin
+      json.senaryo = json.intro_text + "\n\n" +
+        json.questions.map((q, i) =>
+          `Question ${i+1}: ${q.question_text}\n` +
+          q.options.map((opt, j) => `${String.fromCharCode(65+j)}: ${opt}`).join("\n") +
+          `\nThe correct answer is ${String.fromCharCode(65 + q.correct_answer)}: ${q.options[q.correct_answer]}.\n` +
+          (q.fun_fact ? `${q.fun_fact}\n` : "")
+        ).join("\n") +
+        "\n\n" + json.outro_text;
+      
+      json.tts_telaffuz = json.senaryo;
+      json.muzik_mood = "kids";
       
       console.log(`İçerik üretildi: ${json.baslik}`);
-      console.log(`Tarihi dönem: ${json.tarihi_donem || "belirtilmemiş"}`);
-      console.log(`Müzik: ${json.muzik_mood}`);
-      console.log(`Senaryo: ${json.senaryo.length} karakter, TTS: ${json.tts_telaffuz.length} karakter`);
+      console.log(`${json.questions.length} soru, format: ${FORMAT}`);
+      console.log(`Zorluk: ${
+        ["easy", "medium", "hard"].map(d => 
+          `${d}=${json.questions.filter(q => q.difficulty === d).length}`
+        ).join(", ")
+      }`);
+      
       return json;
       
     } catch (error) {
@@ -226,19 +249,26 @@ KRİTİK KURALLAR:
 
 async function main() {
   try {
-    console.log(`Job: ${JOB_ID}, Tarih: ${TARIH}, Index: ${INDEX}`);
+    console.log(`Job: ${JOB_ID}, Format: ${FORMAT}`);
     
     const konu = await konuHavuzundanAl(TARIH, INDEX);
     console.log(`Konu: ${konu}`);
     
-    await telegram(CHAT_ID, `🎬 *Yeni iş*\n\n✅ *Konu:* ${konu}\n🆔 \`${JOB_ID}\`\n\n⏳ İçerik üretiliyor...`);
+    await telegram(
+      CHAT_ID,
+      `🦊 *GeniMini Tests new quiz!*\n\n` +
+      `📚 Topic: ${konu}\n` +
+      `📺 Format: ${FORMAT === "shorts" ? "Shorts (60s)" : "Long (10-12 min)"}\n` +
+      `🆔 \`${JOB_ID}\`\n\n` +
+      `⏳ Generating quiz with Jess...`
+    );
     
     const icerik = await icerikUret(konu);
     
-    const safeTitle = konu.substring(0, 50).replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ ]/g, "");
-    const klasorAdi = `${TARIH}-${safeTitle}`;
+    const safeTitle = konu.substring(0, 50).replace(/[^a-zA-Z0-9 ]/g, "");
+    const klasorAdi = `${TARIH}-${FORMAT}-${safeTitle}`;
     
-    console.log(`Drive klasörleri açılıyor: ${klasorAdi}`);
+    console.log(`Drive klasörü açılıyor: ${klasorAdi}`);
     const anaKlasor = await driveKlasorAc(klasorAdi);
     await driveKlasorAc("01-gorseller", anaKlasor.id);
     await driveKlasorAc("02-ses", anaKlasor.id);
@@ -265,15 +295,38 @@ async function main() {
       muzik_mood: icerik.muzik_mood,
     });
     
+    // Questions JSON'unu Drive'a yaz (07-video-montaj için)
+    const fs = await import("fs");
+    const path = await import("path");
+    const tmpDir = "/tmp/quiz-data";
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const questionsPath = path.join(tmpDir, "questions.json");
+    fs.writeFileSync(questionsPath, JSON.stringify({
+      format: FORMAT,
+      konu: konu,
+      baslik: icerik.baslik,
+      intro_text: icerik.intro_text,
+      outro_text: icerik.outro_text,
+      questions: icerik.questions,
+    }, null, 2));
+    
+    await driveDosyaYukle(
+      { filename: "questions.json", filepath: questionsPath },
+      anaKlasor.id,
+      "application/json"
+    );
+    
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    
     await telegram(
       CHAT_ID,
-      `📝 *İçerik hazır!*\n\n` +
+      `📝 *Quiz ready!*\n\n` +
       `📌 ${icerik.baslik}\n` +
-      `🏛 ${icerik.tarihi_donem || "-"}\n` +
-      `🎵 ${icerik.muzik_mood}\n` +
-      `🖼 30 sahne / 30 görsel\n\n` +
-      `📂 [Drive klasörü](${anaKlasor.link})\n\n` +
-      `⏳ Görsel, ses, thumbnail, altyazı üretiliyor...`
+      `📺 ${FORMAT}\n` +
+      `❓ ${icerik.questions.length} questions\n` +
+      `🦊 Mascot: Jess the Fox\n\n` +
+      `📂 [Drive folder](${anaKlasor.link})\n\n` +
+      `⏳ Generating images, audio, thumbnail...`
     );
     
     console.log("✅ İçerik üretimi tamam.");
@@ -282,7 +335,7 @@ async function main() {
   } catch (error) {
     console.error("HATA:", error.message);
     console.error(error.stack);
-    await telegram(CHAT_ID, `❌ *01-İçerik hatası:* ${error.message.substring(0, 500)}`);
+    await telegram(CHAT_ID, `❌ *01-İçerik error:* ${error.message.substring(0, 500)}`);
     process.exit(1);
   }
 }
