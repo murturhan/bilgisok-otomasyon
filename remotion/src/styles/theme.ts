@@ -1,17 +1,16 @@
-// GeniMini Tests tema - Tüm görsel sabitler burada
-// Renk paleti varsayılan: Pembe-mor-sarı (kanal kimliği)
+// GeniMini Tests theme - tüm görsel sabitler ve dinamik süre helper'ları
 
 export const COLORS = {
   // Ana arka plan gradient
-  bgGradientStart: "#5B2C8C", // koyu mor
-  bgGradientEnd: "#FF57A6",   // pembe
+  bgGradientStart: "#5B2C8C",
+  bgGradientEnd: "#FF57A6",
   
-  // Vurgu renkleri (Jess karakter paleti)
-  primary: "#FFD600",         // GeniMini sarı
-  secondary: "#FF6B35",       // turuncu (Jess kulak rengi)
-  accent: "#7B4CDD",          // mor (Jess göz rengi)
+  // Vurgu renkleri
+  primary: "#FFD600",
+  secondary: "#FF6B35",
+  accent: "#7B4CDD",
   
-  // UI durum renkleri
+  // UI durum
   correctGreen: "#00E676",
   correctGreenDark: "#00C853",
   wrongGray: "#9E9E9E",
@@ -23,7 +22,7 @@ export const COLORS = {
   textBlack: "#1A1A2E",
   textShadow: "#000000",
   
-  // Kutu zemin
+  // Kutu
   boxBg: "rgba(0, 0, 0, 0.7)",
   boxBgCorrect: "#00C853",
   boxBgWrong: "rgba(97, 97, 97, 0.6)",
@@ -42,40 +41,45 @@ export const FONTS = {
   body: '"Nunito", "Comic Sans MS", Arial, sans-serif',
 };
 
-// FPS standart, hep aynı kullan
 export const FPS = 30;
 
-// Faz süreleri (saniye)
-export const TIMING = {
-  intro: 5.0,
-  outro: 5.0,
-  
-  // Soru fazları
-  questionShow: 3.0,        // Soru görseli + metin görünür
-  countdown: 5.0,           // 5,4,3,2,1 geri sayım + cevap kutuları
-  drumRoll: 2.0,            // Suspense
-  reveal: 3.0,              // Doğru cevap görünür + green glow
-  funFact: 9.0,             // Did you know? bilgi sahnesi
-  transition: 3.0,          // Whoosh + boşluk
-  rest: 3.0,                // Nefes
+// SABİT süreler (saniye) - bunlar hep sabit
+export const FIXED_TIMING = {
+  countdown: 5.0,     // Geri sayım her zaman 5 saniye
+  drumRoll: 2.0,      // Drum roll her zaman 2 saniye
+  transition: 1.0,    // Soru sonu nefes - kısa
 };
 
-// Frame hesaplamaları (FPS=30)
-export const FRAMES = {
-  intro: TIMING.intro * FPS,                    // 150
-  outro: TIMING.outro * FPS,                    // 150
-  questionShow: TIMING.questionShow * FPS,      // 90
-  countdown: TIMING.countdown * FPS,            // 150
-  drumRoll: TIMING.drumRoll * FPS,             // 60
-  reveal: TIMING.reveal * FPS,                  // 90
-  funFact: TIMING.funFact * FPS,               // 270
-  transition: TIMING.transition * FPS,          // 90
-  rest: TIMING.rest * FPS,                      // 90
-  questionTotal: (TIMING.questionShow + TIMING.countdown + TIMING.drumRoll +
-                  TIMING.reveal + TIMING.funFact + TIMING.transition + TIMING.rest) * FPS, // 840 = 28s
+// SABİT frame sayıları
+export const FIXED_FRAMES = {
+  countdown: FIXED_TIMING.countdown * FPS,  // 150
+  drumRoll: FIXED_TIMING.drumRoll * FPS,    // 60
+  transition: FIXED_TIMING.transition * FPS, // 30
 };
 
-// Toplam video süresi hesaplayıcı
-export function totalFrames(questionCount: number): number {
-  return FRAMES.intro + (questionCount * FRAMES.questionTotal) + FRAMES.outro;
+// Bir soru için toplam frame sayısı (dinamik!)
+// = question_audio_duration + countdown + drumRoll + answer_audio_duration + transition
+export function questionTotalFrames(questionAudioDur: number, answerAudioDur: number): number {
+  return Math.ceil(
+    questionAudioDur * FPS +
+    FIXED_FRAMES.countdown +
+    FIXED_FRAMES.drumRoll +
+    answerAudioDur * FPS +
+    FIXED_FRAMES.transition
+  );
+}
+
+// Tüm video toplam frame sayısı
+export function totalFrames(
+  introAudioDur: number,
+  questionDurations: Array<{ q: number; a: number }>,
+  outroAudioDur: number
+): number {
+  const introFrames = Math.ceil(introAudioDur * FPS);
+  const questionsFrames = questionDurations.reduce(
+    (sum, { q, a }) => sum + questionTotalFrames(q, a),
+    0
+  );
+  const outroFrames = Math.ceil(outroAudioDur * FPS);
+  return introFrames + questionsFrames + outroFrames;
 }
