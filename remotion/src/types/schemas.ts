@@ -4,6 +4,7 @@ export const questionSchema = z.object({
   question_text: z.string(),
   image_url: z.string().url().optional(),
   image_path: z.string().optional(),
+  fun_fact_image_path: z.string().optional(),  // YENİ: Fun fact için ayrı görsel
   options: z.array(z.string()).length(4),
   correct_answer: z.number().int().min(0).max(3),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
