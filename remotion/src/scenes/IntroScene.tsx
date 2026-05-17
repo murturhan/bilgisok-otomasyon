@@ -14,7 +14,7 @@ interface IntroSceneProps {
   channelName: string;
   topic: string;
   jessPoses: JessPoses;
-  durationFrames: number; // Dinamik (intro_audio_duration * FPS)
+  durationFrames: number;
 }
 
 export const IntroScene: React.FC<IntroSceneProps> = ({
@@ -65,10 +65,6 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
     <AbsoluteFill
       style={{
         background: `linear-gradient(135deg, ${COLORS.bgGradientStart} 0%, ${COLORS.bgGradientEnd} 100%)`,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
       }}
     >
       {stars.map((s) => (
@@ -87,36 +83,42 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         </div>
       ))}
 
+      {/* METIN BLOĞU - üst 1/3'te */}
       <div
         style={{
+          position: "absolute",
+          top: isVertical ? "12%" : "20%",
+          left: 0,
+          right: 0,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: isVertical ? 30 : 50,
+          gap: isVertical ? 24 : 50,
           zIndex: 5,
         }}
       >
+        {/* GENIMINI logo - DAHA BÜYÜK */}
         <div
           style={{
             transform: `translateY(${logoY}px) scale(${logoScale})`,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: 20,
+            gap: isVertical ? 18 : 20,
           }}
         >
           <div
             style={{
-              fontSize: isVertical ? 110 : 140,
+              fontSize: isVertical ? 160 : 180,  // 110 → 160 (BÜYÜTÜLDÜ)
               fontFamily: FONTS.display,
               fontWeight: 900,
               color: COLORS.primary,
               textShadow: `
-                -6px -6px 0 black,
-                6px -6px 0 black,
-                -6px 6px 0 black,
-                6px 6px 0 black,
-                12px 12px 0 ${COLORS.accent}
+                -8px -8px 0 black,
+                8px -8px 0 black,
+                -8px 8px 0 black,
+                8px 8px 0 black,
+                15px 15px 0 ${COLORS.accent}
               `,
               lineHeight: 1,
               textAlign: "center",
@@ -126,39 +128,41 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
           </div>
           <div
             style={{
-              fontSize: isVertical ? 80 : 100,
+              fontSize: isVertical ? 120 : 130,  // 80 → 120 (BÜYÜTÜLDÜ)
               fontFamily: FONTS.display,
               fontWeight: 900,
               color: COLORS.textWhite,
               textShadow: `
-                -4px -4px 0 black,
-                4px -4px 0 black,
-                -4px 4px 0 black,
-                4px 4px 0 black
+                -6px -6px 0 black,
+                6px -6px 0 black,
+                -6px 6px 0 black,
+                6px 6px 0 black
               `,
               lineHeight: 1,
-              letterSpacing: 8,
+              letterSpacing: 12,
             }}
           >
             TESTS
           </div>
         </div>
 
+        {/* Tagline */}
         <div
           style={{
             transform: `translateY(${taglineY}px)`,
             opacity: taglineOpacity,
-            fontSize: isVertical ? 42 : 50,
+            fontSize: isVertical ? 52 : 56,  // 42 → 52
             fontFamily: FONTS.body,
             fontWeight: 700,
             color: COLORS.textWhite,
-            textShadow: "3px 3px 0 black",
+            textShadow: "4px 4px 0 black",
             textAlign: "center",
           }}
         >
-          🎉 Fun &amp; Smart Learning for Kids 🦊
+          🎉 Fun &amp; Smart Learning 🦊
         </div>
 
+        {/* Konu rozetı */}
         {topic && (
           <div
             style={{
@@ -166,14 +170,15 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
               transform: `scale(${topicScale})`,
               backgroundColor: COLORS.primary,
               color: COLORS.textBlack,
-              padding: isVertical ? "20px 40px" : "26px 60px",
+              padding: isVertical ? "22px 44px" : "30px 60px",
               borderRadius: 30,
-              fontSize: isVertical ? 44 : 60,
+              fontSize: isVertical ? 50 : 60,  // 44 → 50
               fontFamily: FONTS.display,
               fontWeight: 900,
-              border: "5px solid black",
-              boxShadow: `0 8px 24px rgba(0,0,0,0.4), 0 0 30px ${COLORS.primary}`,
-              marginTop: 20,
+              border: "6px solid black",
+              boxShadow: `0 8px 24px rgba(0,0,0,0.4), 0 0 40px ${COLORS.primary}`,
+              maxWidth: "85%",
+              textAlign: "center",
             }}
           >
             Today: {topic}
@@ -181,11 +186,12 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         )}
       </div>
 
+      {/* Jess - ALT ORTA, BÜYÜK */}
       <JessCharacter
         pose="intro"
         poses={jessPoses}
-        position="bottom-right"
-        size={isVertical ? 400 : 480}
+        position="bottom-center"
+        size={isVertical ? 480 : 500}
         animate
       />
     </AbsoluteFill>
