@@ -7,6 +7,8 @@
  * - Video tam ses süresine göre senkron olacak
  */
 
+import fs from "fs";
+import path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   konuHavuzundanAl,
@@ -323,8 +325,6 @@ async function main() {
     });
     
     // questions.json - YENİ FORMAT (audio segments dahil)
-    const fs = await import("fs");
-    const path = await import("path");
     const tmpDir = "/tmp/quiz-data";
     fs.mkdirSync(tmpDir, { recursive: true });
     const questionsPath = path.join(tmpDir, "questions.json");
@@ -337,11 +337,15 @@ async function main() {
       questions: icerik.questions, // Her q'da question_audio_text + answer_audio_text var
     }, null, 2));
     
+    console.log(`questions.json yazıldı: ${questionsPath}`);
+    
     await driveDosyaYukle(
       { filename: "questions.json", filepath: questionsPath },
       anaKlasor.id,
       "application/json"
     );
+    
+    console.log(`✓ questions.json Drive'a yüklendi`);
     
     fs.rmSync(tmpDir, { recursive: true, force: true });
     
