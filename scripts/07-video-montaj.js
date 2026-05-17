@@ -38,6 +38,7 @@ const {
   JOB_ID,
   GDRIVE_MUZIK_FOLDER_ID,
   GDRIVE_JESS_FOLDER_ID,
+  GDRIVE_SFX_FOLDER_ID,
 } = process.env;
 
 const TMP_DIR = "/tmp/video-montaj";
@@ -93,6 +94,60 @@ async function jsonIndir(folderId, filename, auth, hedefYol) {
   if (!res.data.files || res.data.files.length === 0) return null;
   await driveIndir(res.data.files[0].id, hedefYol, auth);
   return JSON.parse(fs.readFileSync(hedefYol, "utf8"));
+}
+
+// Önce 02-ses içinde, yoksa ana klasörde questions.json ara
+async function questionsJsonOku(jobFolderId, auth, hedefYol) {
+  // 1. 02-ses
+  const sesKlasor = await driveAltKlasorBul("02-ses", jobFolderId);
+  if (sesKlasor.length > 0) {
+    const data = await jsonIndir(sesKlasor[0].id, "questions.json", auth, hedefYol);
+    if (data) {
+      console.log("✓ questions.json '02-ses' klasöründen okundu");
+      return data;
+    }
+  }
+  // 2. Ana klasör (backward compat)
+  const data = await jsonIndir(jobFolderId, "questions.json", auth, hedefYol);
+  if (data) {
+    console.log("✓ questions.json ana klasörden okundu (eski format)");
+  }
+  return data;
+}
+
+// SFX dosyalarını indir, map döner: {tick: relativePath, drum: ..., correct: ..., whoosh: ...}
+async function sfxIndir(auth, hedefKlasor) {
+  if (!GDRIVE_SFX_FOLDER_ID) {
+    console.log("⚠ GDRIVE_SFX_FOLDER_ID yok, SFX atlanıyor");
+    return {};
+  }
+  
+  const dosyalar = await driveKlasorIcerigi(GDRIVE_SFX_FOLDER_ID, auth);
+  const audioDosyalar = dosyalar.filter(d => d.name.match(/\.(wav|mp3|m4a|ogg)$/i));
+  
+  const sfxMap = {};
+  
+  for (const d of audioDosyalar) {
+    const ad = d.name.toLowerCase();
+    let sfxKey = null;
+    
+    if (ad.includes("tick") || ad.includes("countdown")) sfxKey = "tick";
+    else if (ad.includes("drum")) sfxKey = "drum";
+    else if (ad.includes("correct") || ad.includes("ding")) sfxKey = "correct";
+    else if (ad.includes("whoosh") || ad.includes("transition")) sfxKey = "whoosh";
+    
+    if (sfxKey && !sfxMap[sfxKey]) {
+      // SFX dosyasını .wav uzantılı olsun bizimkilerle uyumlu
+      const ext = d.name.substring(d.name.lastIndexOf(".")).toLowerCase();
+      const hedefAd = `sfx-${sfxKey}${ext}`;
+      const hedef = path.join(hedefKlasor, hedefAd);
+      await driveIndir(d.id, hedef, auth);
+      sfxMap[sfxKey] = `audio/${hedefAd}`;
+      console.log(`  ✓ SFX ${sfxKey}: ${d.name}`);
+    }
+  }
+  
+  return sfxMap;
 }
 
 async function jessPozlariniIndir(auth, hedefKlasor) {
@@ -168,10 +223,9 @@ async function main() {
     const compositionId = format === "shorts" ? "KidsQuizShorts" : "KidsQuizLong";
     console.log(`📺 Format: ${format} → ${compositionId}`);
 
-    // 2. questions.json indir
-    const questionsData = await jsonIndir(
+    // 2. questions.json indir (önce 02-ses, yoksa ana klasör)
+    const questionsData = await questionsJsonOku(
       job.drive_folder_id,
-      "questions.json",
       oauthAuth,
       path.join(TMP_DIR, "questions.json")
     );
@@ -237,16 +291,22 @@ async function main() {
     const bgMuzikYol = path.join(REMOTION_PUBLIC, "audio", "bg-music.mp3");
     const bgMuzikPromise = bgMuzikIndir(saAuth, bgMuzikYol);
 
-    const [jessPozlar] = await Promise.all([
+    // 8. SFX dosyalarını indir
+    console.log("⬇️ SFX indiriliyor...");
+    const sfxPromise = sfxIndir(saAuth, path.join(REMOTION_PUBLIC, "audio"));
+
+    const [jessPozlar, sfxMap] = await Promise.all([
       jessPozlarPromise,
       bgMuzikPromise,
+      sfxPromise,
       ...sesIndirmePromises,
       ...gorselIndirmePromises,
     ]);
     
     console.log(`✓ Tüm materyaller indirildi`);
+    console.log(`✓ SFX: ${Object.keys(sfxMap).join(", ") || "yok"}`);
 
-    // 8. Sorulara audio path + duration ata
+    // 9. Sorulara audio path + duration ata
     const segByKey = {};
     for (const seg of segmentsManifest.segments) {
       segByKey[seg.key] = seg;
@@ -261,18 +321,18 @@ async function main() {
         questions[i].question_audio_path = `audio/${qSeg.filename}`;
         questions[i].question_audio_duration = qSeg.duration;
       } else {
-        questions[i].question_audio_duration = 8.0; // fallback
+        questions[i].question_audio_duration = 8.0;
       }
       
       if (aSeg) {
         questions[i].answer_audio_path = `audio/${aSeg.filename}`;
         questions[i].answer_audio_duration = aSeg.duration;
       } else {
-        questions[i].answer_audio_duration = 8.0; // fallback
+        questions[i].answer_audio_duration = 8.0;
       }
     }
 
-    // 9. inputProps hazırla
+    // 10. inputProps hazırla
     const jessPosesForRemotion = {};
     for (const [pose, absPath] of Object.entries(jessPozlar)) {
       jessPosesForRemotion[pose] = path.relative(REMOTION_PUBLIC, absPath);
@@ -297,6 +357,12 @@ async function main() {
       background_music_url: fs.existsSync(bgMuzikYol)
         ? path.relative(REMOTION_PUBLIC, bgMuzikYol)
         : undefined,
+      
+      // SFX path'leri
+      sfx_tick: sfxMap.tick,
+      sfx_drum: sfxMap.drum,
+      sfx_correct: sfxMap.correct,
+      sfx_whoosh: sfxMap.whoosh,
     };
 
     const propsJsonPath = path.join(TMP_DIR, "input-props.json");
