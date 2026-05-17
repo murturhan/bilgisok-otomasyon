@@ -23,22 +23,64 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   outro_audio_duration,
   jess_poses,
   background_music_url,
+  sfx_tick,
+  sfx_drum,
+  sfx_correct,
+  sfx_whoosh,
   channel_name,
 }) => {
   const { width, height } = useVideoConfig();
 
-  // Jess pose path'lerini staticFile() ile resolve et
   const resolvedJessPoses = Object.fromEntries(
     Object.entries(jess_poses || {})
       .filter(([_, v]) => v)
       .map(([k, v]) => [k, staticFile(v as string)])
   );
 
-  // Frame hesaplamaları
   const introFrames = Math.ceil(intro_audio_duration * FPS);
   const outroFrames = Math.ceil(outro_audio_duration * FPS);
   const outroStart = outroStartFrame(intro_audio_duration, questions);
   const totalDuration = outroStart + outroFrames;
+
+  // Müzik volume hesaplaması (DİNAMİK DUCKING)
+  // Jess konuşurken: %1 (neredeyse sessiz - profesyonel side-chain)
+  // Sessiz fazlarda: %15 (normal arka plan)
+  // Intro/outro: %15
+  const musicVolume = (f: number): number => {
+    // Intro fazı - normal seviye, Jess konuşması üstüne biner ama o önce
+    if (f < introFrames) {
+      return 0.15; // intro audio yokken normal, varken duck olsun
+    }
+    
+    // Outro fazı
+    if (f >= outroStart) {
+      return 0.15;
+    }
+    
+    // Sorular - hangi fazda olduğumuza göre
+    let scanFrame = introFrames;
+    for (let i = 0; i < questions.length; i++) {
+      const phases = computeQuestionPhases(questions[i]);
+      const qStart = scanFrame;
+      const qEnd = scanFrame + phases.end;
+      
+      if (f >= qStart && f < qEnd) {
+        const localFrame = f - qStart;
+        // Question audio (Jess soru söylüyor): DUCK %1
+        if (localFrame < phases.countdown) return 0.01;
+        // Countdown (sessiz, tick SFX var): %15
+        if (localFrame < phases.drumRoll) return 0.15;
+        // Drumroll (drum SFX var): %12
+        if (localFrame < phases.reveal) return 0.12;
+        // Answer audio (Jess cevap söylüyor): DUCK %1
+        if (localFrame < phases.transition) return 0.01;
+        // Transition: %15
+        return 0.15;
+      }
+      scanFrame = qEnd;
+    }
+    return 0.10;
+  };
 
   return (
     <AbsoluteFill>
@@ -55,11 +97,11 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       {/* Intro audio */}
       {intro_audio_path && (
         <Sequence from={0} durationInFrames={introFrames}>
-          <Audio src={staticFile(intro_audio_path)} volume={1.0} />
+          <Audio src={staticFile(intro_audio_path)} volume={1.2} />
         </Sequence>
       )}
 
-      {/* SORULAR (her biri kendi dinamik süresiyle) */}
+      {/* SORULAR */}
       {questions.map((q, idx) => {
         const startFrame = questionStartFrame(idx, intro_audio_duration, questions);
         const phases = computeQuestionPhases(q);
@@ -80,6 +122,10 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
               totalQuestions={questions.length}
               jessPoses={resolvedJessPoses}
               channelName={channel_name}
+              sfx_tick={sfx_tick}
+              sfx_drum={sfx_drum}
+              sfx_correct={sfx_correct}
+              sfx_whoosh={sfx_whoosh}
             />
           </Sequence>
         );
@@ -97,48 +143,15 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       {/* Outro audio */}
       {outro_audio_path && (
         <Sequence from={outroStart} durationInFrames={outroFrames}>
-          <Audio src={staticFile(outro_audio_path)} volume={1.0} />
+          <Audio src={staticFile(outro_audio_path)} volume={1.2} />
         </Sequence>
       )}
 
-      {/* Arka plan müziği - dinamik ducking */}
+      {/* Arka plan müziği - DİNAMİK DUCKING */}
       {background_music_url && (
         <Audio
           src={staticFile(background_music_url)}
-          // Volume dinamik:
-          // - Intro/outro: %20 (Jess konuşması az duyulsun değil, ama biraz arkada)
-          // - Soruda question/answer audio: %5 (Jess net duyulsun)
-          // - Sessiz fazlarda (countdown, drumroll, transition): %15
-          volume={(f) => {
-            // Intro fazı
-            if (f < introFrames) return 0.20;
-            // Outro fazı
-            if (f >= outroStart) return 0.20;
-            
-            // Hangi sorudayız ve hangi fazda?
-            let scanFrame = introFrames;
-            for (let i = 0; i < questions.length; i++) {
-              const phases = computeQuestionPhases(questions[i]);
-              const qStart = scanFrame;
-              const qEnd = scanFrame + phases.end;
-              
-              if (f >= qStart && f < qEnd) {
-                const localFrame = f - qStart;
-                // Question audio (Jess soruyu söylüyor): %5
-                if (localFrame < phases.countdown) return 0.05;
-                // Countdown (sessiz, tick SFX): %15
-                if (localFrame < phases.drumRoll) return 0.15;
-                // Drumroll (sessiz, drum SFX): %15
-                if (localFrame < phases.reveal) return 0.15;
-                // Answer audio (Jess cevabı söylüyor): %5
-                if (localFrame < phases.transition) return 0.05;
-                // Transition (kısa): %15
-                return 0.15;
-              }
-              scanFrame = qEnd;
-            }
-            return 0.10;
-          }}
+          volume={musicVolume}
           startFrom={0}
           loop
         />
