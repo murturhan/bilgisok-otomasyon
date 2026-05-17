@@ -425,13 +425,28 @@ async function soruSegmentUret({
     const correctRevealColor = "lime";
     const wrongRevealColor = "gray";
 
+    // Reveal'dan ÖNCE (t1-t3): beyaz, normal kutu
     filter += `[${currentLabel}]drawtext=text='${opts[i]}':` +
       `fontsize=${optionSize}:` +
-      `fontcolor='if(lt(t\\,${t3})\\,white\\,${isCorrect ? correctRevealColor : wrongRevealColor})':` +
+      `fontcolor=white:` +
       `borderw=3:bordercolor=black:` +
-      `box=1:boxcolor='if(lt(t\\,${t3})\\,0x000000AA\\,${isCorrect ? "0x00CC00CC" : "0x44444499"})':boxborderw=8:` +
+      `box=1:boxcolor=0x000000AA:boxborderw=8:` +
       `x=W*${optX[i]}:y=H*${optY[i]}:` +
-      `enable='gte(t,${t1})':` +
+      `enable='between(t,${t1.toFixed(2)},${t3.toFixed(2)})':` +
+      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg${stepIdx}];`;
+    currentLabel = `bg${stepIdx}`;
+    stepIdx++;
+    
+    // Reveal'dan SONRA (t3-end): doğru cevap yeşil, yanlışlar gri
+    const revealColor = isCorrect ? correctRevealColor : wrongRevealColor;
+    const revealBoxColor = isCorrect ? "0x00CC00CC" : "0x44444499";
+    filter += `[${currentLabel}]drawtext=text='${opts[i]}':` +
+      `fontsize=${optionSize}:` +
+      `fontcolor=${revealColor}:` +
+      `borderw=3:bordercolor=black:` +
+      `box=1:boxcolor=${revealBoxColor}:boxborderw=8:` +
+      `x=W*${optX[i]}:y=H*${optY[i]}:` +
+      `enable='gte(t,${t3.toFixed(2)})':` +
       `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg${stepIdx}];`;
     currentLabel = `bg${stepIdx}`;
     stepIdx++;
