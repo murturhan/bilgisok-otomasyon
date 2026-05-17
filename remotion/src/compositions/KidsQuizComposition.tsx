@@ -42,22 +42,26 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   const outroStart = outroStartFrame(intro_audio_duration, questions);
   const totalDuration = outroStart + outroFrames;
 
-  // Müzik volume hesaplaması (DİNAMİK DUCKING)
-  // Jess konuşurken: %1 (neredeyse sessiz - profesyonel side-chain)
-  // Sessiz fazlarda: %15 (normal arka plan)
-  // Intro/outro: %15
-  const musicVolume = (f: number): number => {
-    // Intro fazı - normal seviye, Jess konuşması üstüne biner ama o önce
-    if (f < introFrames) {
-      return 0.15; // intro audio yokken normal, varken duck olsun
-    }
+  // ─── GRADUAL DUCKING ───
+  // İdeal müzik seviyeleri:
+  // - Intro/outro: %15 (normal, Jess konuşurken side-chain ducking)
+  // - Sessiz fazlar (countdown, drumroll, transition): %15
+  // - Jess konuşurken: %1 (neredeyse sessiz)
+  // 
+  // GEÇISLER: lineer 0.5sn (15 frame) fade ile yumuşatılıyor
+  // Bu side-chain ducking gibi profesyonel ses karışımı verir
+  
+  const FADE_FRAMES = 15; // 0.5 saniye yumuşak geçiş
+  
+  // Belirli bir frame'de "Jess konuşuyor mu?" testi
+  const isJessSpeaking = (f: number): boolean => {
+    // Intro audio çalıyor mu?
+    if (f < introFrames) return true; // intro boyunca Jess konuşur
     
-    // Outro fazı
-    if (f >= outroStart) {
-      return 0.15;
-    }
+    // Outro audio çalıyor mu?
+    if (f >= outroStart && f < outroStart + outroFrames) return true;
     
-    // Sorular - hangi fazda olduğumuza göre
+    // Sorular - question_audio veya answer_audio fazında mı?
     let scanFrame = introFrames;
     for (let i = 0; i < questions.length; i++) {
       const phases = computeQuestionPhases(questions[i]);
@@ -66,20 +70,45 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       
       if (f >= qStart && f < qEnd) {
         const localFrame = f - qStart;
-        // Question audio (Jess soru söylüyor): DUCK %1
-        if (localFrame < phases.countdown) return 0.01;
-        // Countdown (sessiz, tick SFX var): %15
-        if (localFrame < phases.drumRoll) return 0.15;
-        // Drumroll (drum SFX var): %12
-        if (localFrame < phases.reveal) return 0.12;
-        // Answer audio (Jess cevap söylüyor): DUCK %1
-        if (localFrame < phases.transition) return 0.01;
-        // Transition: %15
-        return 0.15;
+        // Question audio fazı
+        if (localFrame < phases.countdown) return true;
+        // Answer audio fazı (reveal başlangıcından transition'a kadar)
+        if (localFrame >= phases.reveal && localFrame < phases.transition) return true;
+        return false;
       }
       scanFrame = qEnd;
     }
-    return 0.10;
+    return false;
+  };
+
+  // Gradual volume: 0.01 (konuşurken) ↔ 0.15 (sessiz) arası fade
+  const musicVolume = (f: number): number => {
+    const speaking = isJessSpeaking(f);
+    
+    // Geçişleri yumuşatmak için: hedef seviyeden geri geri bak
+    // Eğer son FADE_FRAMES içinde state değişimi varsa, lineer geçiş yap
+    let prevSpeaking = speaking;
+    let framesSinceChange = FADE_FRAMES;
+    
+    for (let lookback = 1; lookback <= FADE_FRAMES; lookback++) {
+      const prev = isJessSpeaking(Math.max(0, f - lookback));
+      if (prev !== speaking) {
+        framesSinceChange = lookback;
+        prevSpeaking = prev;
+        break;
+      }
+    }
+    
+    const targetVol = speaking ? 0.01 : 0.15;
+    const startVol = prevSpeaking ? 0.01 : 0.15;
+    
+    // Eğer state değişti, lineer interpolate
+    if (framesSinceChange < FADE_FRAMES) {
+      const t = framesSinceChange / FADE_FRAMES;
+      return startVol + (targetVol - startVol) * t;
+    }
+    
+    return targetVol;
   };
 
   return (
@@ -108,6 +137,9 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         const imageSrc = q.image_path
           ? staticFile(q.image_path)
           : q.image_url || "";
+        const funFactImageSrc = q.fun_fact_image_path
+          ? staticFile(q.fun_fact_image_path)
+          : imageSrc; // fallback: aynı görsel
         
         return (
           <Sequence
@@ -118,6 +150,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
             <QuestionScene
               question={q}
               imageSrc={imageSrc}
+              funFactImageSrc={funFactImageSrc}
               questionNumber={idx + 1}
               totalQuestions={questions.length}
               jessPoses={resolvedJessPoses}
@@ -147,7 +180,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         </Sequence>
       )}
 
-      {/* Arka plan müziği - DİNAMİK DUCKING */}
+      {/* Arka plan müziği - GRADUAL DUCKING */}
       {background_music_url && (
         <Audio
           src={staticFile(background_music_url)}
