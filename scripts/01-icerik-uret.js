@@ -325,6 +325,7 @@ async function main() {
     });
     
     // questions.json - YENİ FORMAT (audio segments dahil)
+    // NOT: 02-ses klasörüne yazılıyor (daha düzgün organizasyon)
     const tmpDir = "/tmp/quiz-data";
     fs.mkdirSync(tmpDir, { recursive: true });
     const questionsPath = path.join(tmpDir, "questions.json");
@@ -334,18 +335,25 @@ async function main() {
       baslik: icerik.baslik,
       intro_audio_text: icerik.intro_audio_text,
       outro_audio_text: icerik.outro_audio_text,
-      questions: icerik.questions, // Her q'da question_audio_text + answer_audio_text var
+      questions: icerik.questions,
     }, null, 2));
     
     console.log(`questions.json yazıldı: ${questionsPath}`);
     
+    // 02-ses alt klasörünü bul ve oraya yükle
+    const { driveAltKlasorBul } = await import("./lib/google.js");
+    const sesKlasor = await driveAltKlasorBul("02-ses", anaKlasor.id);
+    if (sesKlasor.length === 0) {
+      throw new Error("02-ses klasörü oluşturulamadı");
+    }
+    
     await driveDosyaYukle(
       { filename: "questions.json", filepath: questionsPath },
-      anaKlasor.id,
+      sesKlasor[0].id,
       "application/json"
     );
     
-    console.log(`✓ questions.json Drive'a yüklendi`);
+    console.log(`✓ questions.json '02-ses' klasörüne yüklendi`);
     
     fs.rmSync(tmpDir, { recursive: true, force: true });
     
