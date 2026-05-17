@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// Tek soru (audio segment paths + durations dahil)
 export const questionSchema = z.object({
   question_text: z.string(),
   image_url: z.string().url().optional(),
@@ -10,11 +9,10 @@ export const questionSchema = z.object({
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
   fun_fact: z.string().default(""),
   
-  // YENİ v5: Her sorunun 2 ayrı ses parçası
-  question_audio_path: z.string().optional(),  // public/audio/q01-question.mp3
-  answer_audio_path: z.string().optional(),    // public/audio/q01-answer.mp3
-  question_audio_duration: z.number().default(8.0),  // saniye
-  answer_audio_duration: z.number().default(8.0),    // saniye
+  question_audio_path: z.string().optional(),
+  answer_audio_path: z.string().optional(),
+  question_audio_duration: z.number().default(8.0),
+  answer_audio_duration: z.number().default(8.0),
 });
 
 export type Question = z.infer<typeof questionSchema>;
@@ -29,30 +27,30 @@ export const jessPosesSchema = z.object({
 
 export type JessPoses = z.infer<typeof jessPosesSchema>;
 
-// Composition input props
 export const quizCompositionSchema = z.object({
   title: z.string().default("GeniMini Tests"),
   topic: z.string().default(""),
   questions: z.array(questionSchema),
   
-  // YENİ v5: Intro/outro için ayrı audio paths + sürelerle
   intro_audio_path: z.string().optional(),
   outro_audio_path: z.string().optional(),
   intro_audio_duration: z.number().default(5.0),
   outro_audio_duration: z.number().default(5.0),
   
-  // Karakter görselleri
   jess_poses: jessPosesSchema.default({}),
-  
-  // Arka plan müziği (loop)
   background_music_url: z.string().optional(),
+  
+  // SFX paths
+  sfx_tick: z.string().optional(),
+  sfx_drum: z.string().optional(),
+  sfx_correct: z.string().optional(),
+  sfx_whoosh: z.string().optional(),
   
   channel_name: z.string().default("GeniMini Tests"),
 });
 
 export type QuizCompositionProps = z.infer<typeof quizCompositionSchema>;
 
-// Default props (testing için - 5 örnek soru)
 export const defaultQuizProps: QuizCompositionProps = {
   title: "GeniMini Tests",
   topic: "Animals",
