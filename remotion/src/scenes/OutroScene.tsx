@@ -25,7 +25,7 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   const { fps, width, height } = useVideoConfig();
   const isVertical = height > width;
 
-  const confetti = Array.from({ length: 20 }).map((_, i) => {
+  const confetti = Array.from({ length: 30 }).map((_, i) => {
     const startY = -50 - (i * 60) % 400;
     const x = (i * 137 + frame * 2) % width;
     const y = (startY + frame * 3) % (height + 100);
@@ -52,10 +52,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
     <AbsoluteFill
       style={{
         background: `linear-gradient(135deg, ${COLORS.accent} 0%, ${COLORS.bgGradientEnd} 100%)`,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
       }}
     >
       {confetti.map((c) => (
@@ -65,7 +61,7 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
             position: "absolute",
             left: c.x,
             top: c.y,
-            fontSize: 40,
+            fontSize: 48,
             transform: `rotate(${c.rotation}deg)`,
             pointerEvents: "none",
           }}
@@ -74,46 +70,64 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         </div>
       ))}
 
+      {/* METIN BLOĞU - üst orta */}
       <div
         style={{
+          position: "absolute",
+          top: isVertical ? "10%" : "15%",
+          left: 0,
+          right: 0,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 40,
+          gap: isVertical ? 30 : 40,
           zIndex: 5,
         }}
       >
+        {/* GREAT JOB - BÜYÜK */}
         <div
           style={{
             transform: `scale(${thanksScale})`,
-            fontSize: isVertical ? 90 : 120,
+            fontSize: isVertical ? 150 : 160,  // 90 → 150 (BÜYÜTÜLDÜ)
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: COLORS.primary,
             textShadow: `
-              -6px -6px 0 black,
-              6px -6px 0 black,
-              -6px 6px 0 black,
-              6px 6px 0 black
+              -8px -8px 0 black,
+              8px -8px 0 black,
+              -8px 8px 0 black,
+              8px 8px 0 black,
+              12px 12px 0 ${COLORS.secondary}
             `,
+            textAlign: "center",
+            lineHeight: 1,
+          }}
+        >
+          Great Job!
+        </div>
+        <div
+          style={{
+            transform: `scale(${thanksScale})`,
+            fontSize: isVertical ? 100 : 120,
             textAlign: "center",
           }}
         >
-          Great Job! 🎉
+          🎉🎊
         </div>
 
+        {/* SUBSCRIBE rozet */}
         <div
           style={{
             transform: `scale(${subBtnScale * pulse})`,
             backgroundColor: "#FF0000",
             color: COLORS.textWhite,
-            padding: isVertical ? "26px 60px" : "32px 80px",
+            padding: isVertical ? "30px 70px" : "32px 80px",
             borderRadius: 50,
-            fontSize: isVertical ? 50 : 64,
+            fontSize: isVertical ? 60 : 64,
             fontFamily: FONTS.display,
             fontWeight: 900,
-            border: "5px solid black",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.5), 0 0 40px #FF0000",
+            border: "6px solid black",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.5), 0 0 50px #FF0000",
             display: "flex",
             alignItems: "center",
             gap: 20,
@@ -125,11 +139,11 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         <div
           style={{
             transform: `scale(${subBtnScale})`,
-            fontSize: isVertical ? 38 : 48,
+            fontSize: isVertical ? 48 : 52,
             fontFamily: FONTS.body,
             fontWeight: 700,
             color: COLORS.textWhite,
-            textShadow: "3px 3px 0 black",
+            textShadow: "4px 4px 0 black",
             textAlign: "center",
           }}
         >
@@ -137,11 +151,12 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         </div>
       </div>
 
+      {/* Jess - ALT ORTA, BÜYÜK */}
       <JessCharacter
         pose="outro"
         poses={jessPoses}
-        position="bottom-left"
-        size={isVertical ? 400 : 480}
+        position="bottom-center"
+        size={isVertical ? 480 : 500}
         animate
       />
     </AbsoluteFill>
