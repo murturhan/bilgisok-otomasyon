@@ -145,7 +145,8 @@ JSON OUTPUT (must be valid JSON, no markdown):
 {
   "konu": "${konu}",
   "format": "${FORMAT}",
-  "baslik": "YouTube title with emoji",
+  "baslik": "Long YouTube title with emoji",
+  "thumbnail_title": "2-3 WORDS MAX (uppercase, punchy)",
   "thumbnail_prompt": "FLUX prompt - scenery only, NO CHARACTERS",
   "aciklama": "200 word description with hashtags",
   "intro_audio_text": "Jess intro 2-3 sentences",
@@ -153,7 +154,8 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "questions": [
     {
       "question_text": "Short on-screen text",
-      "image_prompt": "Pixar-style image prompt",
+      "image_prompt": "Pixar-style image prompt for the QUESTION",
+      "fun_fact_image_prompt": "Pixar-style image prompt for the FUN FACT (different scene illustrating the fun fact - e.g. if fun_fact is 'Pizza invented in Naples 1889', show a chef in Naples 1889 cartoon style)",
       "options": ["A_short", "B_short", "C_short", "D_short"],
       "correct_answer": 0,
       "difficulty": "easy",
@@ -171,7 +173,12 @@ CRITICAL:
 - All child-safe
 - Answers SHORT (1-3 words)
 - question_audio_text MUST include all 4 options spoken out loud
-- answer_audio_text MUST include fun_fact at the end`;
+- answer_audio_text MUST include fun_fact at the end
+- **fun_fact_image_prompt MUST illustrate the fun fact narrative** (different scene from question image - e.g. if fun fact is about Eiffel Tower being 330m tall, show a Pixar-style Eiffel Tower with measurement; if about pizza invented in Naples 1889, show a cartoon chef in old Naples kitchen)
+- fun_fact_image_prompt should be Pixar 3D style, NO TEXT, kid-friendly
+- **thumbnail_title MUST be 2-3 WORDS MAX, UPPERCASE, PUNCHY** (examples: "FOOD QUIZ", "GUESS THE ANIMAL", "OCEAN QUIZ", "TRUCK CHALLENGE", "MIGHTY MACHINES")
+- thumbnail_title is for the thumbnail image (LARGE TEXT), NOT for YouTube title
+- baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title`;
 
   const maxRetries = 5;
   const modeller = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
@@ -217,6 +224,16 @@ CRITICAL:
         if (!q.difficulty) q.difficulty = "medium";
         if (!q.fun_fact) q.fun_fact = "";
         
+        // fun_fact_image_prompt fallback - Gemini vermediyse, question image prompt + fun fact birleştir
+        if (!q.fun_fact_image_prompt) {
+          if (q.fun_fact) {
+            q.fun_fact_image_prompt = `Pixar 3D cartoon illustration: ${q.fun_fact}, kid-friendly, vibrant colors, NO TEXT`;
+          } else {
+            // Soru görselini reuse
+            q.fun_fact_image_prompt = q.image_prompt;
+          }
+        }
+        
         // Audio text alanları varsayılan oluştur (Gemini eksik verirse)
         if (!q.question_audio_text) {
           const letters = ["A", "B", "C", "D"];
@@ -232,11 +249,35 @@ CRITICAL:
       if (!json.intro_audio_text) json.intro_audio_text = "Hi friends! I'm Jess the Fox! Let's play a fun quiz!";
       if (!json.outro_audio_text) json.outro_audio_text = "Great job! Subscribe for more fun! See you next time!";
       if (!json.baslik) json.baslik = `${konu} Quiz for Kids!`;
+      
+      // thumbnail_title validate - 2-3 kelime, uppercase, max 16 karakter
+      if (!json.thumbnail_title) {
+        // Konu'dan otomatik üret
+        const konuTemiz = konu.replace(/[:!?].*$/g, "").trim(); // İlk : veya ! sonrasını at
+        const kelimeler = konuTemiz.split(/\s+/).slice(0, 2);
+        json.thumbnail_title = kelimeler.join(" ").toUpperCase() + " QUIZ";
+      } else {
+        // Çok uzun ise kısalt
+        json.thumbnail_title = String(json.thumbnail_title).toUpperCase().trim();
+        const kelimeler = json.thumbnail_title.split(/\s+/);
+        if (kelimeler.length > 3) {
+          json.thumbnail_title = kelimeler.slice(0, 3).join(" ");
+        }
+      }
+      console.log(`Thumbnail title: "${json.thumbnail_title}"`);
+      
       if (!json.thumbnail_prompt) {
-        json.thumbnail_prompt = `Vibrant ${konu} themed background scenery, Pixar 3D style, NO CHARACTERS, NO ANIMALS, NO PEOPLE, kid-friendly, bright colors, 16:9, NO TEXT`;
+        json.thumbnail_prompt = `Vibrant ${konu} themed background scenery, Pixar 3D style, NO CHARACTERS, NO ANIMALS, NO PEOPLE, kid-friendly, bright colors, NO TEXT`;
       }
       
-      json.ai_gorsel_prompts = json.questions.map(q => q.image_prompt);
+      // ai_gorsel_prompts: her soru için 2 prompt (question + fun_fact)
+      // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ...
+      // 02-gorsel-uret bunu sıralı işler ve q01.jpg, q01-fact.jpg gibi isimlerle yazar
+      json.ai_gorsel_prompts = [];
+      for (const q of json.questions) {
+        json.ai_gorsel_prompts.push(q.image_prompt);
+        json.ai_gorsel_prompts.push(q.fun_fact_image_prompt);
+      }
       json.ai_klip_prompts = [];
       json.pexels_anahtar_kelimeler = [];
       
@@ -310,7 +351,7 @@ async function main() {
       chat_id: CHAT_ID,
       konu: konu,
       baslik: icerik.baslik,
-      thumbnail_baslik: "",
+      thumbnail_baslik: icerik.thumbnail_title || "",  // YENİ: 2-3 kelime kısa başlık
       thumbnail_alt_baslik: "",
       thumbnail_prompt: icerik.thumbnail_prompt,
       senaryo: icerik.senaryo,
@@ -324,8 +365,7 @@ async function main() {
       muzik_mood: icerik.muzik_mood,
     });
     
-    // questions.json - YENİ FORMAT (audio segments dahil)
-    // NOT: 02-ses klasörüne yazılıyor (daha düzgün organizasyon)
+    // questions.json'a da ekle (07-video-montaj da görsel için kullanır)
     const tmpDir = "/tmp/quiz-data";
     fs.mkdirSync(tmpDir, { recursive: true });
     const questionsPath = path.join(tmpDir, "questions.json");
@@ -333,6 +373,7 @@ async function main() {
       format: FORMAT,
       konu: konu,
       baslik: icerik.baslik,
+      thumbnail_title: icerik.thumbnail_title || "",
       intro_audio_text: icerik.intro_audio_text,
       outro_audio_text: icerik.outro_audio_text,
       questions: icerik.questions,
