@@ -196,10 +196,11 @@ async function sfxDosyalari(auth) {
     return {};
   }
   const dosyalar = await driveKlasorIcerigi(GDRIVE_SFX_FOLDER_ID, auth);
-  const mp3ler = dosyalar.filter(d => d.name.toLowerCase().endsWith(".mp3"));
+  const sesDosyalar = dosyalar.filter(d => d.name.toLowerCase().match(/\.(mp3|wav|m4a|ogg|aac|flac)$/));
   const sfxMap = {};
-  for (const d of mp3ler) {
-    const ad = d.name.toLowerCase().replace(".mp3", "");
+  for (const d of sesDosyalar) {
+    // Uzantıyı kaldır, isim normalize et
+    const ad = d.name.toLowerCase().replace(/\.(mp3|wav|m4a|ogg|aac|flac)$/, "");
     sfxMap[ad] = d;
   }
   console.log(`✓ SFX: ${Object.keys(sfxMap).join(", ")}`);
@@ -262,13 +263,13 @@ async function introSegmentUret(introYol, jessIntroYol, videoW, videoH) {
     `fontcolor=yellow:` +
     `borderw=6:bordercolor=black:` +
     `x=(w-text_w)/2:y=h*0.15:` +
-    `font='DejaVu Sans:style=Bold'[bg1];` +
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg1];` +
     `[bg1]drawtext=text='Quiz Time with Jess\\!':` +
     `fontsize=${Math.floor(videoH * 0.05)}:` +
     `fontcolor=white:` +
     `borderw=4:bordercolor=black:` +
     `x=(w-text_w)/2:y=h*0.28:` +
-    `font='DejaVu Sans'[outv]`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf[outv]`;
 
   if (jessIntroYol && fs.existsSync(jessIntroYol)) {
     inputs += `-loop 1 -t ${INTRO_SURE} -i "${jessIntroYol}" `;
@@ -292,13 +293,13 @@ async function outroSegmentUret(outroYol, jessOutroYol, videoW, videoH) {
     `fontcolor=yellow:` +
     `borderw=6:bordercolor=black:` +
     `x=(w-text_w)/2:y=h*0.12:` +
-    `font='DejaVu Sans:style=Bold'[bg1];` +
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg1];` +
     `[bg1]drawtext=text='Subscribe for more\\!':` +
     `fontsize=${Math.floor(videoH * 0.05)}:` +
     `fontcolor=white:` +
     `borderw=4:bordercolor=black:` +
     `x=(w-text_w)/2:y=h*0.85:` +
-    `font='DejaVu Sans'[outv]`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf[outv]`;
 
   if (jessOutroYol && fs.existsSync(jessOutroYol)) {
     inputs += `-loop 1 -t ${OUTRO_SURE} -i "${jessOutroYol}" `;
@@ -393,7 +394,7 @@ async function soruSegmentUret({
     `fontsize=${labelSize}:fontcolor=yellow:` +
     `borderw=3:bordercolor=black:` +
     `x=30:y=30:` +
-    `font='DejaVu Sans:style=Bold'[bg];`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
 
   // Question text (görselin altında)
   const qTextY = isVertical
@@ -403,7 +404,7 @@ async function soruSegmentUret({
     `fontsize=${titleSize}:fontcolor=white:` +
     `borderw=4:bordercolor=black:` +
     `x=(w-text_w)/2:y=${qTextY}:` +
-    `font='DejaVu Sans:style=Bold'[bg];`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
 
   // Options (4 kutu) - countdown başlayınca görünür
   // Yatay layout: 2x2 grid
@@ -431,7 +432,7 @@ async function soruSegmentUret({
       `box=1:boxcolor='if(lt(t\\,${t3})\\,0x000000AA\\,${isCorrect ? "0x00CC00CC" : "0x44444499"})':boxborderw=8:` +
       `x=W*${optX[i]}:y=H*${optY[i]}:` +
       `enable='gte(t,${t1})':` +
-      `font='DejaVu Sans:style=Bold'[bg];`;
+      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
   }
 
   // Geri sayım: 5,4,3,2,1 (t1'den t2'ye, her saniye)
@@ -443,7 +444,7 @@ async function soruSegmentUret({
       `borderw=8:bordercolor=red:` +
       `x=(w-text_w)/2:y=h*0.85:` +
       `enable='between(t,${showStart.toFixed(2)},${showEnd.toFixed(2)})':` +
-      `font='DejaVu Sans:style=Bold'[bg];`;
+      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
   }
 
   // Drum roll fazı (t2-t3): "..."
@@ -452,7 +453,7 @@ async function soruSegmentUret({
     `borderw=5:bordercolor=black:` +
     `x=(w-text_w)/2:y=h*0.85:` +
     `enable='between(t,${t2.toFixed(2)},${t3.toFixed(2)})':` +
-    `font='DejaVu Sans:style=Bold'[bg];`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
 
   // Reveal banner (t3-t4): "Correct: C: Eagle"
   filter += `[bg]drawtext=text='${correctAnswerText}':` +
@@ -461,7 +462,7 @@ async function soruSegmentUret({
     `box=1:boxcolor=0x000000CC:boxborderw=12:` +
     `x=(w-text_w)/2:y=h*0.85:` +
     `enable='between(t,${t3.toFixed(2)},${t4.toFixed(2)})':` +
-    `font='DejaVu Sans:style=Bold'[bg];`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
 
   // Fun fact (t4-t5)
   if (question.fun_fact) {
@@ -471,14 +472,14 @@ async function soruSegmentUret({
       `borderw=3:bordercolor=black:` +
       `x=(w-text_w)/2:y=h*0.80:` +
       `enable='between(t,${t4.toFixed(2)},${t5.toFixed(2)})':` +
-      `font='DejaVu Sans:style=Bold'[bg];`;
+      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
     filter += `[bg]drawtext=text='${funFactText}':` +
       `fontsize=${funFactSize}:fontcolor=white:` +
       `borderw=3:bordercolor=black:` +
       `box=1:boxcolor=0x000000AA:boxborderw=10:` +
       `x=(w-text_w)/2:y=h*0.86:` +
       `enable='between(t,${t4.toFixed(2)},${t5.toFixed(2)})':` +
-      `font='DejaVu Sans'[bg];`;
+      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf[bg];`;
   }
 
   // Jess overlay'leri (faz bazlı)
@@ -744,7 +745,10 @@ async function main() {
     const sfxMap = await sfxDosyalari(saAuth);
     const sfxYollar = {};
     for (const [ad, dosya] of Object.entries(sfxMap)) {
-      const yol = path.join(TMP_DIR, `sfx-${ad}.mp3`);
+      // Orijinal uzantıyı al (.wav .mp3 .m4a .ogg vs.)
+      const uzantiMatch = dosya.name.toLowerCase().match(/\.(mp3|wav|m4a|ogg|aac|flac)$/);
+      const uzanti = uzantiMatch ? uzantiMatch[0] : ".mp3";
+      const yol = path.join(TMP_DIR, `sfx-${ad}${uzanti}`);
       sfxYollar[ad] = yol;
       indirmePromises.push(driveIndir(dosya.id, yol, saAuth));
     }
