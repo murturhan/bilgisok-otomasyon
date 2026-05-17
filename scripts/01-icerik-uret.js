@@ -1,9 +1,10 @@
 /**
- * 01 - İçerik Üretimi v13 (GeniMini Tests Kids Quiz)
- * - Gemini'den İngilizce çocuk quiz üretir
- * - 25 soru (long) veya 5 soru (shorts)
- * - Her soru: question + 4 options + correct answer + difficulty + image prompt
- * - Mascot: Jess the Fox
+ * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
+ * v13'ten farkı:
+ * - Her soru için AYRI question_audio_text ve answer_audio_text üretir
+ * - questions.json'da bu yapı: { intro_audio_text, outro_audio_text, questions: [{..., question_audio_text, answer_audio_text}] }
+ * - Bu sayede 03-seslendirme her parçayı ayrı MP3 yapacak
+ * - Video tam ses süresine göre senkron olacak
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -43,16 +44,22 @@ async function icerikUret(konu) {
 Channel mascot: **Jess the Fox** - cute, friendly Pixar-style fox who hosts the quiz.
 
 TOPIC: "${konu}"
-FORMAT: ${FORMAT === "shorts" ? "YouTube Shorts (60 seconds, 5 quick questions)" : "Long video (10-12 minutes, 25 questions with mixed difficulty)"}
+FORMAT: ${FORMAT === "shorts" ? "YouTube Shorts (60-90 seconds, 5 quick questions)" : "Long video (10-12 minutes, 25 questions with mixed difficulty)"}
 
 ═══════════════════════════════════════════════════
 QUIZ STRUCTURE
 ═══════════════════════════════════════════════════
 
 You will create:
-1. **Intro** (Jess greets viewers)
+1. **Intro audio** (Jess greets viewers, 2-3 sentences)
 2. **${QUESTION_COUNT} questions** with 4 multiple choice answers each
-3. **Outro** (Jess says goodbye)
+3. **Outro audio** (Jess says goodbye, 2-3 sentences)
+
+For EACH question, you must create:
+- The question itself + 4 options
+- **question_audio_text**: What Jess SAYS when introducing the question (reads question + 4 options out loud)
+- **answer_audio_text**: What Jess SAYS when revealing the answer (confirms correct answer + fun fact)
+- image_prompt for the question visual
 
 DIFFICULTY DISTRIBUTION (for ${QUESTION_COUNT} questions):
 ${FORMAT === "shorts" ? `- Easy: 3 questions (ages 4-7)
@@ -63,36 +70,44 @@ ${FORMAT === "shorts" ? `- Easy: 3 questions (ages 4-7)
 QUESTIONS MUST PROGRESS from easy → medium → hard.`}
 
 ═══════════════════════════════════════════════════
-QUESTION FORMAT
+AUDIO TEXT FORMAT (CRITICAL!)
 ═══════════════════════════════════════════════════
 
-Each question must have:
-- **question_text**: Question in English (e.g., "Which animal is this?")
-- **image_prompt**: FLUX prompt for question's main image (Pixar-style, kid-friendly)
+**question_audio_text** template (what Jess says when showing the question):
+"Question [N]. [Question text]. Is it A: [option1], B: [option2], C: [option3], or D: [option4]?"
+
+Example:
+"Question 1. Which animal is the king of the jungle? Is it A: Tiger, B: Lion, C: Cheetah, or D: Leopard?"
+
+**answer_audio_text** template (what Jess says revealing answer):
+"The correct answer is [Letter]: [Correct option]! [Fun fact sentence]."
+
+Example:
+"The correct answer is B: Lion! Did you know? Lions are the only cats that live in groups called prides!"
+
+═══════════════════════════════════════════════════
+INTRO & OUTRO AUDIO
+═══════════════════════════════════════════════════
+
+**intro_audio_text** (Jess greets, 2-3 sentences, energetic):
+Example: "Hi friends! I'm Jess the Fox! Today we're exploring amazing animals! Can you guess them all? Let's play!"
+
+**outro_audio_text** (Jess says goodbye, 2-3 sentences):
+Example: "Wow, you did amazing! Don't forget to subscribe and join Jess for more fun quizzes! See you next time, friends!"
+
+═══════════════════════════════════════════════════
+QUESTION OBJECT FORMAT
+═══════════════════════════════════════════════════
+
+Each question object MUST have ALL these fields:
+- **question_text**: Short text shown on screen (e.g., "Which animal is this?")
+- **image_prompt**: FLUX prompt for question's image (Pixar-style, kid-friendly)
 - **options**: Array of 4 short answers (1-3 words each)
 - **correct_answer**: Index 0, 1, 2, or 3
 - **difficulty**: "easy", "medium", or "hard"
-- **fun_fact**: Short fun fact about answer (1 sentence)
-
-EXAMPLE for "Animals":
-{
-  "question_text": "Which animal is this?",
-  "image_prompt": "Cute Pixar-style lion cub illustration, golden mane, big eyes, vibrant savanna, 16:9, child-friendly cartoon",
-  "options": ["Tiger", "Lion", "Cheetah", "Leopard"],
-  "correct_answer": 1,
-  "difficulty": "easy",
-  "fun_fact": "Lions are the only cats that live in groups called prides!"
-}
-
-═══════════════════════════════════════════════════
-INTRO & OUTRO (Jess speaking)
-═══════════════════════════════════════════════════
-
-**intro_text**: Jess greets kids (2-3 sentences)
-Example: "Hi friends! I'm Jess the Fox! Today we're exploring amazing animals! Can you guess them all? Let's play!"
-
-**outro_text**: Jess says goodbye (2-3 sentences)
-Example: "Wow, you did amazing! Don't forget to subscribe and join Jess for more fun quizzes! See you next time, friends!"
+- **fun_fact**: Short fact sentence (used in answer_audio_text)
+- **question_audio_text**: Full sentence Jess SPEAKS when posing the question (includes all 4 options)
+- **answer_audio_text**: Full sentence Jess SPEAKS when revealing the answer (includes fun fact)
 
 ═══════════════════════════════════════════════════
 TITLE & METADATA
@@ -104,11 +119,11 @@ Example: "🦁 Can YOU Guess All 25 Animals? Kids Quiz with Jess the Fox!"
 **aciklama** (description): 150-250 words with hashtags
 Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
 
-**thumbnail_prompt**: FLUX prompt
-- Jess the Fox prominently featured
-- Question mark, excited expression
-- Big colorful theme image
-- 16:9, NO text in image, leave right third empty for text overlay
+**thumbnail_prompt**: FLUX prompt for thumbnail background (NO CHARACTERS, just theme scenery)
+- Vibrant theme scenery only
+- NO ANIMALS, NO CHARACTERS, NO PEOPLE in the image
+- Right third should be empty for text overlay
+- 16:9, Pixar 3D style, NO TEXT
 
 ═══════════════════════════════════════════════════
 SAFETY (Made for Kids)
@@ -123,24 +138,26 @@ TOPIC: ${konu}
 QUESTION COUNT: ${QUESTION_COUNT}
 ═══════════════════════════════════════════════════
 
-JSON OUTPUT:
+JSON OUTPUT (must be valid JSON, no markdown):
 
 {
   "konu": "${konu}",
   "format": "${FORMAT}",
   "baslik": "YouTube title with emoji",
-  "thumbnail_prompt": "FLUX prompt",
+  "thumbnail_prompt": "FLUX prompt - scenery only, NO CHARACTERS",
   "aciklama": "200 word description with hashtags",
-  "intro_text": "Jess greets",
-  "outro_text": "Jess goodbye",
+  "intro_audio_text": "Jess intro 2-3 sentences",
+  "outro_audio_text": "Jess outro 2-3 sentences",
   "questions": [
     {
-      "question_text": "Which X is this?",
-      "image_prompt": "Pixar-style ... 16:9 cartoon",
-      "options": ["A", "B", "C", "D"],
+      "question_text": "Short on-screen text",
+      "image_prompt": "Pixar-style image prompt",
+      "options": ["A_short", "B_short", "C_short", "D_short"],
       "correct_answer": 0,
       "difficulty": "easy",
-      "fun_fact": "Short fact."
+      "fun_fact": "Fun fact sentence.",
+      "question_audio_text": "Question N. [question_text] Is it A: [opt1], B: [opt2], C: [opt3], or D: [opt4]?",
+      "answer_audio_text": "The correct answer is [Letter]: [correct option]! [fun_fact]"
     }
   ]
 }
@@ -148,9 +165,11 @@ JSON OUTPUT:
 CRITICAL:
 - EXACTLY ${QUESTION_COUNT} questions
 - All in English
-- Image prompts MUST be PIXAR/3D CARTOON, never realistic
+- Image prompts MUST be PIXAR/3D CARTOON
 - All child-safe
-- Answers SHORT (1-3 words)`;
+- Answers SHORT (1-3 words)
+- question_audio_text MUST include all 4 options spoken out loud
+- answer_audio_text MUST include fun_fact at the end`;
 
   const maxRetries = 5;
   const modeller = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
@@ -195,28 +214,36 @@ CRITICAL:
         }
         if (!q.difficulty) q.difficulty = "medium";
         if (!q.fun_fact) q.fun_fact = "";
+        
+        // Audio text alanları varsayılan oluştur (Gemini eksik verirse)
+        if (!q.question_audio_text) {
+          const letters = ["A", "B", "C", "D"];
+          q.question_audio_text = `Question ${i+1}. ${q.question_text} Is it ` +
+            q.options.map((opt, j) => `${letters[j]}: ${opt}`).join(", ") + "?";
+        }
+        if (!q.answer_audio_text) {
+          const letter = ["A", "B", "C", "D"][q.correct_answer];
+          q.answer_audio_text = `The correct answer is ${letter}: ${q.options[q.correct_answer]}! ${q.fun_fact}`;
+        }
       }
       
-      if (!json.intro_text) json.intro_text = "Hi friends! I'm Jess the Fox! Let's play a fun quiz!";
-      if (!json.outro_text) json.outro_text = "Great job! Subscribe for more fun! See you next time!";
+      if (!json.intro_audio_text) json.intro_audio_text = "Hi friends! I'm Jess the Fox! Let's play a fun quiz!";
+      if (!json.outro_audio_text) json.outro_audio_text = "Great job! Subscribe for more fun! See you next time!";
       if (!json.baslik) json.baslik = `${konu} Quiz for Kids!`;
       if (!json.thumbnail_prompt) {
-        json.thumbnail_prompt = `Jess the Fox Pixar-style mascot pointing at colorful ${konu} themed image, question marks, excited expression, vibrant colors, kid-friendly cartoon, 16:9, leave right third empty for text, NO text in image`;
+        json.thumbnail_prompt = `Vibrant ${konu} themed background scenery, Pixar 3D style, NO CHARACTERS, NO ANIMALS, NO PEOPLE, kid-friendly, bright colors, 16:9, NO TEXT`;
       }
       
       json.ai_gorsel_prompts = json.questions.map(q => q.image_prompt);
       json.ai_klip_prompts = [];
       json.pexels_anahtar_kelimeler = [];
       
-      // Senaryo: TTS için ham metin
-      json.senaryo = json.intro_text + "\n\n" +
-        json.questions.map((q, i) =>
-          `Question ${i+1}: ${q.question_text}\n` +
-          q.options.map((opt, j) => `${String.fromCharCode(65+j)}: ${opt}`).join("\n") +
-          `\nThe correct answer is ${String.fromCharCode(65 + q.correct_answer)}: ${q.options[q.correct_answer]}.\n` +
-          (q.fun_fact ? `${q.fun_fact}\n` : "")
-        ).join("\n") +
-        "\n\n" + json.outro_text;
+      // Senaryo: Tüm ses parçalarının birleşimi (backward compat için)
+      json.senaryo = [
+        json.intro_audio_text,
+        ...json.questions.map(q => `${q.question_audio_text} ${q.answer_audio_text}`),
+        json.outro_audio_text
+      ].join("\n\n");
       
       json.tts_telaffuz = json.senaryo;
       json.muzik_mood = "kids";
@@ -258,7 +285,7 @@ async function main() {
       CHAT_ID,
       `🦊 *GeniMini Tests new quiz!*\n\n` +
       `📚 Topic: ${konu}\n` +
-      `📺 Format: ${FORMAT === "shorts" ? "Shorts (60s)" : "Long (10-12 min)"}\n` +
+      `📺 Format: ${FORMAT === "shorts" ? "Shorts (60-90s)" : "Long (10-12 min)"}\n` +
       `🆔 \`${JOB_ID}\`\n\n` +
       `⏳ Generating quiz with Jess...`
     );
@@ -295,7 +322,7 @@ async function main() {
       muzik_mood: icerik.muzik_mood,
     });
     
-    // Questions JSON'unu Drive'a yaz (07-video-montaj için)
+    // questions.json - YENİ FORMAT (audio segments dahil)
     const fs = await import("fs");
     const path = await import("path");
     const tmpDir = "/tmp/quiz-data";
@@ -305,9 +332,9 @@ async function main() {
       format: FORMAT,
       konu: konu,
       baslik: icerik.baslik,
-      intro_text: icerik.intro_text,
-      outro_text: icerik.outro_text,
-      questions: icerik.questions,
+      intro_audio_text: icerik.intro_audio_text,
+      outro_audio_text: icerik.outro_audio_text,
+      questions: icerik.questions, // Her q'da question_audio_text + answer_audio_text var
     }, null, 2));
     
     await driveDosyaYukle(
@@ -323,10 +350,10 @@ async function main() {
       `📝 *Quiz ready!*\n\n` +
       `📌 ${icerik.baslik}\n` +
       `📺 ${FORMAT}\n` +
-      `❓ ${icerik.questions.length} questions\n` +
+      `❓ ${icerik.questions.length} questions (2 audio per question)\n` +
       `🦊 Mascot: Jess the Fox\n\n` +
       `📂 [Drive folder](${anaKlasor.link})\n\n` +
-      `⏳ Generating images, audio, thumbnail...`
+      `⏳ Generating images, audio segments, thumbnail...`
     );
     
     console.log("✅ İçerik üretimi tamam.");
