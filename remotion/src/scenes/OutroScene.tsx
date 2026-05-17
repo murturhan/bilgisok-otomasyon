@@ -13,17 +13,18 @@ import { JessPoses } from "../types/schemas";
 interface OutroSceneProps {
   channelName: string;
   jessPoses: JessPoses;
+  durationFrames: number;
 }
 
 export const OutroScene: React.FC<OutroSceneProps> = ({
   channelName,
   jessPoses,
+  durationFrames,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const isVertical = height > width;
 
-  // Confetti-like floating elements
   const confetti = Array.from({ length: 20 }).map((_, i) => {
     const startY = -50 - (i * 60) % 400;
     const x = (i * 137 + frame * 2) % width;
@@ -32,7 +33,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
     return { x, y, rotation, key: i, emoji: ["🎉", "⭐", "🎊", "✨"][i % 4] };
   });
 
-  // "Thanks" animasyonu
   const thanksAnim = spring({
     frame,
     fps,
@@ -40,7 +40,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   });
   const thanksScale = interpolate(thanksAnim, [0, 1], [0, 1]);
 
-  // Subscribe button pulse
   const subBtnAnim = spring({
     frame: frame - 30,
     fps,
@@ -59,7 +58,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         justifyContent: "center",
       }}
     >
-      {/* Confetti */}
       {confetti.map((c) => (
         <div
           key={c.key}
@@ -76,7 +74,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         </div>
       ))}
 
-      {/* Ana içerik */}
       <div
         style={{
           display: "flex",
@@ -140,7 +137,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         </div>
       </div>
 
-      {/* Jess outro karakter */}
       <JessCharacter
         pose="outro"
         poses={jessPoses}
