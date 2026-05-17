@@ -4,9 +4,9 @@ import { useCurrentFrame, interpolate, Img, staticFile } from "remotion";
 interface JessCharacterProps {
   pose: "intro" | "question" | "thinking" | "correct" | "outro";
   poses: { [key: string]: string | undefined };
-  position?: "center" | "bottom-right" | "bottom-left" | "right" | "left";
-  size?: number; // px (genişlik)
-  animate?: boolean; // yukarı-aşağı yumuşak salınım
+  position?: "center" | "bottom-right" | "bottom-left" | "bottom-center" | "right" | "left";
+  size?: number;
+  animate?: boolean;
 }
 
 export const JessCharacter: React.FC<JessCharacterProps> = ({
@@ -18,23 +18,14 @@ export const JessCharacter: React.FC<JessCharacterProps> = ({
 }) => {
   const frame = useCurrentFrame();
   
-  // Poz dosya yolunu al, yoksa hiç gösterme
   const posePath = poses[pose];
   if (!posePath) {
     return null;
   }
   
-  // Yumuşak salınım (saniyede ~0.5 cycle)
-  const bobbing = animate
-    ? Math.sin(frame * 0.08) * 8 // ±8px yukarı-aşağı
-    : 0;
-  
-  // Hafif rotasyon (saniyede ~0.3 cycle)
-  const rotating = animate
-    ? Math.sin(frame * 0.05) * 1.5 // ±1.5 derece
-    : 0;
+  const bobbing = animate ? Math.sin(frame * 0.08) * 8 : 0;
+  const rotating = animate ? Math.sin(frame * 0.05) * 1.5 : 0;
 
-  // Konum stilleri
   const positionStyles: { [key: string]: React.CSSProperties } = {
     "center": {
       position: "absolute",
@@ -53,6 +44,12 @@ export const JessCharacter: React.FC<JessCharacterProps> = ({
       left: 40,
       bottom: 40 + bobbing,
       transform: `rotate(${rotating}deg)`,
+    },
+    "bottom-center": {
+      position: "absolute",
+      left: "50%",
+      bottom: 20,
+      transform: `translateX(-50%) translateY(${-bobbing}px) rotate(${rotating}deg)`,
     },
     "right": {
       position: "absolute",
@@ -75,7 +72,7 @@ export const JessCharacter: React.FC<JessCharacterProps> = ({
         style={{
           width: size,
           height: "auto",
-          filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.3))",
+          filter: "drop-shadow(0 12px 20px rgba(0,0,0,0.4))",
         }}
       />
     </div>
