@@ -248,16 +248,9 @@ function jessOverlayFilter(jessIndex, videoW, videoH, jessGenislik = null) {
 
 // ─── INTRO video segmenti ──────────────────────────────────────────
 async function introSegmentUret(introYol, jessIntroYol, videoW, videoH) {
-  // Solid gradient arka plan + Jess intro + "GeniMini Tests" başlık
-  // Süre: INTRO_SURE
-  const filterParts = [];
   let inputs = "";
-
-  // Renkli gradient arka plan (color filter)
-  // Mavi → mor → pembe gradient
   inputs += `-f lavfi -t ${INTRO_SURE} -i "color=c=0x7B4CDD:s=${videoW}x${videoH}:r=${FPS}" `;
   
-  // Üst banner: "GENİMİNİ TESTS"
   let vf = `[0:v]drawtext=text='GeniMini Tests':` +
     `fontsize=${Math.floor(videoH * 0.08)}:` +
     `fontcolor=yellow:` +
@@ -269,16 +262,19 @@ async function introSegmentUret(introYol, jessIntroYol, videoW, videoH) {
     `fontcolor=white:` +
     `borderw=4:bordercolor=black:` +
     `x=(w-text_w)/2:y=h*0.28:` +
-    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf[outv]`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf[bg2]`;
 
+  let finalLabel = "bg2";
   if (jessIntroYol && fs.existsSync(jessIntroYol)) {
     inputs += `-loop 1 -t ${INTRO_SURE} -i "${jessIntroYol}" `;
-    // Jess ortada büyük
     const jessW = Math.floor(videoW * 0.5);
     const jessX = `(W-w)/2`;
     const jessY = `H*0.4`;
-    vf += `;[1:v]scale=${jessW}:-1[jess];[outv][jess]overlay=${jessX}:${jessY}[outv]`;
+    vf += `;[1:v]scale=${jessW}:-1[jess];[bg2][jess]overlay=${jessX}:${jessY}[bg3]`;
+    finalLabel = "bg3";
   }
+  
+  vf += `;[${finalLabel}]format=yuv420p[outv]`;
 
   const args = `${inputs} -filter_complex "${vf}" -map "[outv]" -c:v libx264 -preset fast -crf 22 -pix_fmt yuv420p -r ${FPS} -t ${INTRO_SURE} "${introYol}"`;
   await ffmpegCalistir(args, "intro");
@@ -299,13 +295,17 @@ async function outroSegmentUret(outroYol, jessOutroYol, videoW, videoH) {
     `fontcolor=white:` +
     `borderw=4:bordercolor=black:` +
     `x=(w-text_w)/2:y=h*0.85:` +
-    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf[outv]`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf[bg2]`;
 
+  let finalLabel = "bg2";
   if (jessOutroYol && fs.existsSync(jessOutroYol)) {
     inputs += `-loop 1 -t ${OUTRO_SURE} -i "${jessOutroYol}" `;
     const jessW = Math.floor(videoW * 0.5);
-    vf += `;[1:v]scale=${jessW}:-1[jess];[outv][jess]overlay=(W-w)/2:H*0.25[outv]`;
+    vf += `;[1:v]scale=${jessW}:-1[jess];[bg2][jess]overlay=(W-w)/2:H*0.25[bg3]`;
+    finalLabel = "bg3";
   }
+  
+  vf += `;[${finalLabel}]format=yuv420p[outv]`;
 
   const args = `${inputs} -filter_complex "${vf}" -map "[outv]" -c:v libx264 -preset fast -crf 22 -pix_fmt yuv420p -r ${FPS} -t ${OUTRO_SURE} "${outroYol}"`;
   await ffmpegCalistir(args, "outro");
@@ -382,33 +382,36 @@ async function soruSegmentUret({
   const jessX = `W-w-20`;
   const jessY = `H-h-20`;
 
-  // Filter complex inşa
+  // Filter complex inşa - HER ADIM YENİ ETIKET (FFmpeg aynı etiketi hem input hem output kabul etmez)
   let filter = "";
+  let stepIdx = 0; // Etiket sayacı: bg0, bg1, bg2...
 
   // Question gorseli scale + position
   filter += `[1:v]scale=${gorselGenislik}:-1[qimg];`;
-  filter += `[0:v][qimg]overlay=${gorselX}:${gorselY}[bg];`;
+  filter += `[0:v][qimg]overlay=${gorselX}:${gorselY}[bg${stepIdx}];`;
+  let currentLabel = `bg${stepIdx}`;
+  stepIdx++;
 
   // Soru etiketi (üst köşe)
-  filter += `[bg]drawtext=text='${soruEtiketi}':` +
+  filter += `[${currentLabel}]drawtext=text='${soruEtiketi}':` +
     `fontsize=${labelSize}:fontcolor=yellow:` +
     `borderw=3:bordercolor=black:` +
     `x=30:y=30:` +
-    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg${stepIdx}];`;
+  currentLabel = `bg${stepIdx}`;
+  stepIdx++;
 
   // Question text (görselin altında)
-  const qTextY = isVertical
-    ? `H*0.50`
-    : `H*0.18`;
-  filter += `[bg]drawtext=text='${questionText}':` +
+  const qTextY = isVertical ? `H*0.50` : `H*0.18`;
+  filter += `[${currentLabel}]drawtext=text='${questionText}':` +
     `fontsize=${titleSize}:fontcolor=white:` +
     `borderw=4:bordercolor=black:` +
     `x=(w-text_w)/2:y=${qTextY}:` +
-    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg${stepIdx}];`;
+  currentLabel = `bg${stepIdx}`;
+  stepIdx++;
 
-  // Options (4 kutu) - countdown başlayınca görünür
-  // Yatay layout: 2x2 grid
-  // Dikey layout: dikey sıralı
+  // Options (4 kutu)
   const optY = isVertical
     ? [0.58, 0.65, 0.72, 0.79]
     : [0.40, 0.50, 0.60, 0.70];
@@ -419,83 +422,100 @@ async function soruSegmentUret({
   const opts = [opt0, opt1, opt2, opt3];
   for (let i = 0; i < 4; i++) {
     const isCorrect = i === correctIdx;
-    // Reveal'dan sonra doğru cevap yeşil, diğerleri normal
-    const beforeRevealColor = "white";
     const correctRevealColor = "lime";
     const wrongRevealColor = "gray";
 
-    // İki overlay: t0-t3 normal, t3-t5 yeşil/gri
-    filter += `[bg]drawtext=text='${opts[i]}':` +
+    filter += `[${currentLabel}]drawtext=text='${opts[i]}':` +
       `fontsize=${optionSize}:` +
       `fontcolor='if(lt(t\\,${t3})\\,white\\,${isCorrect ? correctRevealColor : wrongRevealColor})':` +
       `borderw=3:bordercolor=black:` +
       `box=1:boxcolor='if(lt(t\\,${t3})\\,0x000000AA\\,${isCorrect ? "0x00CC00CC" : "0x44444499"})':boxborderw=8:` +
       `x=W*${optX[i]}:y=H*${optY[i]}:` +
       `enable='gte(t,${t1})':` +
-      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
+      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg${stepIdx}];`;
+    currentLabel = `bg${stepIdx}`;
+    stepIdx++;
   }
 
-  // Geri sayım: 5,4,3,2,1 (t1'den t2'ye, her saniye)
+  // Geri sayım: 5,4,3,2,1
   for (let n = 5; n >= 1; n--) {
     const showStart = t1 + (5 - n);
     const showEnd = showStart + 1.0;
-    filter += `[bg]drawtext=text='${n}':` +
+    filter += `[${currentLabel}]drawtext=text='${n}':` +
       `fontsize=${counterSize}:fontcolor=yellow:` +
       `borderw=8:bordercolor=red:` +
       `x=(w-text_w)/2:y=h*0.85:` +
       `enable='between(t,${showStart.toFixed(2)},${showEnd.toFixed(2)})':` +
-      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
+      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg${stepIdx}];`;
+    currentLabel = `bg${stepIdx}`;
+    stepIdx++;
   }
 
-  // Drum roll fazı (t2-t3): "..."
-  filter += `[bg]drawtext=text='Drumroll\\!':` +
+  // Drum roll
+  filter += `[${currentLabel}]drawtext=text='Drumroll\\!':` +
     `fontsize=${revealSize}:fontcolor=orange:` +
     `borderw=5:bordercolor=black:` +
     `x=(w-text_w)/2:y=h*0.85:` +
     `enable='between(t,${t2.toFixed(2)},${t3.toFixed(2)})':` +
-    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg${stepIdx}];`;
+  currentLabel = `bg${stepIdx}`;
+  stepIdx++;
 
-  // Reveal banner (t3-t4): "Correct: C: Eagle"
-  filter += `[bg]drawtext=text='${correctAnswerText}':` +
+  // Reveal banner
+  filter += `[${currentLabel}]drawtext=text='${correctAnswerText}':` +
     `fontsize=${revealSize}:fontcolor=lime:` +
     `borderw=5:bordercolor=black:` +
     `box=1:boxcolor=0x000000CC:boxborderw=12:` +
     `x=(w-text_w)/2:y=h*0.85:` +
     `enable='between(t,${t3.toFixed(2)},${t4.toFixed(2)})':` +
-    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg${stepIdx}];`;
+  currentLabel = `bg${stepIdx}`;
+  stepIdx++;
 
-  // Fun fact (t4-t5)
+  // Fun fact
   if (question.fun_fact) {
-    // Wrap long fun fact
-    filter += `[bg]drawtext=text='Did you know?':` +
+    filter += `[${currentLabel}]drawtext=text='Did you know?':` +
       `fontsize=${labelSize}:fontcolor=cyan:` +
       `borderw=3:bordercolor=black:` +
       `x=(w-text_w)/2:y=h*0.80:` +
       `enable='between(t,${t4.toFixed(2)},${t5.toFixed(2)})':` +
-      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg];`;
-    filter += `[bg]drawtext=text='${funFactText}':` +
+      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf[bg${stepIdx}];`;
+    currentLabel = `bg${stepIdx}`;
+    stepIdx++;
+    
+    filter += `[${currentLabel}]drawtext=text='${funFactText}':` +
       `fontsize=${funFactSize}:fontcolor=white:` +
       `borderw=3:bordercolor=black:` +
       `box=1:boxcolor=0x000000AA:boxborderw=10:` +
       `x=(w-text_w)/2:y=h*0.86:` +
       `enable='between(t,${t4.toFixed(2)},${t5.toFixed(2)})':` +
-      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf[bg];`;
+      `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf[bg${stepIdx}];`;
+    currentLabel = `bg${stepIdx}`;
+    stepIdx++;
   }
 
   // Jess overlay'leri (faz bazlı)
   if (hasJess) {
     // t0-t1: question pose
     filter += `[2:v]scale=${jessW}:-1[jess_q];`;
-    filter += `[bg][jess_q]overlay=${jessX}:${jessY}:enable='between(t,${t0.toFixed(2)},${t1.toFixed(2)})'[bg];`;
+    filter += `[${currentLabel}][jess_q]overlay=${jessX}:${jessY}:enable='between(t,${t0.toFixed(2)},${t1.toFixed(2)})'[bg${stepIdx}];`;
+    currentLabel = `bg${stepIdx}`;
+    stepIdx++;
+    
     // t1-t3: thinking pose
     filter += `[3:v]scale=${jessW}:-1[jess_t];`;
-    filter += `[bg][jess_t]overlay=${jessX}:${jessY}:enable='between(t,${t1.toFixed(2)},${t3.toFixed(2)})'[bg];`;
+    filter += `[${currentLabel}][jess_t]overlay=${jessX}:${jessY}:enable='between(t,${t1.toFixed(2)},${t3.toFixed(2)})'[bg${stepIdx}];`;
+    currentLabel = `bg${stepIdx}`;
+    stepIdx++;
+    
     // t3-t5: correct pose
     filter += `[4:v]scale=${jessW}:-1[jess_c];`;
-    filter += `[bg][jess_c]overlay=${jessX}:${jessY}:enable='between(t,${t3.toFixed(2)},${t5.toFixed(2)})'[bg];`;
+    filter += `[${currentLabel}][jess_c]overlay=${jessX}:${jessY}:enable='between(t,${t3.toFixed(2)},${t5.toFixed(2)})'[bg${stepIdx}];`;
+    currentLabel = `bg${stepIdx}`;
+    stepIdx++;
   }
 
-  filter += `[bg]format=yuv420p[outv]`;
+  filter += `[${currentLabel}]format=yuv420p[outv]`;
 
   const args = `${inputs} -filter_complex "${filter}" -map "[outv]" -c:v libx264 -preset fast -crf 22 -pix_fmt yuv420p -r ${FPS} -t ${SORU_TOPLAM_SURE} "${ciktiYol}"`;
   await ffmpegCalistir(args, `soru-${soruNo}`);
