@@ -1,34 +1,58 @@
-import { FRAMES, FPS, TIMING } from "../styles/theme";
+import { FPS, FIXED_FRAMES } from "../styles/theme";
+import { Question } from "../types/schemas";
 
-// Bir sorunun başlangıç frame'i (intro sonrasında)
-export function questionStartFrame(questionIndex: number): number {
-  return FRAMES.intro + (questionIndex * FRAMES.questionTotal);
+// Bir soru için faz başlangıç frame'leri (soru başlangıcına göre relatif)
+export interface QuestionPhases {
+  show: number;      // 0
+  countdown: number; // question_audio_duration
+  drumRoll: number;  // + countdown
+  reveal: number;    // + drumRoll (answer audio start)
+  transition: number; // + answer_audio_duration
+  end: number;       // + transition
 }
 
-// Bir soru içindeki fazların başlangıç frame'leri (soru başlangıcına göre relatif)
-export const QUESTION_PHASE_FRAMES = {
-  show: 0,
-  countdown: FRAMES.questionShow,
-  drumRoll: FRAMES.questionShow + FRAMES.countdown,
-  reveal: FRAMES.questionShow + FRAMES.countdown + FRAMES.drumRoll,
-  funFact: FRAMES.questionShow + FRAMES.countdown + FRAMES.drumRoll + FRAMES.reveal,
-  transition: FRAMES.questionShow + FRAMES.countdown + FRAMES.drumRoll + FRAMES.reveal + FRAMES.funFact,
-  rest: FRAMES.questionShow + FRAMES.countdown + FRAMES.drumRoll + FRAMES.reveal + FRAMES.funFact + FRAMES.transition,
-};
+export function computeQuestionPhases(question: Question): QuestionPhases {
+  const qFrames = Math.ceil(question.question_audio_duration * FPS);
+  const aFrames = Math.ceil(question.answer_audio_duration * FPS);
+  
+  const show = 0;
+  const countdown = show + qFrames;
+  const drumRoll = countdown + FIXED_FRAMES.countdown;
+  const reveal = drumRoll + FIXED_FRAMES.drumRoll;
+  const transition = reveal + aFrames;
+  const end = transition + FIXED_FRAMES.transition;
+  
+  return { show, countdown, drumRoll, reveal, transition, end };
+}
+
+// Bir sorunun başlangıç frame'i (intro + tüm önceki soruların süresi)
+export function questionStartFrame(
+  questionIndex: number,
+  introDuration: number,
+  questions: Question[]
+): number {
+  let frame = Math.ceil(introDuration * FPS);
+  for (let i = 0; i < questionIndex; i++) {
+    const phases = computeQuestionPhases(questions[i]);
+    frame += phases.end;
+  }
+  return frame;
+}
 
 // Outro başlangıç frame'i
-export function outroStartFrame(questionCount: number): number {
-  return FRAMES.intro + (questionCount * FRAMES.questionTotal);
+export function outroStartFrame(
+  introDuration: number,
+  questions: Question[]
+): number {
+  let frame = Math.ceil(introDuration * FPS);
+  for (const q of questions) {
+    const phases = computeQuestionPhases(q);
+    frame += phases.end;
+  }
+  return frame;
 }
 
-// Frame to seconds
+// Frame to second
 export function frameToSecond(frame: number): number {
   return frame / FPS;
-}
-
-// Bir aralıkta normalize ilerleme (0-1) - animasyonlar için
-export function rangeProgress(currentFrame: number, startFrame: number, endFrame: number): number {
-  if (currentFrame < startFrame) return 0;
-  if (currentFrame > endFrame) return 1;
-  return (currentFrame - startFrame) / (endFrame - startFrame);
 }
