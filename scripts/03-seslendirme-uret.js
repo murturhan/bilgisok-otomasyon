@@ -166,18 +166,43 @@ async function sesParcasiUret(metin, ciktiAdi, accessToken, tmpDir) {
   };
 }
 
-// ─── questions.json'u Drive'dan oku ────────────────────────────
+// ─── questions.json'u Drive'dan oku (önce 02-ses, sonra ana klasör) ────
 async function questionsJsonOku(jobFolderId, auth, hedefYol) {
   const drive = google.drive({ version: "v3", auth });
-  const res = await drive.files.list({
-    q: `'${jobFolderId}' in parents and name='questions.json' and trashed=false`,
-    fields: "files(id, name)",
-    pageSize: 1,
-  });
-  if (!res.data.files || res.data.files.length === 0) return null;
+  
+  // 1. Önce 02-ses alt klasöründe ara
+  const sesKlasor = await driveAltKlasorBul("02-ses", jobFolderId);
+  let fileId = null;
+  
+  if (sesKlasor.length > 0) {
+    const res1 = await drive.files.list({
+      q: `'${sesKlasor[0].id}' in parents and name='questions.json' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 1,
+    });
+    if (res1.data.files && res1.data.files.length > 0) {
+      fileId = res1.data.files[0].id;
+      console.log("✓ questions.json '02-ses' klasöründe bulundu");
+    }
+  }
+  
+  // 2. Bulunmadıysa ana klasörde ara (backward compat)
+  if (!fileId) {
+    const res2 = await drive.files.list({
+      q: `'${jobFolderId}' in parents and name='questions.json' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 1,
+    });
+    if (res2.data.files && res2.data.files.length > 0) {
+      fileId = res2.data.files[0].id;
+      console.log("✓ questions.json ana klasörde bulundu (eski format)");
+    }
+  }
+  
+  if (!fileId) return null;
   
   const stream = await drive.files.get(
-    { fileId: res.data.files[0].id, alt: "media" },
+    { fileId, alt: "media" },
     { responseType: "stream" }
   );
   
