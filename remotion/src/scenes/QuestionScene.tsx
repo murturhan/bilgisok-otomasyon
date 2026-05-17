@@ -5,9 +5,11 @@ import {
   useVideoConfig,
   interpolate,
   spring,
+  Audio,
+  staticFile,
   Sequence,
 } from "remotion";
-import { COLORS, FONTS, FRAMES } from "../styles/theme";
+import { COLORS, FONTS, FIXED_FRAMES, FPS } from "../styles/theme";
 import { Question, JessPoses } from "../types/schemas";
 import { JessCharacter } from "../components/JessCharacter";
 import { AnswerBox } from "../components/AnswerBox";
@@ -15,11 +17,11 @@ import { CountdownTimer } from "../components/CountdownTimer";
 import { QuestionImage } from "../components/QuestionImage";
 import { FunFactBanner } from "../components/FunFactBanner";
 import { HeaderBar } from "../components/HeaderBar";
-import { QUESTION_PHASE_FRAMES } from "../utils/timing";
+import { computeQuestionPhases } from "../utils/timing";
 
 interface QuestionSceneProps {
   question: Question;
-  imageSrc: string; // Bu sorunun görseli (Drive'dan indirildi, staticFile path)
+  imageSrc: string;
   questionNumber: number;
   totalQuestions: number;
   jessPoses: JessPoses;
@@ -38,39 +40,38 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   const { width, height, fps } = useVideoConfig();
   const isVertical = height > width;
 
-  // Faz başlangıç frame'leri (relatif - 0'dan başlar)
-  const phases = QUESTION_PHASE_FRAMES;
+  // DİNAMİK faz frame'leri - her sorunun kendi audio süresine göre
+  const phases = computeQuestionPhases(question);
   
   // Hangi fazdayız?
-  const inShow = frame < phases.countdown;
-  const inCountdown = frame >= phases.countdown && frame < phases.drumRoll;
-  const inDrumRoll = frame >= phases.drumRoll && frame < phases.reveal;
-  const inReveal = frame >= phases.reveal && frame < phases.funFact;
-  const inFunFact = frame >= phases.funFact && frame < phases.transition;
-  const inTransition = frame >= phases.transition && frame < phases.rest;
+  const inShow = frame < phases.countdown;        // question_audio_text söylenirken
+  const inCountdown = frame >= phases.countdown && frame < phases.drumRoll; // 5sn
+  const inDrumRoll = frame >= phases.drumRoll && frame < phases.reveal;     // 2sn
+  const inReveal = frame >= phases.reveal && frame < phases.transition;    // answer_audio_text
+  const inTransition = frame >= phases.transition && frame < phases.end;   // 1sn nefes
   
-  // Jess pose kontrolü
+  // Jess pose
   let currentJessPose: keyof JessPoses = "question";
   if (inShow) currentJessPose = "question";
   else if (inCountdown || inDrumRoll) currentJessPose = "thinking";
-  else if (inReveal || inFunFact) currentJessPose = "correct";
+  else if (inReveal) currentJessPose = "correct";
 
-  // Transition fade-out (son saniyelerde)
+  // Transition fade-out
   const fadeOut = inTransition
     ? interpolate(
         frame - phases.transition,
-        [0, FRAMES.transition],
+        [0, FIXED_FRAMES.transition],
         [1, 0.3],
         { extrapolateRight: "clamp" }
       )
     : 1;
 
-  // Görsel ve soru metni layout farkları
+  // Görsel/metin boyutları
   const imageWidth = isVertical
     ? width - 80
     : Math.floor(width * 0.42);
   const imageHeight = isVertical
-    ? Math.floor((width - 80) * 0.75)
+    ? Math.floor((width - 80) * 0.62)
     : Math.floor(height * 0.5);
 
   return (
@@ -80,6 +81,20 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         opacity: fadeOut,
       }}
     >
+      {/* Audio: Question text (show fazı boyunca) */}
+      {question.question_audio_path && (
+        <Sequence from={phases.show} durationInFrames={phases.countdown - phases.show}>
+          <Audio src={staticFile(question.question_audio_path)} volume={1.2} />
+        </Sequence>
+      )}
+      
+      {/* Audio: Answer text (reveal fazı boyunca) */}
+      {question.answer_audio_path && (
+        <Sequence from={phases.reveal} durationInFrames={phases.transition - phases.reveal}>
+          <Audio src={staticFile(question.answer_audio_path)} volume={1.2} />
+        </Sequence>
+      )}
+
       {/* Header */}
       <HeaderBar
         channelName={channelName}
@@ -88,7 +103,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         height={isVertical ? 90 : 110}
       />
 
-      {/* Ana içerik - yatay layout */}
+      {/* YATAY LAYOUT (long) */}
       {!isVertical && (
         <div
           style={{
@@ -124,7 +139,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
             />
           </div>
 
-          {/* Sağ: 4 cevap kutusu + timer */}
+          {/* Sağ: cevap kutuları / reveal */}
           <div
             style={{
               flex: 1,
@@ -135,18 +150,16 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
               maxWidth: 800,
             }}
           >
-            {/* Reveal'dan önce kutular göster */}
-            {!inReveal && !inFunFact && !inTransition && (
+            {!inReveal && !inTransition && (
               <>
-                <AnswerBox letter="A" text={question.options[0]} isCorrect={question.correct_answer === 0} showFrame={phases.show} revealFrame={phases.reveal} index={0} layout="horizontal" />
-                <AnswerBox letter="B" text={question.options[1]} isCorrect={question.correct_answer === 1} showFrame={phases.show} revealFrame={phases.reveal} index={1} layout="horizontal" />
-                <AnswerBox letter="C" text={question.options[2]} isCorrect={question.correct_answer === 2} showFrame={phases.show} revealFrame={phases.reveal} index={2} layout="horizontal" />
-                <AnswerBox letter="D" text={question.options[3]} isCorrect={question.correct_answer === 3} showFrame={phases.show} revealFrame={phases.reveal} index={3} layout="horizontal" />
+                <AnswerBox letter="A" text={question.options[0]} isCorrect={question.correct_answer === 0} showFrame={phases.show + 15} revealFrame={phases.reveal} index={0} layout="horizontal" />
+                <AnswerBox letter="B" text={question.options[1]} isCorrect={question.correct_answer === 1} showFrame={phases.show + 15} revealFrame={phases.reveal} index={1} layout="horizontal" />
+                <AnswerBox letter="C" text={question.options[2]} isCorrect={question.correct_answer === 2} showFrame={phases.show + 15} revealFrame={phases.reveal} index={2} layout="horizontal" />
+                <AnswerBox letter="D" text={question.options[3]} isCorrect={question.correct_answer === 3} showFrame={phases.show + 15} revealFrame={phases.reveal} index={3} layout="horizontal" />
               </>
             )}
 
-            {/* Reveal sırasında sadece doğru cevap büyük göster */}
-            {(inReveal || inFunFact) && (
+            {(inReveal) && (
               <CorrectAnswerHighlight
                 letter={["A", "B", "C", "D"][question.correct_answer]}
                 text={question.options[question.correct_answer]}
@@ -154,12 +167,11 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
               />
             )}
 
-            {/* Timer (countdown fazı) */}
             {inCountdown && (
               <div style={{ marginTop: 30 }}>
                 <CountdownTimer
                   startFrame={phases.countdown}
-                  durationFrames={FRAMES.countdown}
+                  durationFrames={FIXED_FRAMES.countdown}
                   width="100%"
                   showNumber={false}
                 />
@@ -169,7 +181,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </div>
       )}
 
-      {/* Ana içerik - dikey layout (shorts) */}
+      {/* DİKEY LAYOUT (shorts) */}
       {isVertical && (
         <div
           style={{
@@ -196,16 +208,16 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
             isCompact
           />
 
-          {!inReveal && !inFunFact && !inTransition && (
+          {!inReveal && !inTransition && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
-              <AnswerBox letter="A" text={question.options[0]} isCorrect={question.correct_answer === 0} showFrame={phases.show} revealFrame={phases.reveal} index={0} layout="vertical" />
-              <AnswerBox letter="B" text={question.options[1]} isCorrect={question.correct_answer === 1} showFrame={phases.show} revealFrame={phases.reveal} index={1} layout="vertical" />
-              <AnswerBox letter="C" text={question.options[2]} isCorrect={question.correct_answer === 2} showFrame={phases.show} revealFrame={phases.reveal} index={2} layout="vertical" />
-              <AnswerBox letter="D" text={question.options[3]} isCorrect={question.correct_answer === 3} showFrame={phases.show} revealFrame={phases.reveal} index={3} layout="vertical" />
+              <AnswerBox letter="A" text={question.options[0]} isCorrect={question.correct_answer === 0} showFrame={phases.show + 15} revealFrame={phases.reveal} index={0} layout="vertical" />
+              <AnswerBox letter="B" text={question.options[1]} isCorrect={question.correct_answer === 1} showFrame={phases.show + 15} revealFrame={phases.reveal} index={1} layout="vertical" />
+              <AnswerBox letter="C" text={question.options[2]} isCorrect={question.correct_answer === 2} showFrame={phases.show + 15} revealFrame={phases.reveal} index={2} layout="vertical" />
+              <AnswerBox letter="D" text={question.options[3]} isCorrect={question.correct_answer === 3} showFrame={phases.show + 15} revealFrame={phases.reveal} index={3} layout="vertical" />
               {inCountdown && (
                 <CountdownTimer
                   startFrame={phases.countdown}
-                  durationFrames={FRAMES.countdown}
+                  durationFrames={FIXED_FRAMES.countdown}
                   width="100%"
                   showNumber={false}
                 />
@@ -213,7 +225,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
             </div>
           )}
 
-          {(inReveal || inFunFact) && (
+          {inReveal && (
             <CorrectAnswerHighlight
               letter={["A", "B", "C", "D"][question.correct_answer]}
               text={question.options[question.correct_answer]}
@@ -223,21 +235,21 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </div>
       )}
 
-      {/* Drum roll metni - ortada büyük */}
+      {/* Drum roll metni */}
       {inDrumRoll && (
         <DrumRollBanner startFrame={phases.drumRoll} />
       )}
 
-      {/* Büyük geri sayım numarası - ortada */}
+      {/* Geri sayım büyük rakamı */}
       {inCountdown && (
         <BigCountdownNumber
           startFrame={phases.countdown}
-          durationFrames={FRAMES.countdown}
+          durationFrames={FIXED_FRAMES.countdown}
         />
       )}
 
-      {/* Fun fact (funFact fazı) */}
-      {inFunFact && question.fun_fact && (
+      {/* Fun fact - reveal fazının ikinci yarısında */}
+      {inReveal && question.fun_fact && (
         <div
           style={{
             position: "absolute",
@@ -251,8 +263,8 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         >
           <FunFactBanner
             text={question.fun_fact}
-            showFrame={phases.funFact}
-            width={isVertical ? "92%" : "80%"}
+            showFrame={phases.reveal + 30} // 1 saniye gecikme
+            width={isVertical ? "92%" : "70%"}
           />
         </div>
       )}
@@ -326,7 +338,6 @@ const BigCountdownNumber: React.FC<{
   const elapsed = frame - startFrame;
   const remainingSeconds = Math.max(1, Math.ceil((durationFrames - elapsed) / fps));
   
-  // Her saniyenin başında pulse
   const secondInTime = elapsed % fps;
   const pulse = secondInTime < 6
     ? interpolate(secondInTime, [0, 6], [1.8, 1.0])
@@ -376,7 +387,6 @@ const DrumRollBanner: React.FC<{ startFrame: number }> = ({ startFrame }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
-  // Sallanma animasyonu
   const shake = Math.sin(frame * 0.8) * 5;
   
   const enterAnim = spring({
@@ -435,7 +445,6 @@ const CorrectAnswerHighlight: React.FC<{
   const scale = interpolate(enterAnim, [0, 1], [0.3, 1]);
   const rotation = interpolate(enterAnim, [0, 1], [-15, 0]);
   
-  // Pulsing glow
   const glowIntensity = 30 + Math.sin(frame * 0.2) * 20;
 
   return (
