@@ -1,10 +1,10 @@
 /**
- * 05 - Thumbnail Üretimi v8 (GeniMini Kids Quiz)
- * v7'den farkı:
- * - Format'a göre boyut dinamik:
- *   - Shorts (dikey): 1080×1920 (9:16)
- *   - Long (yatay): 1280×720 (16:9)
- * - Tasarım her iki formata uyarlandı (dikeyde alt-üst, yatayda sol-sağ)
+ * 05 - Thumbnail Üretimi v9 (GeniMini Kids Quiz)
+ * v8'den farkı:
+ * - thumbnail_baslik (2-3 kelime kısa) kullanılıyor - sığar, kırpılmaz
+ * - Minimal layout: Jess BÜYÜK ortada, başlık üstte küçük banner
+ * - "Monkey Quiz / TriviawithIbiza" tarzı temiz tasarım
+ * - Format'a göre 9:16 (Shorts) veya 16:9 (Long)
  */
 
 import fs from "fs";
@@ -28,193 +28,12 @@ function delay(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-// Format tespit
 async function formatTespit(jobFolderId, auth) {
   const drive = google.drive({ version: "v3", auth });
   const res = await drive.files.get({ fileId: jobFolderId, fields: "name" });
   const klasorAdi = res.data.name || "";
   if (klasorAdi.toLowerCase().includes("-shorts-")) return "shorts";
   return "long";
-}
-
-// Başlık 2 satıra böl
-function basligiBol(baslikTam) {
-  // Emoji'yi temizle
-  const temiz = baslikTam.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{2700}-\u{27BF}]/gu, "").trim();
-  
-  // : varsa ondan böl
-  if (temiz.includes(":")) {
-    const [ana, alt] = temiz.split(":", 2);
-    return { ana: ana.trim().toUpperCase(), alt: alt.trim() };
-  }
-  
-  // Yoksa kelime başı uzun cümleyi ortadan böl
-  const words = temiz.split(" ");
-  if (words.length <= 4) {
-    return { ana: temiz.toUpperCase(), alt: "" };
-  }
-  
-  const mid = Math.ceil(words.length / 2);
-  return {
-    ana: words.slice(0, mid).join(" ").toUpperCase(),
-    alt: words.slice(mid).join(" "),
-  };
-}
-
-// SVG metin overlay - Shorts (dikey 1080x1920)
-function metinSvgShorts(baslikTam) {
-  const { ana, alt } = basligiBol(baslikTam);
-  const width = 1080;
-  const height = 1920;
-  
-  // Üst yarıda mavi şerit, alt yarıda Jess olacak
-  // Metin: üst kısımda büyük
-  
-  let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
-  
-  // Üst yarıda yarı şeffaf yatay şerit (metin bloğu)
-  svg += `<defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="rgba(123, 76, 221, 0.92)"/>
-      <stop offset="100%" stop-color="rgba(255, 87, 166, 0.92)"/>
-    </linearGradient>
-  </defs>`;
-  
-  // Üst banner
-  const bannerY = 200;
-  const bannerH = 600;
-  svg += `<rect x="0" y="${bannerY}" width="${width}" height="${bannerH}" fill="url(#bgGrad)"/>`;
-  svg += `<rect x="0" y="${bannerY}" width="${width}" height="12" fill="#FFD700"/>`;
-  svg += `<rect x="0" y="${bannerY + bannerH - 12}" width="${width}" height="12" fill="#FFD700"/>`;
-  
-  // Ana başlık (büyük sarı)
-  const anaFontSize = ana.length > 16 ? 110 : 140;
-  const anaWords = ana.split(" ");
-  
-  let anaSatirlar = [];
-  if (anaWords.length <= 3 && ana.length <= 18) {
-    anaSatirlar = [ana];
-  } else {
-    // 2 satıra böl
-    const mid = Math.ceil(anaWords.length / 2);
-    anaSatirlar = [
-      anaWords.slice(0, mid).join(" "),
-      anaWords.slice(mid).join(" "),
-    ];
-  }
-  
-  const anaY = bannerY + 150;
-  anaSatirlar.forEach((satir, i) => {
-    svg += `<text x="${width/2}" y="${anaY + i * (anaFontSize + 20)}"
-              font-family="Lilita One, Comic Sans MS, Arial Black, sans-serif"
-              font-size="${anaFontSize}" font-weight="900" fill="#FFD700"
-              stroke="#000000" stroke-width="8" paint-order="stroke"
-              text-anchor="middle">${escapeXml(satir)}</text>`;
-  });
-  
-  // Alt başlık (beyaz, küçük)
-  if (alt) {
-    const altY = bannerY + bannerH - 80;
-    svg += `<text x="${width/2}" y="${altY}"
-              font-family="Lilita One, Comic Sans MS, Arial, sans-serif"
-              font-size="56" font-weight="700" fill="#FFFFFF"
-              stroke="#000000" stroke-width="4" paint-order="stroke"
-              text-anchor="middle">${escapeXml(alt)}</text>`;
-  }
-  
-  // QUIZ! rozeti - sağ üst
-  svg += `<g transform="translate(${width - 140}, 130)">
-    <circle cx="0" cy="0" r="90" fill="#FF5722" stroke="#000000" stroke-width="8"/>
-    <text x="0" y="20" font-family="Lilita One, Comic Sans MS, sans-serif"
-          font-size="54" font-weight="900" fill="#FFFFFF" text-anchor="middle"
-          stroke="#000000" stroke-width="3" paint-order="stroke">QUIZ!</text>
-  </g>`;
-  
-  // Soru işareti - sol üst
-  svg += `<g transform="translate(120, 130)">
-    <circle cx="0" cy="0" r="80" fill="#4FC3F7" stroke="#000000" stroke-width="8"/>
-    <text x="0" y="30" font-family="Lilita One, Comic Sans MS, sans-serif"
-          font-size="100" font-weight="900" fill="#FFFFFF" text-anchor="middle"
-          stroke="#000000" stroke-width="4" paint-order="stroke">?</text>
-  </g>`;
-  
-  svg += `</svg>`;
-  return svg;
-}
-
-// SVG metin overlay - Long (yatay 1280x720)
-function metinSvgLong(baslikTam) {
-  const { ana, alt } = basligiBol(baslikTam);
-  const width = 1280;
-  const height = 720;
-  
-  // Sağ yarıda metin bloğu
-  const blokGenislik = 640;
-  const blokX = width - blokGenislik;
-  
-  let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
-  
-  svg += `<defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="rgba(123, 76, 221, 0.92)"/>
-      <stop offset="100%" stop-color="rgba(255, 87, 166, 0.92)"/>
-    </linearGradient>
-  </defs>`;
-  
-  // Sağ panel
-  svg += `<rect x="${blokX}" y="0" width="${blokGenislik}" height="${height}" fill="url(#bgGrad)"/>`;
-  svg += `<rect x="${blokX}" y="0" width="8" height="${height}" fill="#FFD700"/>`;
-  
-  // Ana metin - sağ panelin ortasında
-  const anaFontSize = ana.length > 16 ? 70 : 90;
-  const anaWords = ana.split(" ");
-  let anaSatirlar = [];
-  if (ana.length <= 14) {
-    anaSatirlar = [ana];
-  } else {
-    const mid = Math.ceil(anaWords.length / 2);
-    anaSatirlar = [
-      anaWords.slice(0, mid).join(" "),
-      anaWords.slice(mid).join(" "),
-    ];
-  }
-  
-  const anaY = height/2 - (alt ? 30 : 0);
-  anaSatirlar.forEach((satir, i) => {
-    svg += `<text x="${blokX + blokGenislik/2}" y="${anaY + i * (anaFontSize + 15)}"
-              font-family="Lilita One, Comic Sans MS, Arial Black, sans-serif"
-              font-size="${anaFontSize}" font-weight="900" fill="#FFD700"
-              stroke="#000000" stroke-width="6" paint-order="stroke"
-              text-anchor="middle">${escapeXml(satir)}</text>`;
-  });
-  
-  if (alt) {
-    const altY = height/2 + anaSatirlar.length * (anaFontSize + 15) + 30;
-    svg += `<text x="${blokX + blokGenislik/2}" y="${altY}"
-              font-family="Lilita One, Comic Sans MS, Arial, sans-serif"
-              font-size="38" font-weight="700" fill="#FFFFFF"
-              stroke="#000000" stroke-width="3" paint-order="stroke"
-              text-anchor="middle">${escapeXml(alt)}</text>`;
-  }
-  
-  // QUIZ! rozeti sol üst (Jess'in üzerinde değil, FLUX bg kısmında)
-  svg += `<g transform="translate(120, 80)">
-    <circle cx="0" cy="0" r="55" fill="#FF5722" stroke="#000000" stroke-width="5"/>
-    <text x="0" y="13" font-family="Lilita One, Comic Sans MS, sans-serif"
-          font-size="32" font-weight="900" fill="#FFFFFF" text-anchor="middle"
-          stroke="#000000" stroke-width="2" paint-order="stroke">QUIZ!</text>
-  </g>`;
-  
-  // ? rozet sağ alt - metnin alt köşesi
-  svg += `<g transform="translate(${width - 80}, ${height - 80})">
-    <circle cx="0" cy="0" r="45" fill="#4FC3F7" stroke="#000000" stroke-width="5"/>
-    <text x="0" y="16" font-family="Lilita One, Comic Sans MS, sans-serif"
-          font-size="54" font-weight="900" fill="#FFFFFF" text-anchor="middle"
-          stroke="#000000" stroke-width="3" paint-order="stroke">?</text>
-  </g>`;
-  
-  svg += `</svg>`;
-  return svg;
 }
 
 function escapeXml(s) {
@@ -226,20 +45,166 @@ function escapeXml(s) {
     .replace(/'/g, "&apos;");
 }
 
+// SVG - Shorts (1080×1920 dikey)
+// Layout:
+//   Üst (250px): "QUIZ" rozeti sol, "?" rozeti sağ
+//   Banner (250-450): Başlık (kısa, büyük)
+//   Orta-Alt (450-1500): Jess + FLUX background
+//   Alt (1500-1920): "5 Q's" rozeti sağ alt, GeniMini logosu sol alt
+function svgShorts(baslik, format) {
+  const W = 1080, H = 1920;
+  const t = escapeXml(baslik.toUpperCase());
+  
+  // Tek satır mı çift satır mı (≤10 char tek, fazla çift)?
+  const kelimeler = t.split(" ");
+  let satirlar;
+  if (t.length <= 14) {
+    satirlar = [t];
+  } else {
+    const mid = Math.ceil(kelimeler.length / 2);
+    satirlar = [kelimeler.slice(0, mid).join(" "), kelimeler.slice(mid).join(" ")];
+  }
+  
+  const fontSize = satirlar.length === 1 ? 180 : 150;
+  
+  // Üst banner Y koordinatları
+  const bannerY = 250;
+  const bannerH = 320;
+  
+  let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  
+  // Gradient defs
+  svg += `<defs>
+    <linearGradient id="bannerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7B4CDD"/>
+      <stop offset="100%" stop-color="#FF57A6"/>
+    </linearGradient>
+  </defs>`;
+  
+  // ÜST BANNER (başlık alanı)
+  svg += `<rect x="0" y="${bannerY}" width="${W}" height="${bannerH}" fill="url(#bannerGrad)"/>`;
+  // Üst-alt sarı çizgiler
+  svg += `<rect x="0" y="${bannerY - 8}" width="${W}" height="16" fill="#FFD700"/>`;
+  svg += `<rect x="0" y="${bannerY + bannerH - 8}" width="${W}" height="16" fill="#FFD700"/>`;
+  
+  // BAŞLIK (1 veya 2 satır)
+  const totalH = satirlar.length * (fontSize + 30) - 30;
+  const startY = bannerY + (bannerH - totalH) / 2 + fontSize - 20;
+  satirlar.forEach((s, i) => {
+    const y = startY + i * (fontSize + 30);
+    svg += `<text x="${W/2}" y="${y}"
+              font-family="Lilita One, Comic Sans MS, Impact, Arial Black, sans-serif"
+              font-size="${fontSize}" font-weight="900" fill="#FFD700"
+              stroke="#000000" stroke-width="10" paint-order="stroke"
+              text-anchor="middle">${s}</text>`;
+  });
+  
+  // SOL ÜST - "?" rozeti
+  svg += `<g transform="translate(140, 140)">
+    <circle cx="0" cy="0" r="100" fill="#4FC3F7" stroke="#000000" stroke-width="10"/>
+    <text x="0" y="40" font-family="Lilita One, sans-serif"
+          font-size="130" font-weight="900" fill="#FFFFFF" text-anchor="middle"
+          stroke="#000000" stroke-width="5" paint-order="stroke">?</text>
+  </g>`;
+  
+  // SAĞ ÜST - "QUIZ" rozeti
+  svg += `<g transform="translate(${W - 140}, 140)">
+    <circle cx="0" cy="0" r="100" fill="#FF5722" stroke="#000000" stroke-width="10"/>
+    <text x="0" y="20" font-family="Lilita One, sans-serif"
+          font-size="60" font-weight="900" fill="#FFFFFF" text-anchor="middle"
+          stroke="#000000" stroke-width="4" paint-order="stroke">QUIZ!</text>
+  </g>`;
+  
+  // SAĞ ALT - "5 Q's" rozet (soru sayısı vurgusu)
+  svg += `<g transform="translate(${W - 130}, ${H - 130})">
+    <circle cx="0" cy="0" r="95" fill="#FFD700" stroke="#000000" stroke-width="10"/>
+    <text x="0" y="-10" font-family="Lilita One, sans-serif"
+          font-size="74" font-weight="900" fill="#1A1A2E" text-anchor="middle">5</text>
+    <text x="0" y="40" font-family="Lilita One, sans-serif"
+          font-size="34" font-weight="900" fill="#1A1A2E" text-anchor="middle">QUIZ</text>
+  </g>`;
+  
+  svg += `</svg>`;
+  return svg;
+}
+
+// SVG - Long (1280×720 yatay)
+function svgLong(baslik) {
+  const W = 1280, H = 720;
+  const t = escapeXml(baslik.toUpperCase());
+  
+  const blokGenislik = 700;
+  const blokX = W - blokGenislik;
+  
+  const kelimeler = t.split(" ");
+  let satirlar;
+  if (t.length <= 12) {
+    satirlar = [t];
+  } else {
+    const mid = Math.ceil(kelimeler.length / 2);
+    satirlar = [kelimeler.slice(0, mid).join(" "), kelimeler.slice(mid).join(" ")];
+  }
+  const fontSize = satirlar.length === 1 ? 140 : 100;
+  
+  let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  
+  svg += `<defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(123, 76, 221, 0.95)"/>
+      <stop offset="100%" stop-color="rgba(255, 87, 166, 0.95)"/>
+    </linearGradient>
+  </defs>`;
+  
+  // Sağ panel
+  svg += `<rect x="${blokX}" y="0" width="${blokGenislik}" height="${H}" fill="url(#bgGrad)"/>`;
+  svg += `<rect x="${blokX}" y="0" width="10" height="${H}" fill="#FFD700"/>`;
+  
+  // Başlık
+  const totalH = satirlar.length * (fontSize + 20);
+  const startY = (H - totalH) / 2 + fontSize - 10;
+  satirlar.forEach((s, i) => {
+    const y = startY + i * (fontSize + 20);
+    svg += `<text x="${blokX + blokGenislik/2}" y="${y}"
+              font-family="Lilita One, Impact, Arial Black, sans-serif"
+              font-size="${fontSize}" font-weight="900" fill="#FFD700"
+              stroke="#000000" stroke-width="8" paint-order="stroke"
+              text-anchor="middle">${s}</text>`;
+  });
+  
+  // Sol üst QUIZ rozeti
+  svg += `<g transform="translate(120, 90)">
+    <circle cx="0" cy="0" r="65" fill="#FF5722" stroke="#000000" stroke-width="6"/>
+    <text x="0" y="16" font-family="Lilita One, sans-serif"
+          font-size="38" font-weight="900" fill="#FFFFFF" text-anchor="middle"
+          stroke="#000000" stroke-width="3" paint-order="stroke">QUIZ!</text>
+  </g>`;
+  
+  // Sağ alt "5"
+  svg += `<g transform="translate(${W - 90}, ${H - 90})">
+    <circle cx="0" cy="0" r="55" fill="#FFD700" stroke="#000000" stroke-width="6"/>
+    <text x="0" y="22" font-family="Lilita One, sans-serif"
+          font-size="68" font-weight="900" fill="#1A1A2E" text-anchor="middle">5</text>
+  </g>`;
+  
+  svg += `</svg>`;
+  return svg;
+}
+
 // FLUX bg üret
 async function fluxBgUret(prompt, hesap, format) {
+  // FLUX desteklediği boyutlar
   const dim = format === "shorts" 
-    ? { width: 1024, height: 1792 }  // 9:16 yaklaşık (FLUX desteklediği boyut)
+    ? { width: 1024, height: 1792 }
     : { width: 1280, height: 720 };
   
-  const promptIyilestirilmis = `Empty scenic background only depicting ${prompt}, EMPTY LANDSCAPE, ABSOLUTELY NO LIVING CREATURES, NO ANIMALS WHATSOEVER, NO HUMANS, NO CARTOON CHARACTERS, NO MASCOTS, NO CREATURE FACES, just empty natural environment with terrain, plants, sky, water, or man-made structures. Pixar 3D animation style background environment, kid-friendly, bright cheerful colors, daylight. ${format === "shorts" ? "9:16 vertical aspect ratio" : "16:9 cinematic widescreen"}. NO TEXT, NO WORDS, NO LETTERS, NO LOGOS. Style: like an empty Pixar scene before characters enter.`;
+  const promptIyilestirilmis = `Empty scenic background only depicting ${prompt}, EMPTY LANDSCAPE, ABSOLUTELY NO LIVING CREATURES, NO ANIMALS WHATSOEVER, NO HUMANS, NO CARTOON CHARACTERS, NO MASCOTS, just empty natural environment with terrain, plants, sky, water, or man-made structures. Pixar 3D animation style background environment, kid-friendly, bright cheerful colors, daylight. ${format === "shorts" ? "9:16 vertical aspect ratio, vertical composition" : "16:9 cinematic widescreen"}. NO TEXT, NO WORDS, NO LETTERS, NO LOGOS. Style: like an empty Pixar scene before characters enter.`;
   
   const buffer = await fluxCagri(promptIyilestirilmis, hesap, dim);
   console.log(`  ✓ FLUX bg: ${(buffer.length / 1024).toFixed(0)}KB (${dim.width}x${dim.height})`);
   return buffer;
 }
 
-// Jess intro PNG'sini Drive'dan indir
+// Jess intro/correct PNG'sini indir
 async function jessIntroIndir(auth, hedefYol) {
   if (!GDRIVE_JESS_FOLDER_ID) return null;
   const drive = google.drive({ version: "v3", auth });
@@ -250,11 +215,10 @@ async function jessIntroIndir(auth, hedefYol) {
   });
   if (!res.data.files) return null;
   
-  // Önce jess-intro, yoksa ilk png
-  let target = res.data.files.find(f => f.name.toLowerCase().includes("intro") && f.name.toLowerCase().endsWith(".png"));
-  if (!target) {
-    target = res.data.files.find(f => f.name.toLowerCase().endsWith(".png"));
-  }
+  // Önce "correct" pose (eller havada coşkulu, thumbnail için en uygun)
+  let target = res.data.files.find(f => f.name.toLowerCase().includes("correct") && f.name.toLowerCase().endsWith(".png"));
+  if (!target) target = res.data.files.find(f => f.name.toLowerCase().includes("intro") && f.name.toLowerCase().endsWith(".png"));
+  if (!target) target = res.data.files.find(f => f.name.toLowerCase().endsWith(".png"));
   if (!target) return null;
   
   const stream = await drive.files.get(
@@ -269,7 +233,7 @@ async function jessIntroIndir(auth, hedefYol) {
 }
 
 // Ana üretim
-async function thumbnailUret(prompt, jessThumbYol, baslik, format, hesap) {
+async function thumbnailUret(prompt, jessYol, baslikKisa, format, hesap) {
   const isShorts = format === "shorts";
   const finalW = isShorts ? 1080 : 1280;
   const finalH = isShorts ? 1920 : 720;
@@ -282,34 +246,38 @@ async function thumbnailUret(prompt, jessThumbYol, baslik, format, hesap) {
     .resize(finalW, finalH, { fit: "cover" })
     .toBuffer();
   
-  // 3. SVG metin overlay
-  const svg = isShorts ? metinSvgShorts(baslik) : metinSvgLong(baslik);
+  // 3. SVG overlay
+  const svg = isShorts ? svgShorts(baslikKisa, format) : svgLong(baslikKisa);
   const svgBuffer = Buffer.from(svg);
   
-  // 4. Compose
   const layers = [
     { input: svgBuffer, top: 0, left: 0 },
   ];
   
-  // 5. Jess overlay (boyut + konum format'a göre)
-  if (jessThumbYol && fs.existsSync(jessThumbYol)) {
+  // 4. Jess overlay - format'a göre konum/boyut
+  if (jessYol && fs.existsSync(jessYol)) {
     let jessW, jessTop, jessLeft;
     
     if (isShorts) {
-      // Dikey: Jess alt yarıda, ortalı, büyük (~600px)
-      jessW = 700;
-      const jessMeta = await sharp(jessThumbYol).resize(jessW, jessW, { fit: "inside" }).metadata();
-      jessTop = finalH - jessMeta.height - 80; // alt boşluk
+      // SHORTS: Jess BÜYÜK orta-alt (banner altında, alt rozetlerin üstünde)
+      jessW = 900;
+      const jessMeta = await sharp(jessYol).resize(jessW, jessW, { fit: "inside" }).metadata();
+      // Banner: 250-570, Alt rozetler: 1700+, Jess: 600-1700 arası
       jessLeft = (finalW - jessMeta.width) / 2;
+      jessTop = 580; // Banner'ın hemen altında başlasın
+      // Eğer Jess banner'ın altına sığmıyorsa, biraz aşağı kaydır
+      if (jessTop + jessMeta.height > finalH - 100) {
+        jessTop = finalH - jessMeta.height - 80;
+      }
     } else {
-      // Yatay: sol alt köşede (320px)
-      jessW = 320;
-      const jessMeta = await sharp(jessThumbYol).resize(jessW, jessW, { fit: "inside" }).metadata();
+      // LONG: Jess sol alt köşede (sağ panel metin olduğu için sol kısımda)
+      jessW = 480;
+      const jessMeta = await sharp(jessYol).resize(jessW, jessW, { fit: "inside" }).metadata();
+      jessLeft = 60;
       jessTop = finalH - jessMeta.height - 30;
-      jessLeft = 40;
     }
     
-    const jessResized = await sharp(jessThumbYol)
+    const jessResized = await sharp(jessYol)
       .resize(jessW, jessW, { fit: "inside", background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer();
@@ -343,33 +311,41 @@ async function main() {
     
     const saAuth = getServiceAccountAuth();
     
-    // Format tespit
     const format = await formatTespit(job.drive_folder_id, saAuth);
     console.log(`📺 Format: ${format}`);
     
+    // Kısa başlık - Sheets'teki thumbnail_baslik kolonundan al
+    // Yoksa konu'dan otomatik üret
+    let baslikKisa = job.thumbnail_baslik;
+    if (!baslikKisa || baslikKisa.length < 3) {
+      // Fallback: konu'dan üret
+      const konuTemiz = (job.konu || "").replace(/[:!?].*$/g, "").trim();
+      const kelimeler = konuTemiz.split(/\s+/).slice(0, 2);
+      baslikKisa = (kelimeler.join(" ") + " QUIZ").toUpperCase();
+    }
+    console.log(`📝 Thumbnail başlığı: "${baslikKisa}"`);
+    
     await jobGuncelle(JOB_ID, { thumb_status: "running" });
     
-    // Cloudflare hesapları
     const hesaplar = getCfAccounts();
     if (hesaplar.length === 0) throw new Error("Cloudflare hesap yok");
     
-    // Jess intro PNG'sini indir
+    // Jess PNG indir (correct pose tercih)
     const jessYol = path.join(TMP_DIR, "jess.png");
     const jessIndirildi = await jessIntroIndir(saAuth, jessYol);
     if (jessIndirildi) {
-      console.log("✓ Jess thumbnail karakteri indirildi");
+      console.log("✓ Jess karakteri indirildi");
     } else {
-      console.log("⚠ Jess karakteri yok, sadece bg + metin");
+      console.log("⚠ Jess karakteri yok");
     }
     
-    // Thumbnail üret
     const prompt = job.thumbnail_prompt || job.konu;
-    console.log(`🎨 Üretiliyor: "${prompt.substring(0, 80)}..."`);
+    console.log(`🎨 BG prompt: "${prompt.substring(0, 80)}..."`);
     
     let buffer;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        buffer = await thumbnailUret(prompt, jessIndirildi, job.baslik, format, hesaplar[attempt % hesaplar.length]);
+        buffer = await thumbnailUret(prompt, jessIndirildi, baslikKisa, format, hesaplar[attempt % hesaplar.length]);
         break;
       } catch (e) {
         console.error(`Deneme ${attempt + 1}: ${e.message}`);
@@ -406,6 +382,7 @@ async function main() {
     await telegram(
       job.chat_id,
       `🖼 *Thumbnail ready!* (${format})\n` +
+      `📝 "${baslikKisa}"\n` +
       `📦 ${(buffer.length / 1024).toFixed(0)}KB\n` +
       `📂 [View](${yuklenen.link})`
     );
