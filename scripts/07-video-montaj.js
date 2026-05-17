@@ -271,17 +271,47 @@ async function main() {
     if (gorselKlasor.length === 0) throw new Error("01-gorseller yok");
     const gorseller = await driveKlasorIcerigi(gorselKlasor[0].id, oauthAuth);
     const gorselDosyalar = gorseller.filter(d => d.name.match(/\.(jpg|jpeg|png|webp)$/i));
-    if (gorselDosyalar.length < soruSayisi) {
-      throw new Error(`${gorselDosyalar.length} görsel var, ${soruSayisi} gerekli`);
+    
+    // YENİ: Her soru için 2 görsel (question + fun_fact)
+    // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ...
+    // Toplam 2N görsel beklenir, ama eski jobs için 1N olabilir (backward compat)
+    const beklenenGorselSayisi = soruSayisi * 2;
+    const tekGorselMu = gorselDosyalar.length < beklenenGorselSayisi;
+    
+    if (tekGorselMu) {
+      console.log(`⚠ Sadece ${gorselDosyalar.length} görsel var (beklenen: ${beklenenGorselSayisi})`);
+      console.log(`   Fun fact için aynı görsel kullanılacak (backward compat)`);
+      if (gorselDosyalar.length < soruSayisi) {
+        throw new Error(`${gorselDosyalar.length} görsel, ${soruSayisi} soru için yetersiz`);
+      }
     }
     
-    console.log("⬇️ Soru görselleri indiriliyor...");
+    console.log("⬇️ Soru + fun fact görselleri indiriliyor...");
     const gorselIndirmePromises = [];
     for (let i = 0; i < soruSayisi; i++) {
-      const yerelAdi = `q${String(i + 1).padStart(2, "0")}.jpg`;
-      const yol = path.join(REMOTION_PUBLIC, "questions", yerelAdi);
-      gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, yol, oauthAuth));
-      questions[i].image_path = `questions/${yerelAdi}`;
+      // Soru görseli (q01.jpg)
+      const qAdi = `q${String(i + 1).padStart(2, "0")}.jpg`;
+      const qYol = path.join(REMOTION_PUBLIC, "questions", qAdi);
+      
+      // Fun fact görseli (q01-fact.jpg)
+      const fAdi = `q${String(i + 1).padStart(2, "0")}-fact.jpg`;
+      const fYol = path.join(REMOTION_PUBLIC, "questions", fAdi);
+      
+      if (tekGorselMu) {
+        // Eski yapı: sıralı 5 görsel
+        gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, qYol, oauthAuth));
+        // Fun fact aynı görsel
+        gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, fYol, oauthAuth));
+      } else {
+        // Yeni yapı: sıralı 10 görsel, çift index question, tek index fun_fact
+        const qIdx = i * 2;
+        const fIdx = i * 2 + 1;
+        gorselIndirmePromises.push(driveIndir(gorselDosyalar[qIdx].id, qYol, oauthAuth));
+        gorselIndirmePromises.push(driveIndir(gorselDosyalar[fIdx].id, fYol, oauthAuth));
+      }
+      
+      questions[i].image_path = `questions/${qAdi}`;
+      questions[i].fun_fact_image_path = `questions/${fAdi}`;
     }
 
     // 6. Jess pose'larını indir
