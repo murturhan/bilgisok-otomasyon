@@ -1,4 +1,4 @@
-name: 07 - Video Montaj
+name: 07 - Video Montaj (Remotion)
 on:
   repository_dispatch:
     types: [video_montaj]
@@ -7,29 +7,51 @@ on:
       job_id:
         description: 'Job ID (run_id)'
         required: true
+
 jobs:
   video-montaj:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: FFmpeg kur
+      
+      - name: FFmpeg ve sistem bağımlılıkları
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
+          sudo apt-get install -y -qq \
+            ffmpeg \
+            libnss3 \
+            libatk-bridge2.0-0 \
+            libdrm2 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxfixes3 \
+            libxrandr2 \
+            libgbm1 \
+            libpango-1.0-0 \
+            libcairo2 \
+            libasound2t64
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: NPM dependencies
+      
+      - name: NPM dependencies (scripts için)
         run: |
           npm init -y
           npm pkg set type=module
           npm install --no-save \
             googleapis \
-            axios \
-            sharp
+            axios
+      
+      - name: Remotion bağımlılıkları (pre-install)
+        working-directory: ./remotion
+        run: |
+          npm install --no-audit --no-fund
+      
       - name: Job ID belirle
         id: params
         run: |
@@ -38,7 +60,8 @@ jobs:
           else
             echo "job_id=${{ github.event.inputs.job_id }}" >> $GITHUB_OUTPUT
           fi
-      - name: Video montaj
+      
+      - name: Video montaj (Remotion render)
         env:
           GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
