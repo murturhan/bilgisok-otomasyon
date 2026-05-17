@@ -26,6 +26,11 @@ interface QuestionSceneProps {
   totalQuestions: number;
   jessPoses: JessPoses;
   channelName: string;
+  // SFX dosya yolları (opsiyonel)
+  sfx_tick?: string;
+  sfx_drum?: string;
+  sfx_correct?: string;
+  sfx_whoosh?: string;
 }
 
 export const QuestionScene: React.FC<QuestionSceneProps> = ({
@@ -35,20 +40,24 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   totalQuestions,
   jessPoses,
   channelName,
+  sfx_tick,
+  sfx_drum,
+  sfx_correct,
+  sfx_whoosh,
 }) => {
   const frame = useCurrentFrame();
   const { width, height, fps } = useVideoConfig();
   const isVertical = height > width;
 
-  // DİNAMİK faz frame'leri - her sorunun kendi audio süresine göre
+  // DİNAMİK faz frame'leri
   const phases = computeQuestionPhases(question);
   
-  // Hangi fazdayız?
-  const inShow = frame < phases.countdown;        // question_audio_text söylenirken
-  const inCountdown = frame >= phases.countdown && frame < phases.drumRoll; // 5sn
-  const inDrumRoll = frame >= phases.drumRoll && frame < phases.reveal;     // 2sn
-  const inReveal = frame >= phases.reveal && frame < phases.transition;    // answer_audio_text
-  const inTransition = frame >= phases.transition && frame < phases.end;   // 1sn nefes
+  // Faz testleri
+  const inShow = frame < phases.countdown;
+  const inCountdown = frame >= phases.countdown && frame < phases.drumRoll;
+  const inDrumRoll = frame >= phases.drumRoll && frame < phases.reveal;
+  const inReveal = frame >= phases.reveal && frame < phases.transition;
+  const inTransition = frame >= phases.transition && frame < phases.end;
   
   // Jess pose
   let currentJessPose: keyof JessPoses = "question";
@@ -56,7 +65,6 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   else if (inCountdown || inDrumRoll) currentJessPose = "thinking";
   else if (inReveal) currentJessPose = "correct";
 
-  // Transition fade-out
   const fadeOut = inTransition
     ? interpolate(
         frame - phases.transition,
@@ -66,13 +74,17 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       )
     : 1;
 
-  // Görsel/metin boyutları
+  // Görsel boyutları
   const imageWidth = isVertical
     ? width - 80
     : Math.floor(width * 0.42);
   const imageHeight = isVertical
     ? Math.floor((width - 80) * 0.62)
     : Math.floor(height * 0.5);
+
+  // ─── SFX zamanlamaları ───
+  // Tick: son 2 saniye (countdown sonunun son 2sn'si)
+  const tickStartFrame = phases.drumRoll - (2 * FPS); // 5sn countdown'ın son 2sn'si
 
   return (
     <AbsoluteFill
@@ -95,20 +107,48 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </Sequence>
       )}
 
+      {/* SFX: Tick - son 2 saniye (countdown'ın son 2sn'si) */}
+      {sfx_tick && (
+        <Sequence from={tickStartFrame} durationInFrames={2 * FPS}>
+          <Audio src={staticFile(sfx_tick)} volume={0.6} loop />
+        </Sequence>
+      )}
+
+      {/* SFX: Drum roll - drum roll fazı boyunca */}
+      {sfx_drum && (
+        <Sequence from={phases.drumRoll} durationInFrames={FIXED_FRAMES.drumRoll}>
+          <Audio src={staticFile(sfx_drum)} volume={0.7} />
+        </Sequence>
+      )}
+
+      {/* SFX: Correct answer - reveal başlangıcında */}
+      {sfx_correct && (
+        <Sequence from={phases.reveal} durationInFrames={2 * FPS}>
+          <Audio src={staticFile(sfx_correct)} volume={0.7} />
+        </Sequence>
+      )}
+
+      {/* SFX: Whoosh - transition */}
+      {sfx_whoosh && (
+        <Sequence from={phases.transition} durationInFrames={FIXED_FRAMES.transition}>
+          <Audio src={staticFile(sfx_whoosh)} volume={0.5} />
+        </Sequence>
+      )}
+
       {/* Header */}
       <HeaderBar
         channelName={channelName}
         questionNumber={questionNumber}
         totalQuestions={totalQuestions}
-        height={isVertical ? 90 : 110}
+        height={isVertical ? 100 : 120}
       />
 
-      {/* YATAY LAYOUT (long) */}
+      {/* YATAY LAYOUT (long video) */}
       {!isVertical && (
         <div
           style={{
             position: "absolute",
-            top: 130,
+            top: 140,
             left: 40,
             right: 40,
             bottom: 60,
@@ -116,7 +156,6 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
             gap: 50,
           }}
         >
-          {/* Sol: görsel + soru metni */}
           <div
             style={{
               flex: 1,
@@ -132,25 +171,26 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
               width={imageWidth}
               height={imageHeight}
             />
-            <QuestionTextBlock
-              text={question.question_text}
-              showFrame={phases.show}
-              maxWidth={imageWidth}
-            />
+            {!inReveal && !inDrumRoll && (
+              <QuestionTextBlock
+                text={question.question_text}
+                showFrame={phases.show}
+                maxWidth={imageWidth}
+              />
+            )}
           </div>
 
-          {/* Sağ: cevap kutuları / reveal */}
           <div
             style={{
               flex: 1,
               display: "flex",
               flexDirection: "column",
-              gap: 24,
+              gap: 26,
               justifyContent: "center",
               maxWidth: 800,
             }}
           >
-            {!inReveal && !inTransition && (
+            {(inShow || inCountdown) && (
               <>
                 <AnswerBox letter="A" text={question.options[0]} isCorrect={question.correct_answer === 0} showFrame={phases.show + 15} revealFrame={phases.reveal} index={0} layout="horizontal" />
                 <AnswerBox letter="B" text={question.options[1]} isCorrect={question.correct_answer === 1} showFrame={phases.show + 15} revealFrame={phases.reveal} index={1} layout="horizontal" />
@@ -159,7 +199,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
               </>
             )}
 
-            {(inReveal) && (
+            {inReveal && (
               <CorrectAnswerHighlight
                 letter={["A", "B", "C", "D"][question.correct_answer]}
                 text={question.options[question.correct_answer]}
@@ -186,10 +226,10 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         <div
           style={{
             position: "absolute",
-            top: 110,
+            top: 120,
             left: 40,
             right: 40,
-            bottom: 40,
+            bottom: 380, // Jess için altta yer bırak (320px Jess + boşluk)
             display: "flex",
             flexDirection: "column",
             gap: 20,
@@ -201,15 +241,19 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
             width={imageWidth}
             height={imageHeight}
           />
-          <QuestionTextBlock
-            text={question.question_text}
-            showFrame={phases.show}
-            maxWidth="100%"
-            isCompact
-          />
+          
+          {/* Soru metni - drumroll ve reveal'da gizli */}
+          {(inShow || inCountdown) && (
+            <QuestionTextBlock
+              text={question.question_text}
+              showFrame={phases.show}
+              maxWidth="100%"
+              isCompact
+            />
+          )}
 
-          {!inReveal && !inTransition && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1 }}>
+          {(inShow || inCountdown) && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
               <AnswerBox letter="A" text={question.options[0]} isCorrect={question.correct_answer === 0} showFrame={phases.show + 15} revealFrame={phases.reveal} index={0} layout="vertical" />
               <AnswerBox letter="B" text={question.options[1]} isCorrect={question.correct_answer === 1} showFrame={phases.show + 15} revealFrame={phases.reveal} index={1} layout="vertical" />
               <AnswerBox letter="C" text={question.options[2]} isCorrect={question.correct_answer === 2} showFrame={phases.show + 15} revealFrame={phases.reveal} index={2} layout="vertical" />
@@ -235,12 +279,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </div>
       )}
 
-      {/* Drum roll metni */}
+      {/* Drum roll fazı - SADECE büyük yanıp sönen "?" işareti, metin YOK */}
       {inDrumRoll && (
-        <DrumRollBanner startFrame={phases.drumRoll} />
+        <BigQuestionMark startFrame={phases.drumRoll} />
       )}
 
-      {/* Geri sayım büyük rakamı */}
+      {/* Büyük geri sayım numarası */}
       {inCountdown && (
         <BigCountdownNumber
           startFrame={phases.countdown}
@@ -248,14 +292,14 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         />
       )}
 
-      {/* Fun fact - reveal fazının ikinci yarısında */}
+      {/* Fun fact - reveal fazında, SOL-ÜST'te (Jess'i kapatmıyacak) */}
       {inReveal && question.fun_fact && (
         <div
           style={{
             position: "absolute",
-            bottom: isVertical ? 120 : 80,
-            left: 0,
-            right: 0,
+            top: isVertical ? 700 : 200,  // Üst kısımda, image'in altında
+            left: isVertical ? 30 : 50,
+            right: isVertical ? 30 : "50%", // Sağ yarısı boş (Jess oraya gelecek)
             display: "flex",
             justifyContent: "center",
             zIndex: 15,
@@ -263,25 +307,25 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         >
           <FunFactBanner
             text={question.fun_fact}
-            showFrame={phases.reveal + 30} // 1 saniye gecikme
-            width={isVertical ? "92%" : "70%"}
+            showFrame={phases.reveal + 30}
+            width="100%"
           />
         </div>
       )}
 
-      {/* Jess karakter */}
+      {/* Jess karakter - SAĞ ALT, BÜYÜK (320px) */}
       <JessCharacter
         pose={currentJessPose}
         poses={jessPoses}
-        position={isVertical ? "bottom-right" : "bottom-right"}
-        size={isVertical ? 220 : 280}
+        position="bottom-right"
+        size={isVertical ? 320 : 360}
         animate
       />
     </AbsoluteFill>
   );
 };
 
-// ────────── Yardımcı alt komponentler ──────────
+// ────────── Alt komponentler ──────────
 
 const QuestionTextBlock: React.FC<{
   text: string;
@@ -305,21 +349,22 @@ const QuestionTextBlock: React.FC<{
         maxWidth,
         opacity,
         transform: `translateY(${translateY}px)`,
-        backgroundColor: "rgba(0,0,0,0.7)",
-        borderRadius: 16,
-        padding: isCompact ? "14px 24px" : "20px 32px",
-        border: `4px solid ${COLORS.primary}`,
+        backgroundColor: "rgba(0,0,0,0.75)",
+        borderRadius: 18,
+        padding: isCompact ? "18px 28px" : "24px 36px",
+        border: `5px solid ${COLORS.primary}`,
         textAlign: "center",
       }}
     >
       <div
         style={{
-          fontSize: isCompact ? 38 : 44,
+          fontSize: isCompact ? 48 : 54,  // BÜYÜTÜLDÜ
           fontFamily: FONTS.display,
-          fontWeight: 900,
+          fontWeight: 400,  // Lilita One zaten kalın
           color: COLORS.textWhite,
-          textShadow: "2px 2px 4px rgba(0,0,0,0.5)",
-          lineHeight: 1.2,
+          textShadow: "3px 3px 5px rgba(0,0,0,0.7)",
+          lineHeight: 1.15,
+          letterSpacing: 0.5,
         }}
       >
         {text}
@@ -362,7 +407,7 @@ const BigCountdownNumber: React.FC<{
       <div
         style={{
           fontSize: Math.min(width, height) * 0.35,
-          fontFamily: FONTS.display,
+          fontFamily: '"Lilita One", "Fredoka", Arial Black, sans-serif',
           fontWeight: 900,
           color,
           textShadow: `
@@ -374,7 +419,7 @@ const BigCountdownNumber: React.FC<{
           `,
           lineHeight: 1,
           transform: `scale(${pulse})`,
-          opacity: 0.85,
+          opacity: 0.92,
         }}
       >
         {remainingSeconds}
@@ -383,18 +428,23 @@ const BigCountdownNumber: React.FC<{
   );
 };
 
-const DrumRollBanner: React.FC<{ startFrame: number }> = ({ startFrame }) => {
+// Drumroll yerine sadece yanıp sönen büyük "?" — METİN YOK
+const BigQuestionMark: React.FC<{ startFrame: number }> = ({ startFrame }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  
-  const shake = Math.sin(frame * 0.8) * 5;
+  const { fps, width, height } = useVideoConfig();
   
   const enterAnim = spring({
     frame: frame - startFrame,
     fps,
     config: { damping: 10, stiffness: 100 },
   });
-  const scale = interpolate(enterAnim, [0, 1], [0.5, 1]);
+  const scale = interpolate(enterAnim, [0, 1], [0.3, 1]);
+  
+  // Yanıp sön (saniyede 4 kez)
+  const blink = 0.7 + Math.abs(Math.sin(frame * 0.6)) * 0.3;
+  
+  // Hafif sallanma
+  const shake = Math.sin(frame * 0.8) * 5;
 
   return (
     <div
@@ -402,28 +452,32 @@ const DrumRollBanner: React.FC<{ startFrame: number }> = ({ startFrame }) => {
         position: "absolute",
         left: 0,
         right: 0,
-        top: "40%",
+        top: "35%",
         display: "flex",
         justifyContent: "center",
         zIndex: 15,
+        pointerEvents: "none",
       }}
     >
       <div
         style={{
-          fontSize: 100,
-          fontFamily: FONTS.display,
+          fontSize: Math.min(width, height) * 0.5,
+          fontFamily: '"Lilita One", Arial Black, sans-serif',
           fontWeight: 900,
           color: COLORS.primary,
           textShadow: `
-            -5px -5px 0 black,
-            5px -5px 0 black,
-            -5px 5px 0 black,
-            5px 5px 0 black
+            -10px -10px 0 black,
+            10px -10px 0 black,
+            -10px 10px 0 black,
+            10px 10px 0 black,
+            0 0 80px ${COLORS.primary}
           `,
-          transform: `translate(${shake}px, ${-shake}px) scale(${scale})`,
+          transform: `translateX(${shake}px) scale(${scale})`,
+          opacity: blink,
+          lineHeight: 1,
         }}
       >
-        🥁 Drumroll... 🥁
+        ?
       </div>
     </div>
   );
@@ -453,39 +507,40 @@ const CorrectAnswerHighlight: React.FC<{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 20,
+        gap: 24,
         transform: `scale(${scale}) rotate(${rotation}deg)`,
         padding: 40,
       }}
     >
       <div
         style={{
-          fontSize: 50,
+          fontSize: 60,
           fontFamily: FONTS.display,
-          fontWeight: 900,
+          fontWeight: 400,
           color: COLORS.primary,
-          textShadow: "3px 3px 0 black",
+          textShadow: "4px 4px 0 black",
+          letterSpacing: 2,
         }}
       >
         ✅ CORRECT!
       </div>
       <div
         style={{
-          fontSize: 80,
+          fontSize: 70,
           fontFamily: FONTS.display,
-          fontWeight: 900,
+          fontWeight: 400,
           color: COLORS.textWhite,
           backgroundColor: COLORS.correctGreen,
-          padding: "30px 60px",
+          padding: "26px 48px",
           borderRadius: 30,
           border: "6px solid black",
           boxShadow: `0 0 ${glowIntensity}px ${COLORS.correctGreen}, 0 8px 24px rgba(0,0,0,0.4)`,
           display: "flex",
           alignItems: "center",
-          gap: 20,
+          gap: 24,
         }}
       >
-        <span style={{ fontSize: 100 }}>{letter}</span>
+        <span style={{ fontSize: 90 }}>{letter}</span>
         <span>{text}</span>
       </div>
     </div>
