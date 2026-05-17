@@ -1,7 +1,10 @@
 /**
- * 05 - Thumbnail Üretimi v6 (GeniMini Kids Quiz)
- * v5'ten farkı: Drive'dan GERÇEK Jess PNG'sini indirip overlay olarak ekliyor.
- * FLUX sadece arka plan tema görseli için, karakter olarak değil.
+ * 05 - Thumbnail Üretimi v7 (GeniMini Kids Quiz)
+ * v6'dan farkı:
+ * - Jess overlay 480px → 320px (küçük, dengesiz değil)
+ * - Metin bloğu 540px → 640px (geniş, kırpma olmasın)
+ * - QUIZ rozeti sağ üst-köşeye yer değiştirdi (metinden uzakta)
+ * - FLUX promptunda "NO CHARACTERS" çok daha agresif vurgu
  */
 
 import fs from "fs";
@@ -118,9 +121,10 @@ async function jessIntroIndir(auth) {
 function metinSvg(baslikTam, width = 1280, height = 720) {
   const { ana, alt } = basligiBol(baslikTam);
   
-  const blokGenislik = 540;
+  // Metin bloğu sağda daha geniş (640px), kırpma olmasın
+  const blokGenislik = 640;
   const blokX = width - blokGenislik;
-  const padding = 30;
+  const padding = 35;
   
   let anaFontSize;
   const anaLen = ana.length;
@@ -194,19 +198,19 @@ function metinSvg(baslikTam, width = 1280, height = 720) {
     }
   }
   
-  // QUIZ! rozeti sol blok-sağ kenara yakın (Jess'le çakışmasın)
-  svg += `<g transform="translate(${width - 600}, 70)">
+  // QUIZ! rozeti sol-üstte (Jess'in üzerinde, FLUX bg'sinde, metinden uzakta)
+  svg += `<g transform="translate(120, 80)">
     <circle cx="0" cy="0" r="55" fill="#FF5722" stroke="#000000" stroke-width="5"/>
     <text x="0" y="13" font-family="'Comic Sans MS', sans-serif"
           font-size="32" font-weight="900" fill="#FFFFFF" text-anchor="middle"
           stroke="#000000" stroke-width="2" paint-order="stroke">QUIZ!</text>
   </g>`;
   
-  // Soru işareti rozeti sağ-alt blok kenarında
-  svg += `<g transform="translate(${width - 600}, ${height - 70})">
-    <circle cx="0" cy="0" r="50" fill="#4FC3F7" stroke="#000000" stroke-width="5"/>
-    <text x="0" y="18" font-family="'Comic Sans MS', sans-serif"
-          font-size="60" font-weight="900" fill="#FFFFFF" text-anchor="middle"
+  // Soru işareti rozeti sağ-alt (metin bloğu içinde, alt köşe)
+  svg += `<g transform="translate(${width - 80}, ${height - 80})">
+    <circle cx="0" cy="0" r="45" fill="#4FC3F7" stroke="#000000" stroke-width="5"/>
+    <text x="0" y="16" font-family="'Comic Sans MS', sans-serif"
+          font-size="54" font-weight="900" fill="#FFFFFF" text-anchor="middle"
           stroke="#000000" stroke-width="3" paint-order="stroke">?</text>
   </g>`;
   
@@ -217,8 +221,8 @@ function metinSvg(baslikTam, width = 1280, height = 720) {
 async function thumbnailUret(prompt, baslikTam, jessThumbYol, deneme, hesap) {
   console.log(`Thumbnail ${deneme} - FLUX (${hesap.name})...`);
   
-  // FLUX SADECE arka plan tema (karakter İÇERMESİN, Jess overlay'i biz koyacağız)
-  const promptIyilestirilmis = `${prompt}, vibrant background scene only, NO CHARACTERS, NO ANIMALS, NO PEOPLE, just the theme environment, RIGHT THIRD of image EMPTY for text overlay, Pixar 3D animation style, kid-friendly, cheerful, bright daylight, professional thumbnail, 16:9 widescreen, NO TEXT, NO WORDS, NO LETTERS`;
+  // FLUX SADECE arka plan tema (HİÇBİR CANLI OLMASIN)
+  const promptIyilestirilmis = `Empty scenic background only depicting ${prompt}, EMPTY LANDSCAPE, ABSOLUTELY NO LIVING CREATURES, NO ANIMALS WHATSOEVER, NO HUMANS, NO CARTOON CHARACTERS, NO MASCOTS, NO CREATURE FACES, just empty natural environment with terrain, plants, sky, water, or man-made structures. Pixar 3D animation style background environment, kid-friendly, bright cheerful colors, daylight, RIGHT HALF of image should be VISUALLY EMPTY (sky/flat background) for text overlay. 16:9 cinematic widescreen. NO TEXT, NO WORDS, NO LETTERS, NO LOGOS. Style: like an empty Pixar scene before characters enter.`;
   
   const buffer = await fluxCagri(promptIyilestirilmis, hesap, { width: 1280, height: 720 });
   console.log(`  ✓ FLUX bg: ${(buffer.length / 1024).toFixed(0)}KB`);
@@ -230,9 +234,9 @@ async function thumbnailUret(prompt, baslikTam, jessThumbYol, deneme, hesap) {
   const svgBuffer = metinSvg(baslikTam);
   layers.push({ input: svgBuffer, top: 0, left: 0 });
   
-  // Jess overlay (sol alt köşe)
+  // Jess overlay (sol alt köşe, KÜÇÜK - 320px, dengeli)
   if (jessThumbYol && fs.existsSync(jessThumbYol)) {
-    const jessW = 480;
+    const jessW = 320;
     const jessResized = await sharp(jessThumbYol)
       .resize(jessW, jessW, { fit: "inside", background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
@@ -241,8 +245,8 @@ async function thumbnailUret(prompt, baslikTam, jessThumbYol, deneme, hesap) {
     const jessMeta = await sharp(jessResized).metadata();
     layers.push({
       input: jessResized,
-      top: 720 - jessMeta.height - 20,
-      left: 20,
+      top: 720 - jessMeta.height - 30,  // 30px alt boşluk
+      left: 40,                          // 40px sol boşluk
     });
   }
   
