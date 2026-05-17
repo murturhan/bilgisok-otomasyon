@@ -6,7 +6,7 @@ import {
   interpolate,
   spring,
 } from "remotion";
-import { COLORS, FONTS, FRAMES } from "../styles/theme";
+import { COLORS, FONTS } from "../styles/theme";
 import { JessCharacter } from "../components/JessCharacter";
 import { JessPoses } from "../types/schemas";
 
@@ -14,18 +14,19 @@ interface IntroSceneProps {
   channelName: string;
   topic: string;
   jessPoses: JessPoses;
+  durationFrames: number; // Dinamik (intro_audio_duration * FPS)
 }
 
 export const IntroScene: React.FC<IntroSceneProps> = ({
   channelName,
   topic,
   jessPoses,
+  durationFrames,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const isVertical = height > width;
 
-  // Logo gelişi (0-1.5s)
   const logoAnim = spring({
     frame,
     fps,
@@ -34,7 +35,6 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   const logoScale = interpolate(logoAnim, [0, 1], [0, 1]);
   const logoY = interpolate(logoAnim, [0, 1], [-100, 0]);
 
-  // Tagline gelişi (~1s sonra)
   const taglineAnim = spring({
     frame: frame - 30,
     fps,
@@ -43,7 +43,6 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   const taglineOpacity = interpolate(taglineAnim, [0, 1], [0, 1]);
   const taglineY = interpolate(taglineAnim, [0, 1], [40, 0]);
 
-  // Topic banner (~2.5s sonra)
   const topicAnim = spring({
     frame: frame - 75,
     fps,
@@ -52,7 +51,7 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   const topicOpacity = interpolate(topicAnim, [0, 1], [0, 1]);
   const topicScale = interpolate(topicAnim, [0, 1], [0.5, 1]);
 
-  // Animasyonlu yıldız parçacıkları (basit, statik konumlu)
+  // Yıldızlar
   const stars = Array.from({ length: 12 }).map((_, i) => {
     const angle = (i / 12) * Math.PI * 2;
     const radius = Math.min(width, height) * 0.4;
@@ -72,7 +71,6 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         justifyContent: "center",
       }}
     >
-      {/* Yıldız parçacıkları */}
       {stars.map((s) => (
         <div
           key={s.key}
@@ -89,7 +87,6 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         </div>
       ))}
 
-      {/* Ana içerik kontaineri */}
       <div
         style={{
           display: "flex",
@@ -99,7 +96,6 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
           zIndex: 5,
         }}
       >
-        {/* Logo */}
         <div
           style={{
             transform: `translateY(${logoY}px) scale(${logoScale})`,
@@ -148,7 +144,6 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
           </div>
         </div>
 
-        {/* Tagline */}
         <div
           style={{
             transform: `translateY(${taglineY}px)`,
@@ -164,7 +159,6 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
           🎉 Fun &amp; Smart Learning for Kids 🦊
         </div>
 
-        {/* Topic banner */}
         {topic && (
           <div
             style={{
@@ -187,11 +181,10 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         )}
       </div>
 
-      {/* Jess karakter - alt köşede */}
       <JessCharacter
         pose="intro"
         poses={jessPoses}
-        position={isVertical ? "bottom-right" : "bottom-right"}
+        position="bottom-right"
         size={isVertical ? 400 : 480}
         animate
       />
