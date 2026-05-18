@@ -91,28 +91,92 @@ async function jsonIndir(folderId, filename, auth, hedefYol) {
     fields: "files(id, name)",
     pageSize: 1,
   });
-  if (!res.data.files || res.data.files.length === 0) return null;
-  await driveIndir(res.data.files[0].id, hedefYol, auth);
-  return JSON.parse(fs.readFileSync(hedefYol, "utf8"));
+  if (!res.data.files || res.data.files.length === 0) {
+    console.log(`  ⚠ ${filename} klasörde bulunamadı (folderId: ${folderId})`);
+    return null;
+  }
+  try {
+    await driveIndir(res.data.files[0].id, hedefYol, auth);
+    if (!fs.existsSync(hedefYol)) {
+      console.log(`  ⚠ ${filename} indirildi ama disk'te yok: ${hedefYol}`);
+      return null;
+    }
+    return JSON.parse(fs.readFileSync(hedefYol, "utf8"));
+  } catch (e) {
+    console.log(`  ⚠ ${filename} okunamadı: ${e.message}`);
+    return null;
+  }
 }
 
 // Önce 02-ses içinde, yoksa ana klasörde questions.json ara
 async function questionsJsonOku(jobFolderId, auth, hedefYol) {
-  // 1. 02-ses
-  const sesKlasor = await driveAltKlasorBul("02-ses", jobFolderId);
-  if (sesKlasor.length > 0) {
-    const data = await jsonIndir(sesKlasor[0].id, "questions.json", auth, hedefYol);
-    if (data) {
-      console.log("✓ questions.json '02-ses' klasöründen okundu");
-      return data;
+  // Hedef klasörü oluştur (yoksa)
+  const dir = path.dirname(hedefYol);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  
+  const drive = google.drive({ version: "v3", auth });
+  
+  // 1. 02-ses (yeni format) - direct drive.files.list (driveAltKlasorBul'a güvenmiyoruz)
+  console.log(`📂 questions.json aranıyor (önce 02-ses)...`);
+  try {
+    const sesSearchRes = await drive.files.list({
+      q: `'${jobFolderId}' in parents and name='02-ses' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 1,
+    });
+    
+    if (sesSearchRes.data.files && sesSearchRes.data.files.length > 0) {
+      const sesFolderId = sesSearchRes.data.files[0].id;
+      console.log(`  ✓ 02-ses klasörü bulundu: ${sesFolderId}`);
+      
+      const jsonSearchRes = await drive.files.list({
+        q: `'${sesFolderId}' in parents and name='questions.json' and trashed=false`,
+        fields: "files(id, name)",
+        pageSize: 1,
+      });
+      
+      if (jsonSearchRes.data.files && jsonSearchRes.data.files.length > 0) {
+        const fileId = jsonSearchRes.data.files[0].id;
+        await driveIndir(fileId, hedefYol, auth);
+        if (fs.existsSync(hedefYol)) {
+          console.log("✓ questions.json '02-ses' klasöründen okundu");
+          return JSON.parse(fs.readFileSync(hedefYol, "utf8"));
+        }
+      } else {
+        console.log("  ⚠ 02-ses içinde questions.json yok");
+      }
+    } else {
+      console.log("  ⚠ 02-ses klasörü yok");
     }
+  } catch (e) {
+    console.log(`  ⚠ 02-ses arama hatası: ${e.message}`);
   }
+  
   // 2. Ana klasör (backward compat)
-  const data = await jsonIndir(jobFolderId, "questions.json", auth, hedefYol);
-  if (data) {
-    console.log("✓ questions.json ana klasörden okundu (eski format)");
+  console.log(`📂 questions.json ana klasörde aranıyor (backward compat)...`);
+  try {
+    const anaSearchRes = await drive.files.list({
+      q: `'${jobFolderId}' in parents and name='questions.json' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 1,
+    });
+    
+    if (anaSearchRes.data.files && anaSearchRes.data.files.length > 0) {
+      const fileId = anaSearchRes.data.files[0].id;
+      await driveIndir(fileId, hedefYol, auth);
+      if (fs.existsSync(hedefYol)) {
+        console.log("✓ questions.json ana klasörden okundu");
+        return JSON.parse(fs.readFileSync(hedefYol, "utf8"));
+      }
+    }
+  } catch (e) {
+    console.log(`  ⚠ Ana klasör arama hatası: ${e.message}`);
   }
-  return data;
+  
+  console.log("❌ questions.json hiçbir yerde bulunamadı");
+  return null;
 }
 
 // SFX dosyalarını indir, map döner: {tick: relativePath, drum: ..., correct: ..., whoosh: ...}
