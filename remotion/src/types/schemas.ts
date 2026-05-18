@@ -4,8 +4,10 @@ export const questionSchema = z.object({
   question_text: z.string(),
   image_url: z.string().url().optional(),
   image_path: z.string().optional(),
-  fun_fact_image_path: z.string().optional(),  // YENİ: Fun fact için ayrı görsel
+  fun_fact_image_path: z.string().optional(),
   options: z.array(z.string()).length(4),
+  // YENİ: Her seçenek için bayrak emoji (opsiyonel - sadece ülke konularında dolu)
+  option_flags: z.array(z.string()).length(4).optional(),
   correct_answer: z.number().int().min(0).max(3),
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
   fun_fact: z.string().default(""),
@@ -24,6 +26,7 @@ export const jessPosesSchema = z.object({
   thinking: z.string().optional(),
   correct: z.string().optional(),
   outro: z.string().optional(),
+  logo: z.string().optional(), // YENİ: Header'da kullanılan küçük yuvarlak Jess kafa
 });
 
 export type JessPoses = z.infer<typeof jessPosesSchema>;
@@ -41,7 +44,6 @@ export const quizCompositionSchema = z.object({
   jess_poses: jessPosesSchema.default({}),
   background_music_url: z.string().optional(),
   
-  // SFX paths
   sfx_tick: z.string().optional(),
   sfx_drum: z.string().optional(),
   sfx_correct: z.string().optional(),
@@ -75,33 +77,6 @@ export const defaultQuizProps: QuizCompositionProps = {
       correct_answer: 2,
       difficulty: "easy",
       fun_fact: "African elephants can weigh up to 6 tons!",
-      question_audio_duration: 8.0,
-      answer_audio_duration: 8.0,
-    },
-    {
-      question_text: "Which animal is known for its long neck?",
-      options: ["Giraffe", "Camel", "Llama", "Ostrich"],
-      correct_answer: 0,
-      difficulty: "easy",
-      fun_fact: "Giraffes can reach 6 meters tall!",
-      question_audio_duration: 8.0,
-      answer_audio_duration: 8.0,
-    },
-    {
-      question_text: "Which bird cannot fly?",
-      options: ["Eagle", "Owl", "Penguin", "Sparrow"],
-      correct_answer: 2,
-      difficulty: "medium",
-      fun_fact: "Penguins are excellent swimmers instead!",
-      question_audio_duration: 8.0,
-      answer_audio_duration: 8.0,
-    },
-    {
-      question_text: "Which is the fastest land animal?",
-      options: ["Lion", "Horse", "Cheetah", "Greyhound"],
-      correct_answer: 2,
-      difficulty: "medium",
-      fun_fact: "Cheetahs can run up to 120 km/h!",
       question_audio_duration: 8.0,
       answer_audio_duration: 8.0,
     },
