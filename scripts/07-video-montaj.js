@@ -158,7 +158,8 @@ async function jessPozlariniIndir(auth, hedefKlasor) {
   for (const d of pngler) {
     const ad = d.name.toLowerCase().replace(".png", "");
     let pozKey = null;
-    if (ad.includes("intro")) pozKey = "intro";
+    if (ad.includes("logo") || ad.includes("kafa") || ad.includes("head")) pozKey = "logo";
+    else if (ad.includes("intro")) pozKey = "intro";
     else if (ad.includes("question")) pozKey = "question";
     else if (ad.includes("thinking")) pozKey = "thinking";
     else if (ad.includes("correct")) pozKey = "correct";
@@ -409,15 +410,24 @@ async function main() {
       timeout: 10 * 60 * 1000,
     });
 
-    // 11. Render
+    // 11. Render - format'a göre optimize
     const finalVideoYol = path.join(TMP_DIR, "final.mp4");
     console.log("🎬 Remotion render başlıyor...");
-    const renderCmd = `cd "${REMOTION_DIR}" && npx remotion render src/index.ts ${compositionId} "${finalVideoYol}" --props="${propsJsonPath}" --concurrency=1 --codec=h264 --crf=22 --pixel-format=yuv420p`;
+    
+    // Long video çok uzun render oluyor (1+ saat), shorts kısa
+    // GitHub runner 4 vCPU - concurrency=4 paralel çalıştırır
+    // Long için: concurrency 2 (RAM yetmez 4'e), crf 26 (daha hızlı kod)
+    // Shorts için: concurrency 1 (daha güvenli, kısa zaten)
+    const concurrency = format === "long" ? 2 : 1;
+    const crf = format === "long" ? 26 : 22;  // long için biraz düşük kalite, çok daha hızlı
+    
+    const renderCmd = `cd "${REMOTION_DIR}" && npx remotion render src/index.ts ${compositionId} "${finalVideoYol}" --props="${propsJsonPath}" --concurrency=${concurrency} --codec=h264 --crf=${crf} --pixel-format=yuv420p`;
+    console.log(`🚀 Render config: concurrency=${concurrency}, crf=${crf}`);
     
     const renderBaslangic = Date.now();
     const { stderr: renderErr } = await execAsync(renderCmd, {
       maxBuffer: 500 * 1024 * 1024,
-      timeout: 60 * 60 * 1000, // 60 dk max
+      timeout: 90 * 60 * 1000, // 90 dk max (long için)
     });
     const renderSure = ((Date.now() - renderBaslangic) / 1000).toFixed(0);
     console.log(`✓ Render tamam: ${renderSure}s`);
