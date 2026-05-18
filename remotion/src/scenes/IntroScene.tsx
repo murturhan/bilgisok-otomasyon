@@ -8,6 +8,7 @@ import {
 } from "remotion";
 import { COLORS, FONTS } from "../styles/theme";
 import { JessCharacter } from "../components/JessCharacter";
+import { BackgroundLayer } from "../components/BackgroundLayer";
 import { JessPoses } from "../types/schemas";
 
 interface IntroSceneProps {
@@ -15,6 +16,7 @@ interface IntroSceneProps {
   topic: string;
   jessPoses: JessPoses;
   durationFrames: number;
+  backgroundImageSrc?: string;
 }
 
 export const IntroScene: React.FC<IntroSceneProps> = ({
@@ -22,6 +24,7 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   topic,
   jessPoses,
   durationFrames,
+  backgroundImageSrc,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -62,11 +65,8 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   });
 
   return (
-    <AbsoluteFill
-      style={{
-        background: `linear-gradient(135deg, ${COLORS.bgGradientStart} 0%, ${COLORS.bgGradientEnd} 100%)`,
-      }}
-    >
+    <AbsoluteFill>
+      <BackgroundLayer imageSrc={backgroundImageSrc} />
       {stars.map((s) => (
         <div
           key={s.key}
