@@ -1,4 +1,5 @@
 import React from "react";
+import { Img } from "remotion";
 import { COLORS, FONTS } from "../styles/theme";
 
 interface HeaderBarProps {
@@ -6,6 +7,7 @@ interface HeaderBarProps {
   questionNumber: number;
   totalQuestions: number;
   height?: number;
+  logoSrc?: string; // YENİ: Jess logo PNG (sol üst yuvarlak kafa)
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -13,7 +15,10 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   questionNumber,
   totalQuestions,
   height = 100,
+  logoSrc,
 }) => {
+  const logoSize = Math.round(height * 0.85);
+  
   return (
     <div
       style={{
@@ -32,7 +37,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         zIndex: 20,
       }}
     >
-      {/* Channel name (left) */}
+      {/* Channel name + logo (left) */}
       <div
         style={{
           fontSize: 38,
@@ -42,11 +47,34 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           textShadow: "2px 2px 0 black",
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: 14,
         }}
       >
-        <span style={{ fontSize: 48 }}>🦊</span>
-        {channelName}
+        {logoSrc ? (
+          <div
+            style={{
+              width: logoSize,
+              height: logoSize,
+              borderRadius: "50%",
+              overflow: "hidden",
+              border: `3px solid ${COLORS.primary}`,
+              backgroundColor: "rgba(255,255,255,0.1)",
+              flexShrink: 0,
+            }}
+          >
+            <Img
+              src={logoSrc}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          </div>
+        ) : (
+          <span style={{ fontSize: logoSize * 0.75 }}>🦊</span>
+        )}
+        <span>{channelName}</span>
       </div>
 
       {/* Question counter (right) */}
