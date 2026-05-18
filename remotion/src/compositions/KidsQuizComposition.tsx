@@ -23,6 +23,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   outro_audio_duration,
   jess_poses,
   background_music_url,
+  background_image_path,
   sfx_tick,
   sfx_drum,
   sfx_correct,
@@ -36,6 +37,11 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       .filter(([_, v]) => v)
       .map(([k, v]) => [k, staticFile(v as string)])
   );
+  
+  // Background image src - varsa staticFile ile
+  const backgroundImageSrc = background_image_path
+    ? staticFile(background_image_path)
+    : undefined;
 
   const introFrames = Math.ceil(intro_audio_duration * FPS);
   const outroFrames = Math.ceil(outro_audio_duration * FPS);
@@ -120,6 +126,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           topic={topic}
           jessPoses={resolvedJessPoses}
           durationFrames={introFrames}
+          backgroundImageSrc={backgroundImageSrc}
         />
       </Sequence>
 
@@ -159,6 +166,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
               sfx_drum={sfx_drum}
               sfx_correct={sfx_correct}
               sfx_whoosh={sfx_whoosh}
+              backgroundImageSrc={backgroundImageSrc}
             />
           </Sequence>
         );
@@ -170,6 +178,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           channelName={channel_name}
           jessPoses={resolvedJessPoses}
           durationFrames={outroFrames}
+          backgroundImageSrc={backgroundImageSrc}
         />
       </Sequence>
 
