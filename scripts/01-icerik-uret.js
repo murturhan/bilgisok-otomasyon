@@ -157,6 +157,7 @@ JSON OUTPUT (must be valid JSON, no markdown):
       "image_prompt": "Pixar-style image prompt for the QUESTION",
       "fun_fact_image_prompt": "Pixar-style image prompt for the FUN FACT (different scene illustrating the fun fact - e.g. if fun_fact is 'Pizza invented in Naples 1889', show a chef in Naples 1889 cartoon style)",
       "options": ["A_short", "B_short", "C_short", "D_short"],
+      "option_flags": ["🇮🇹", "🇹🇷", "🇫🇷", "🇪🇸"],
       "correct_answer": 0,
       "difficulty": "easy",
       "fun_fact": "Fun fact sentence.",
@@ -176,6 +177,11 @@ CRITICAL:
 - answer_audio_text MUST include fun_fact at the end
 - **fun_fact_image_prompt MUST illustrate the fun fact narrative** (different scene from question image - e.g. if fun fact is about Eiffel Tower being 330m tall, show a Pixar-style Eiffel Tower with measurement; if about pizza invented in Naples 1889, show a cartoon chef in old Naples kitchen)
 - fun_fact_image_prompt should be Pixar 3D style, NO TEXT, kid-friendly
+- **option_flags**: ALWAYS include flag emojis array (4 items). Logic:
+  * If options are COUNTRIES (e.g. "Italy", "France", "Japan", "Brazil"): use country flag emojis ["🇮🇹","🇫🇷","🇯🇵","🇧🇷"]
+  * If options relate to COUNTRY-ORIGIN (e.g. "Pizza" → Italy, "Sushi" → Japan, "Croissant" → France): use the related country flag
+  * If options are NEUTRAL (no country relation, e.g. animals, colors, numbers): use ["","","",""] (empty strings)
+  * NEVER skip this field - if uncertain, use empty strings
 - **thumbnail_title MUST be 2-3 WORDS MAX, UPPERCASE, PUNCHY** (examples: "FOOD QUIZ", "GUESS THE ANIMAL", "OCEAN QUIZ", "TRUCK CHALLENGE", "MIGHTY MACHINES")
 - thumbnail_title is for the thumbnail image (LARGE TEXT), NOT for YouTube title
 - baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title`;
@@ -233,6 +239,13 @@ CRITICAL:
             q.fun_fact_image_prompt = q.image_prompt;
           }
         }
+        
+        // option_flags validation - 4 string array, yoksa boş
+        if (!q.option_flags || !Array.isArray(q.option_flags) || q.option_flags.length !== 4) {
+          q.option_flags = ["", "", "", ""];
+        }
+        // String'e çevir (emoji unicode için emniyet)
+        q.option_flags = q.option_flags.map(f => String(f || ""));
         
         // Audio text alanları varsayılan oluştur (Gemini eksik verirse)
         if (!q.question_audio_text) {
