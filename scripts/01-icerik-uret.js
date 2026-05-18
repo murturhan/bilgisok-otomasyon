@@ -127,6 +127,21 @@ Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
 - Right third should be empty for text overlay
 - 16:9, Pixar 3D style, NO TEXT
 
+**background_prompt**: FLUX prompt for VIDEO BACKGROUND (will be used behind all UI in the video)
+- Empty scenic environment related to the topic
+- HEAVY blur / soft focus / depth of field (it's a BACKGROUND, must not distract)
+- Pixar 3D cartoon style with vibrant colors
+- NO characters, NO animals, NO people, NO faces
+- NO text, NO logos
+- Center area MUST be soft/empty (UI elements go there)
+- Edges can have subtle thematic decorative elements (e.g. for food: blurred utensils on edges; for space: distant stars)
+- Kid-friendly atmosphere
+- Examples:
+  * Food topic: "Cozy blurred cartoon kitchen interior, warm orange lighting, decorative pans hanging on edges, center empty wall, NO food in view"
+  * Ocean topic: "Underwater scene with blurred coral on edges, deep teal-blue gradient, light rays from above, center open water, NO sea creatures"
+  * Space topic: "Cosmic galaxy with swirling purple nebula at edges, golden stars scattered, deep dark center, NO planets in center"
+  * Animals topic: "Stylized cartoon savanna at sunset with blurred acacia trees on edges, warm orange-purple sky, center empty grassland, NO animals"
+
 ═══════════════════════════════════════════════════
 SAFETY (Made for Kids)
 ═══════════════════════════════════════════════════
@@ -148,6 +163,7 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "baslik": "Long YouTube title with emoji",
   "thumbnail_title": "2-3 WORDS MAX (uppercase, punchy)",
   "thumbnail_prompt": "FLUX prompt - scenery only, NO CHARACTERS",
+  "background_prompt": "FLUX prompt - blurred topic-themed background, depth of field, center empty for UI",
   "aciklama": "200 word description with hashtags",
   "intro_audio_text": "Jess intro 2-3 sentences",
   "outro_audio_text": "Jess outro 2-3 sentences",
@@ -182,6 +198,12 @@ CRITICAL:
   * If options relate to COUNTRY-ORIGIN (e.g. "Pizza" → Italy, "Sushi" → Japan, "Croissant" → France): use the related country flag
   * If options are NEUTRAL (no country relation, e.g. animals, colors, numbers): use ["","","",""] (empty strings)
   * NEVER skip this field - if uncertain, use empty strings
+- **background_prompt MUST**:
+  * Match the topic theme but be GENERIC (no specific objects in center)
+  * Have HEAVY BLUR / depth of field (it's a background, not foreground)
+  * Have empty soft center for UI overlay
+  * NO characters, NO animals, NO text
+  * Be Pixar 3D cartoon style
 - **thumbnail_title MUST be 2-3 WORDS MAX, UPPERCASE, PUNCHY** (examples: "FOOD QUIZ", "GUESS THE ANIMAL", "OCEAN QUIZ", "TRUCK CHALLENGE", "MIGHTY MACHINES")
 - thumbnail_title is for the thumbnail image (LARGE TEXT), NOT for YouTube title
 - baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title`;
@@ -283,14 +305,23 @@ CRITICAL:
         json.thumbnail_prompt = `Vibrant ${konu} themed background scenery, Pixar 3D style, NO CHARACTERS, NO ANIMALS, NO PEOPLE, kid-friendly, bright colors, NO TEXT`;
       }
       
-      // ai_gorsel_prompts: her soru için 2 prompt (question + fun_fact)
-      // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ...
-      // 02-gorsel-uret bunu sıralı işler ve q01.jpg, q01-fact.jpg gibi isimlerle yazar
+      // background_prompt validation - yoksa konu'dan üret
+      if (!json.background_prompt) {
+        json.background_prompt = `Blurred ${konu} themed empty environment, Pixar 3D cartoon style, heavy depth of field, soft empty center for UI overlay, decorative thematic elements on edges only, NO characters, NO animals, NO text, kid-friendly bright atmosphere`;
+      }
+      console.log(`Background prompt: "${json.background_prompt.substring(0, 80)}..."`);
+
+      // ai_gorsel_prompts: her soru için 2 prompt (question + fun_fact) + 1 background (en sonda)
+      // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ..., background
+      // 02-gorsel-uret bunu sıralı işler ve q01.jpg, q01-fact.jpg, ..., background.jpg
       json.ai_gorsel_prompts = [];
       for (const q of json.questions) {
         json.ai_gorsel_prompts.push(q.image_prompt);
         json.ai_gorsel_prompts.push(q.fun_fact_image_prompt);
       }
+      // Background prompt - EN SON
+      json.ai_gorsel_prompts.push(json.background_prompt);
+      
       json.ai_klip_prompts = [];
       json.pexels_anahtar_kelimeler = [];
       
@@ -387,6 +418,7 @@ async function main() {
       konu: konu,
       baslik: icerik.baslik,
       thumbnail_title: icerik.thumbnail_title || "",
+      background_prompt: icerik.background_prompt || "",
       intro_audio_text: icerik.intro_audio_text,
       outro_audio_text: icerik.outro_audio_text,
       questions: icerik.questions,
