@@ -15,6 +15,7 @@ import { Question, JessPoses } from "../types/schemas";
 import { JessCharacter } from "../components/JessCharacter";
 import { CountdownTimer } from "../components/CountdownTimer";
 import { HeaderBar } from "../components/HeaderBar";
+import { BackgroundLayer } from "../components/BackgroundLayer";
 import { computeQuestionPhases } from "../utils/timing";
 
 interface QuestionSceneProps {
@@ -29,6 +30,7 @@ interface QuestionSceneProps {
   sfx_drum?: string;
   sfx_correct?: string;
   sfx_whoosh?: string;
+  backgroundImageSrc?: string;
 }
 
 export const QuestionScene: React.FC<QuestionSceneProps> = ({
@@ -43,6 +45,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   sfx_drum,
   sfx_correct,
   sfx_whoosh,
+  backgroundImageSrc,
 }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
@@ -79,10 +82,11 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   return (
     <AbsoluteFill
       style={{
-        background: `linear-gradient(160deg, ${COLORS.bgGradientStart} 0%, ${COLORS.bgGradientEnd} 100%)`,
         opacity: fadeOut,
       }}
     >
+      <BackgroundLayer imageSrc={backgroundImageSrc} />
+      
       {/* AUDIO */}
       {question.question_audio_path && (
         <Sequence from={phases.show} durationInFrames={phases.countdown - phases.show}>
