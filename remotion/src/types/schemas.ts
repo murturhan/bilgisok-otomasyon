@@ -43,6 +43,7 @@ export const quizCompositionSchema = z.object({
   
   jess_poses: jessPosesSchema.default({}),
   background_music_url: z.string().optional(),
+  background_image_path: z.string().optional(),  // YENİ: Topic-themed background
   
   sfx_tick: z.string().optional(),
   sfx_drum: z.string().optional(),
