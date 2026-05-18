@@ -8,18 +8,21 @@ import {
 } from "remotion";
 import { COLORS, FONTS } from "../styles/theme";
 import { JessCharacter } from "../components/JessCharacter";
+import { BackgroundLayer } from "../components/BackgroundLayer";
 import { JessPoses } from "../types/schemas";
 
 interface OutroSceneProps {
   channelName: string;
   jessPoses: JessPoses;
   durationFrames: number;
+  backgroundImageSrc?: string;
 }
 
 export const OutroScene: React.FC<OutroSceneProps> = ({
   channelName,
   jessPoses,
   durationFrames,
+  backgroundImageSrc,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -49,11 +52,8 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   const pulse = 1 + Math.sin(frame * 0.15) * 0.05;
 
   return (
-    <AbsoluteFill
-      style={{
-        background: `linear-gradient(135deg, ${COLORS.accent} 0%, ${COLORS.bgGradientEnd} 100%)`,
-      }}
-    >
+    <AbsoluteFill>
+      <BackgroundLayer imageSrc={backgroundImageSrc} fallbackGradient={`linear-gradient(135deg, ${COLORS.accent} 0%, ${COLORS.bgGradientEnd} 100%)`} />
       {confetti.map((c) => (
         <div
           key={c.key}
