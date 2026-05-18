@@ -273,22 +273,45 @@ async function main() {
     const gorseller = await driveKlasorIcerigi(gorselKlasor[0].id, oauthAuth);
     const gorselDosyalar = gorseller.filter(d => d.name.match(/\.(jpg|jpeg|png|webp)$/i));
     
-    // YENİ: Her soru için 2 görsel (question + fun_fact)
-    // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ...
-    // Toplam 2N görsel beklenir, ama eski jobs için 1N olabilir (backward compat)
-    const beklenenGorselSayisi = soruSayisi * 2;
-    const tekGorselMu = gorselDosyalar.length < beklenenGorselSayisi;
+    // YENİ: Her soru için 2 görsel (question + fun_fact) + 1 background (en sonda)
+    // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ..., background
+    // Toplam 2N+1 görsel beklenir
+    // Backward compat: eski jobs için 1N veya 2N olabilir (bg yok)
+    const beklenenYeni = soruSayisi * 2 + 1;  // 2N+1 (yeni format)
+    const beklenenOrta = soruSayisi * 2;       // 2N (orta format - bg yok ama fun fact var)
+    const beklenenEski = soruSayisi;           // 1N (eski format - bg ve fun fact yok)
     
-    if (tekGorselMu) {
-      console.log(`⚠ Sadece ${gorselDosyalar.length} görsel var (beklenen: ${beklenenGorselSayisi})`);
-      console.log(`   Fun fact için aynı görsel kullanılacak (backward compat)`);
-      if (gorselDosyalar.length < soruSayisi) {
-        throw new Error(`${gorselDosyalar.length} görsel, ${soruSayisi} soru için yetersiz`);
-      }
+    let bgGorseli = null;  // Background dosyasının Drive ID'si
+    let tekGorselMu = false;
+    
+    if (gorselDosyalar.length >= beklenenYeni) {
+      // YENİ FORMAT: 2N+1
+      console.log(`✓ ${gorselDosyalar.length} görsel (yeni format 2N+1 = ${beklenenYeni})`);
+      bgGorseli = gorselDosyalar[beklenenOrta]; // index 2N = background
+    } else if (gorselDosyalar.length >= beklenenOrta) {
+      // ORTA FORMAT: 2N (bg yok, fun fact var)
+      console.log(`✓ ${gorselDosyalar.length} görsel (orta format 2N = ${beklenenOrta}, bg yok)`);
+      tekGorselMu = false;
+    } else if (gorselDosyalar.length >= beklenenEski) {
+      // ESKİ FORMAT: 1N (bg yok, fun fact yok)
+      console.log(`⚠ ${gorselDosyalar.length} görsel (eski format 1N, fun fact aynı görsel)`);
+      tekGorselMu = true;
+    } else {
+      throw new Error(`${gorselDosyalar.length} görsel, ${soruSayisi} soru için yetersiz`);
     }
     
-    console.log("⬇️ Soru + fun fact görselleri indiriliyor...");
+    console.log("⬇️ Soru + fun fact + background görselleri indiriliyor...");
     const gorselIndirmePromises = [];
+    
+    // Background indir (varsa)
+    let backgroundImagePath = null;
+    if (bgGorseli) {
+      const bgYol = path.join(REMOTION_PUBLIC, "questions", "background.jpg");
+      gorselIndirmePromises.push(driveIndir(bgGorseli.id, bgYol, oauthAuth));
+      backgroundImagePath = "questions/background.jpg";
+      console.log(`  ✓ Background: ${bgGorseli.name}`);
+    }
+    
     for (let i = 0; i < soruSayisi; i++) {
       // Soru görseli (q01.jpg)
       const qAdi = `q${String(i + 1).padStart(2, "0")}.jpg`;
@@ -301,7 +324,6 @@ async function main() {
       if (tekGorselMu) {
         // Eski yapı: sıralı 5 görsel
         gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, qYol, oauthAuth));
-        // Fun fact aynı görsel
         gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, fYol, oauthAuth));
       } else {
         // Yeni yapı: sıralı 10 görsel, çift index question, tek index fun_fact
@@ -388,6 +410,9 @@ async function main() {
       background_music_url: fs.existsSync(bgMuzikYol)
         ? path.relative(REMOTION_PUBLIC, bgMuzikYol)
         : undefined,
+      
+      // YENİ: Topic-themed background image (Gemini'nin oluşturduğu, FLUX'ın ürettiği)
+      background_image_path: backgroundImagePath,
       
       // SFX path'leri
       sfx_tick: sfxMap.tick,
