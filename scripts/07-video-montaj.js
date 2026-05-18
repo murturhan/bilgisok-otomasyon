@@ -412,7 +412,7 @@ async function main() {
     console.log("⬇️ SFX indiriliyor...");
     const sfxPromise = sfxIndir(saAuth, path.join(REMOTION_PUBLIC, "audio"));
 
-    const [jessPozlar, sfxMap] = await Promise.all([
+    const [jessPozlar, _bgMuzik, sfxMap] = await Promise.all([
       jessPozlarPromise,
       bgMuzikPromise,
       sfxPromise,
@@ -421,7 +421,7 @@ async function main() {
     ]);
     
     console.log(`✓ Tüm materyaller indirildi`);
-    console.log(`✓ SFX: ${Object.keys(sfxMap).join(", ") || "yok"}`);
+    console.log(`✓ SFX: ${Object.keys(sfxMap || {}).join(", ") || "yok"}`);
 
     // 9. Sorulara audio path + duration ata
     const segByKey = {};
