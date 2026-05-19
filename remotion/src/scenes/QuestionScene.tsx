@@ -18,6 +18,7 @@ import { AnswerCard, AnswerState } from "../components/AnswerCard";
 import { LiquidProgressBar } from "../components/LiquidProgressBar";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { AnimatedBackground, getPatternForQuestion } from "../components/AnimatedBackground";
+import { GlassesIcon } from "../components/BrandAssets";
 import { computeQuestionPhases } from "../utils/timing";
 
 interface QuestionSceneProps {
@@ -70,7 +71,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   
   let currentJessPose: keyof JessPoses = "question";
   if (inCountdown || inDrumRoll) currentJessPose = "thinking";
-  else if (inRevealCorrect || inFunFact) currentJessPose = "correct";
+  else if (inRevealCorrect) currentJessPose = "correct";
   
   const fadeOut = inTransition
     ? interpolate(
@@ -111,35 +112,27 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </Sequence>
       )}
       
-      {/* SFX — Quiz Blitz tarzı, sade ve temiz */}
-      {/* Progress dolan ses - tüm countdown boyunca */}
+      {/* SFX */}
       {sfx_progress && (
         <Sequence from={phases.countdown} durationInFrames={FIXED_FRAMES.countdown}>
           <Audio src={staticFile(sfx_progress)} volume={0.5} />
         </Sequence>
       )}
-      {/* Saat tik-tak - countdown'un son 3 saniyesi (aciliyet) */}
       {sfx_tick && (
-        <Sequence
-          from={phases.drumRoll - (3 * FPS)}
-          durationInFrames={3 * FPS}
-        >
+        <Sequence from={phases.drumRoll - (3 * FPS)} durationInFrames={3 * FPS}>
           <Audio src={staticFile(sfx_tick)} volume={0.6} loop />
         </Sequence>
       )}
-      {/* Drum sadece reveal'den 0.3s önce (kısa bump) */}
       {sfx_drum && (
         <Sequence from={phases.reveal - Math.floor(FPS * 0.3)} durationInFrames={Math.floor(FPS * 0.3)}>
           <Audio src={staticFile(sfx_drum)} volume={0.4} />
         </Sequence>
       )}
-      {/* Correct ding - reveal başında, sade */}
       {sfx_correct && (
         <Sequence from={phases.reveal} durationInFrames={Math.floor(FPS * 1.5)}>
           <Audio src={staticFile(sfx_correct)} volume={0.7} />
         </Sequence>
       )}
-      {/* Whoosh KALDIRILDI - artık çatlama yapan overlap yok */}
       
       {/* HEADER */}
       <QuizHeader
@@ -149,7 +142,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         isVertical={isVertical}
       />
       
-      {/* VERTICAL BRAND TAG */}
+      {/* VERTICAL BRAND */}
       <VerticalBrandTag
         side="right"
         topOffset={isVertical ? 170 : 200}
@@ -205,21 +198,20 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </div>
       )}
       
-      {/* JESS - shorts'ta sağ alt köşede (orta yerine - dah az yer kaplar) */}
-      <JessCharacter
-        pose={currentJessPose}
-        poses={jessPoses}
-        position={isVertical ? "bottom-right" : "bottom-right"}
-        size={isVertical ? 260 : 280}
-        animate
-      />
+      {/* JESS - sadece soru fazlarında, fun fact'te YOK (gözlük gösteriyoruz) */}
+      {!inFunFact && (
+        <JessCharacter
+          pose={currentJessPose}
+          poses={jessPoses}
+          position="bottom-center"
+          size={isVertical ? 280 : 280}
+          animate
+        />
+      )}
     </AbsoluteFill>
   );
 };
 
-// ═══════════════════════════════════════════════════
-// LONG LAYOUT (16:9)
-// ═══════════════════════════════════════════════════
 interface LayoutProps {
   question: Question;
   imageSrc: string;
@@ -318,25 +310,17 @@ const LongLayout: React.FC<LayoutProps> = ({
   );
 };
 
-// ═══════════════════════════════════════════════════
-// SHORTS LAYOUT (9:16) — BOŞ ALAN KAPATILDI
-// ═══════════════════════════════════════════════════
 const ShortsLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases,
   inFunFact, isRevealed, revealImageTransition, width, height,
 }) => {
-  // YENİ LAYOUT (boş alan kapatıldı):
-  // Top:    150 (header) 
-  // Body:   Görsel (büyütüldü %40 → %38)
-  // Body:   Şıklar (3 büyük kart, geniş gap)
-  // Bottom: Progress + Jess (sağ alt köşede)
-  
   const bodyTop = 160;
   const padding = 40;
   const contentWidth = width - padding * 2;
-  
-  // Görsel %38 ekran yüksekliği (önceki %32'den artırıldı)
   const imageHeight = Math.floor(height * 0.38);
+  
+  // Fun fact'te alt boşluk daha az (Jess olmadığı için)
+  const bodyBottom = inFunFact ? 120 : 280;
   
   return (
     <div
@@ -345,14 +329,13 @@ const ShortsLayout: React.FC<LayoutProps> = ({
         top: bodyTop,
         left: padding,
         right: padding,
-        bottom: 280, // Progress bar + Jess için yer ayır
+        bottom: bodyBottom,
         display: "flex",
         flexDirection: "column",
         justifyContent: "flex-start",
         gap: 30,
       }}
     >
-      {/* GÖRSEL veya FUN FACT */}
       {!inFunFact ? (
         <ImageCard
           src={imageSrc}
@@ -373,7 +356,6 @@ const ShortsLayout: React.FC<LayoutProps> = ({
         )
       )}
       
-      {/* ŞIKLAR veya FUN FACT METİN */}
       {!inFunFact ? (
         <div
           style={{
@@ -398,8 +380,9 @@ const ShortsLayout: React.FC<LayoutProps> = ({
           style={{
             flex: 1,
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "center",
+            paddingTop: 20,
           }}
         >
           <FunFactPanel
@@ -413,9 +396,6 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   );
 };
 
-// ═══════════════════════════════════════════════════
-// ANSWER STACK
-// ═══════════════════════════════════════════════════
 interface AnswerStackProps {
   options: string[];
   flags?: string[];
@@ -458,9 +438,6 @@ const AnswerStack: React.FC<AnswerStackProps> = ({
   );
 };
 
-// ═══════════════════════════════════════════════════
-// IMAGE CARD
-// ═══════════════════════════════════════════════════
 interface ImageCardProps {
   src: string;
   width: number;
@@ -508,7 +485,8 @@ const ImageCard: React.FC<ImageCardProps> = ({
 };
 
 // ═══════════════════════════════════════════════════
-// FUN FACT PANEL — UPPERCASE, daha geniş, ortalı
+// FUN FACT PANEL — Canva tasarımına uygun: ampul + DID YOU KNOW yan yana,
+// metin altında GÖZLÜK (Jess yerine)
 // ═══════════════════════════════════════════════════
 interface FunFactPanelProps {
   text: string;
@@ -530,6 +508,15 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
   
   const bulbPulse = 1 + Math.sin(frame * 0.15) * 0.05;
   
+  // Gözlük animasyonu (metin sonrası gelir)
+  const glassesAnim = spring({
+    frame: frame - showFrame - 30,
+    fps,
+    config: { damping: 12, stiffness: 110 },
+  });
+  const glassesScale = interpolate(glassesAnim, [0, 1], [0, 1]);
+  const glassesOpacity = interpolate(glassesAnim, [0, 0.5], [0, 1]);
+  
   return (
     <div
       style={{
@@ -538,54 +525,65 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: isVertical ? 18 : 24,
+        gap: isVertical ? 20 : 24,
         padding: "0 16px",
         width: "100%",
       }}
     >
+      {/* Ampul + DID YOU KNOW yan yana (Canva tasarımı) */}
       <div
         style={{
-          fontSize: isVertical ? 110 : 130,
-          transform: `scale(${bulbPulse})`,
-          filter: `drop-shadow(0 0 30px ${BRAND.yellow})`,
-          lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          gap: 20,
         }}
       >
-        💡
+        <div
+          style={{
+            fontSize: isVertical ? 90 : 110,
+            transform: `scale(${bulbPulse})`,
+            filter: `drop-shadow(0 0 30px ${BRAND.yellow})`,
+            lineHeight: 1,
+          }}
+        >
+          💡
+        </div>
+        
+        <div
+          style={{
+            fontSize: isVertical ? 56 : 64,
+            fontFamily: FONTS.display,
+            fontWeight: 900,
+            color: BRAND.yellow,
+            textShadow: `
+              -3px -3px 0 ${BRAND.black},
+              3px -3px 0 ${BRAND.black},
+              -3px 3px 0 ${BRAND.black},
+              3px 3px 0 ${BRAND.black}
+            `,
+            letterSpacing: 2,
+            textTransform: "uppercase",
+          }}
+        >
+          DID YOU KNOW?
+        </div>
       </div>
       
-      <div
-        style={{
-          fontSize: isVertical ? 44 : 52,
-          fontFamily: FONTS.display,
-          fontWeight: 900,
-          color: BRAND.yellow,
-          textShadow: `
-            -3px -3px 0 ${BRAND.black},
-            3px -3px 0 ${BRAND.black},
-            -3px 3px 0 ${BRAND.black},
-            3px 3px 0 ${BRAND.black}
-          `,
-          letterSpacing: 2,
-          textTransform: "uppercase",
-        }}
-      >
-        DID YOU KNOW?
-      </div>
-      
+      {/* Fact metni - beyaz kart */}
       <div
         style={{
           backgroundColor: BRAND.white,
-          borderRadius: 24,
-          padding: isVertical ? "28px 32px" : "32px 40px",
+          borderRadius: 16,
+          padding: isVertical ? "26px 30px" : "32px 40px",
           boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
-          border: `5px solid ${BRAND.yellow}`,
+          borderTop: `6px solid ${BRAND.yellow}`,
+          borderBottom: `6px solid ${BRAND.yellow}`,
           maxWidth: "100%",
         }}
       >
         <div
           style={{
-            fontSize: isVertical ? 36 : 40,
+            fontSize: isVertical ? 38 : 40,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.black,
@@ -597,6 +595,17 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         >
           {text}
         </div>
+      </div>
+      
+      {/* GÖZLÜK (Jess yerine - Canva tasarımı) */}
+      <div
+        style={{
+          transform: `scale(${glassesScale})`,
+          opacity: glassesOpacity,
+          marginTop: isVertical ? 10 : 20,
+        }}
+      >
+        <GlassesIcon size={isVertical ? 130 : 160} />
       </div>
     </div>
   );
