@@ -1,7 +1,7 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { BRAND, FONTS } from "../styles/theme";
-import { JessTailIcon } from "./JessTailIcon";
+import { JessTail } from "./BrandAssets";
 
 interface QuizHeaderProps {
   questionNumber: number;
@@ -10,12 +10,6 @@ interface QuizHeaderProps {
   isVertical?: boolean;
 }
 
-/**
- * Quiz Blitz tarzı header:
- * - Sol: Mor yıldız rozet + içinde beyaz rakam (soru no)
- * - Orta-üst: Beyaz kalın soru metni (UPPERCASE, siyah outline)
- * - Sağ üst: Jess kuyruğu (önceki şimşek yerine, brand)
- */
 export const QuizHeader: React.FC<QuizHeaderProps> = ({
   questionNumber,
   questionText,
@@ -116,7 +110,7 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
         </div>
       </div>
       
-      {/* Jess kuyruğu (şimşek yerine) */}
+      {/* Jess kuyruğu - senin SVG */}
       <div
         style={{
           transform: `translateX(${tailX}px) scale(${tailScale}) rotate(${tailWag}deg)`,
@@ -125,7 +119,7 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
           transformOrigin: "center bottom",
         }}
       >
-        <JessTailIcon size={isVertical ? 80 : 100} />
+        <JessTail size={isVertical ? 90 : 110} />
       </div>
     </div>
   );
@@ -190,41 +184,5 @@ export const StarBadge: React.FC<StarBadgeProps> = ({
         {number}
       </div>
     </div>
-  );
-};
-
-// Backward compat - IntroScene logosunda hala kullanılıyor
-interface LightningBoltProps {
-  size?: number;
-  color?: string;
-}
-
-export const LightningBolt: React.FC<LightningBoltProps> = ({
-  size = 100,
-  color = BRAND.yellow,
-}) => {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
-      style={{
-        filter: `drop-shadow(0 0 12px ${color}) drop-shadow(0 4px 8px rgba(0,0,0,0.4))`,
-      }}
-    >
-      <path
-        d="M 55 8 L 25 55 L 45 55 L 35 92 L 75 38 L 53 38 Z"
-        fill={color}
-        stroke={BRAND.black}
-        strokeWidth="3"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 55 8 L 25 55 L 45 55 L 35 92 L 75 38 L 53 38 Z"
-        fill="#FF1493"
-        opacity="0.3"
-        transform="translate(2, 3)"
-      />
-    </svg>
   );
 };
