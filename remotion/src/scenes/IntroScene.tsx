@@ -9,8 +9,8 @@ import {
 import { BRAND, FONTS, THEME_COLORS } from "../styles/theme";
 import { JessCharacter } from "../components/JessCharacter";
 import { AnimatedBackground } from "../components/AnimatedBackground";
-import { LightningBolt } from "../components/QuizHeader";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
+import { GeniMiniLogo } from "../components/BrandAssets";
 import { JessPoses } from "../types/schemas";
 
 interface IntroSceneProps {
@@ -20,54 +20,30 @@ interface IntroSceneProps {
   durationFrames: number;
 }
 
-/**
- * Topic'e göre sallanan emoji ikonları seç (Quiz Blitz tarzı).
- * Eşleşme bulamazsa default mix kullan.
- */
 function getTopicEmojis(topic: string): string[] {
   const t = topic.toLowerCase();
   
-  // İcat / teknoloji
   if (/invent|technolog|machine|gadget|computer|phone|comput/i.test(t))
     return ["📞", "💡", "✈️", "📷", "🎬", "🚗"];
-  
-  // Hayvan
-  if (/animal|wild|pet|fox|dog|cat|jungle|safari/i.test(t))
+  if (/animal|wild|pet|fox|dog|cat|jungle|safari|home/i.test(t))
     return ["🦁", "🐘", "🦒", "🐯", "🐧", "🐵"];
-  
-  // Yiyecek
-  if (/food|fruit|drink|cook|cuisine|snack/i.test(t))
+  if (/food|fruit|drink|cook|cuisine|snack|dish/i.test(t))
     return ["🍕", "🍔", "🍎", "🍦", "🍩", "🥕"];
-  
-  // Coğrafya / ülke
   if (/countr|geograph|flag|world|capital|landmark|city/i.test(t))
     return ["🗺️", "🌍", "🗽", "🏔️", "🏛️", "🚩"];
-  
-  // Uzay
   if (/space|planet|astronaut|star|galaxy|moon|sun/i.test(t))
     return ["🚀", "🌙", "⭐", "🪐", "👽", "☄️"];
-  
-  // Doğa / bitkiler
   if (/plant|flower|tree|forest|nature|garden/i.test(t))
     return ["🌳", "🌸", "🌻", "🍄", "🌵", "🌿"];
-  
-  // Spor
   if (/sport|game|ball|olympic/i.test(t))
     return ["⚽", "🏀", "🎾", "🏈", "⛹️", "🏆"];
-  
-  // Ulaşım
-  if (/vehicl|car|truck|transport|plane|train|ship/i.test(t))
+  if (/vehicl|car|truck|transport|plane|train|ship|machine/i.test(t))
     return ["🚗", "✈️", "🚂", "🚢", "🚁", "🚀"];
-  
-  // Bilim
   if (/scien|physic|chem|biolog|experiment/i.test(t))
     return ["🧪", "🔬", "🧬", "⚗️", "🧲", "🔭"];
-  
-  // Müzik
   if (/music|instrument|song|sound/i.test(t))
     return ["🎵", "🎸", "🎹", "🥁", "🎤", "🎺"];
   
-  // Default - genel eğitici karışım
   return ["📚", "💡", "🎨", "🔍", "🌟", "🎯"];
 }
 
@@ -81,31 +57,29 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   const { fps, width, height } = useVideoConfig();
   const isVertical = height > width;
   
-  const theme = THEME_COLORS[0];
+  const theme = THEME_COLORS[0]; // pink
   const topicEmojis = getTopicEmojis(topic);
   
-  // ─── ANIMASYONLAR ─────────────────────────────────
-  const leftAnim = spring({ frame: frame - 0, fps, config: { damping: 11, stiffness: 130 } });
-  const leftX = interpolate(leftAnim, [0, 1], [-400, 0]);
-  const leftScale = interpolate(leftAnim, [0, 1], [0, 1]);
+  // Logo enter animasyonu (yukarıdan iner + büyür)
+  const logoAnim = spring({
+    frame: frame - 0,
+    fps,
+    config: { damping: 11, stiffness: 110 },
+  });
+  const logoScale = interpolate(logoAnim, [0, 1], [0, 1]);
+  const logoY = interpolate(logoAnim, [0, 1], [-100, 0]);
   
-  const rightAnim = spring({ frame: frame - 5, fps, config: { damping: 11, stiffness: 130 } });
-  const rightX = interpolate(rightAnim, [0, 1], [400, 0]);
-  const rightScale = interpolate(rightAnim, [0, 1], [0, 1]);
-  
-  const boltAnim = spring({ frame: frame - 15, fps, config: { damping: 9, stiffness: 100 } });
-  const boltScale = interpolate(boltAnim, [0, 1], [0, 1]);
-  const boltRotate = interpolate(frame, [15, 30], [180, 0], { extrapolateRight: "clamp" });
-  
-  const taglineAnim = spring({ frame: frame - 30, fps, config: { damping: 14, stiffness: 100 } });
+  // Tagline
+  const taglineAnim = spring({ frame: frame - 25, fps, config: { damping: 14, stiffness: 100 } });
   const taglineOpacity = interpolate(taglineAnim, [0, 1], [0, 1]);
   const taglineY = interpolate(taglineAnim, [0, 1], [40, 0]);
   
+  // Topic
   const topicAnim = spring({ frame: frame - 45, fps, config: { damping: 10, stiffness: 110 } });
   const topicScale = interpolate(topicAnim, [0, 1], [0, 1]);
   const topicOpacity = interpolate(topicAnim, [0, 0.5], [0, 1]);
   
-  // Emoji bandı animasyonu (60. frame'den sonra sallanmaya başla)
+  // Emoji bandı
   const emojiBandStart = 60;
   const emojiBandAnim = spring({
     frame: frame - emojiBandStart,
@@ -115,14 +89,14 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   const emojiBandOpacity = interpolate(emojiBandAnim, [0, 1], [0, 1]);
   const emojiBandY = interpolate(emojiBandAnim, [0, 1], [50, 0]);
   
-  // ─── BOYUTLAR ─────────────────────────────────────
-  const logoFontSize = isVertical ? 160 : 200;
+  // Logo idle bounce
+  const logoIdleBounce = frame > 30 ? Math.sin(frame * 0.1) * 6 : 0;
+  
+  // Boyutlar
+  const logoWidth = isVertical ? width * 0.85 : width * 0.55;
   const taglineFontSize = isVertical ? 54 : 60;
   const topicFontSize = isVertical ? 56 : 64;
   
-  const logoIdleBounce = frame > 30 ? Math.sin(frame * 0.1) * 4 : 0;
-  
-  // Topic metnini UPPERCASE yap
   const topicUpper = (topic || "").toUpperCase();
   
   return (
@@ -136,81 +110,27 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         fontSize={isVertical ? 28 : 32}
       />
       
-      {/* ÜST: LOGO BLOĞU */}
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "8%" : "10%",
+          top: isVertical ? "6%" : "8%",
           left: 0,
           right: 0,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 30,
+          gap: isVertical ? 26 : 36,
         }}
       >
-        {/* GENIMINI ⚡ TESTS */}
+        {/* LOGO - senin Canva tasarımı */}
         <div
           style={{
+            transform: `translateY(${logoY + logoIdleBounce}px) scale(${logoScale})`,
             display: "flex",
-            alignItems: "center",
             justifyContent: "center",
-            gap: 24,
-            flexWrap: isVertical ? "wrap" : "nowrap",
-            transform: `translateY(${logoIdleBounce}px)`,
           }}
         >
-          <div
-            style={{
-              fontSize: logoFontSize,
-              fontFamily: FONTS.display,
-              fontWeight: 900,
-              color: BRAND.white,
-              textShadow: `
-                -6px -6px 0 ${BRAND.black},
-                6px -6px 0 ${BRAND.black},
-                -6px 6px 0 ${BRAND.black},
-                6px 6px 0 ${BRAND.black},
-                10px 10px 0 #FF1493
-              `,
-              letterSpacing: 4,
-              transform: `translateX(${leftX}px) scale(${leftScale})`,
-              lineHeight: 1,
-              textTransform: "uppercase",
-            }}
-          >
-            GENIMINI
-          </div>
-          
-          <div
-            style={{
-              transform: `scale(${boltScale}) rotate(${boltRotate}deg)`,
-            }}
-          >
-            <LightningBolt size={isVertical ? 140 : 170} color={BRAND.yellow} />
-          </div>
-          
-          <div
-            style={{
-              fontSize: logoFontSize,
-              fontFamily: FONTS.display,
-              fontWeight: 900,
-              color: BRAND.yellow,
-              textShadow: `
-                -6px -6px 0 ${BRAND.black},
-                6px -6px 0 ${BRAND.black},
-                -6px 6px 0 ${BRAND.black},
-                6px 6px 0 ${BRAND.black},
-                10px 10px 0 #FF1493
-              `,
-              letterSpacing: 4,
-              transform: `translateX(${rightX}px) scale(${rightScale})`,
-              lineHeight: 1,
-              textTransform: "uppercase",
-            }}
-          >
-            TESTS
-          </div>
+          <GeniMiniLogo width={logoWidth} />
         </div>
         
         {/* Tagline */}
@@ -221,7 +141,7 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
             fontSize: taglineFontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
-            color: BRAND.white,
+            color: BRAND.yellow,
             textShadow: `
               -4px -4px 0 ${BRAND.black},
               4px -4px 0 ${BRAND.black},
@@ -233,10 +153,10 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
             textTransform: "uppercase",
           }}
         >
-          🎉 FUN &amp; SMART LEARNING 🦊
+          FUN &amp; SMART LEARNING
         </div>
         
-        {/* Today: TOPIC - büyütüldü, UPPERCASE */}
+        {/* Topic */}
         {topic && (
           <div
             style={{
@@ -244,25 +164,25 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
               opacity: topicOpacity,
               backgroundColor: BRAND.white,
               color: BRAND.black,
-              padding: isVertical ? "28px 50px" : "32px 70px",
+              padding: isVertical ? "26px 50px" : "32px 70px",
               borderRadius: 60,
               fontSize: topicFontSize,
               fontFamily: FONTS.display,
               fontWeight: 900,
               border: `6px solid ${BRAND.yellow}`,
               boxShadow: `0 10px 28px rgba(0,0,0,0.5), 0 0 50px ${BRAND.yellow}`,
-              maxWidth: "90%",
+              maxWidth: "92%",
               textAlign: "center",
               letterSpacing: 1,
               textTransform: "uppercase",
               lineHeight: 1.1,
             }}
           >
-            TODAY: {topicUpper}
+            {topicUpper}
           </div>
         )}
         
-        {/* SALLANANDA EMOJİ BANDI - Quiz Blitz tarzı */}
+        {/* Emoji bandı - sallanan */}
         <div
           style={{
             transform: `translateY(${emojiBandY}px)`,
@@ -273,8 +193,7 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
             marginTop: 10,
           }}
         >
-          {topicEmojis.map((emoji, i) => {
-            // Her emoji farklı faz/genlik ile sallanır
+          {topicEmojis.slice(0, isVertical ? 4 : 6).map((emoji, i) => {
             const swing = Math.sin(frame * 0.08 + i * 0.6) * 15;
             const bounce = Math.cos(frame * 0.1 + i * 0.5) * 8;
             const idleScale = 1 + Math.sin(frame * 0.12 + i) * 0.04;
@@ -283,7 +202,7 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
               <div
                 key={i}
                 style={{
-                  fontSize: isVertical ? 80 : 100,
+                  fontSize: isVertical ? 90 : 110,
                   transform: `translateY(${bounce}px) rotate(${swing}deg) scale(${idleScale})`,
                   filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.4))",
                   lineHeight: 1,
@@ -296,12 +215,12 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         </div>
       </div>
       
-      {/* JESS - alt orta, BÜYÜK */}
+      {/* JESS - alt orta */}
       <JessCharacter
         pose="intro"
         poses={jessPoses}
         position="bottom-center"
-        size={isVertical ? 460 : 500}
+        size={isVertical ? 440 : 480}
         animate
       />
     </AbsoluteFill>
