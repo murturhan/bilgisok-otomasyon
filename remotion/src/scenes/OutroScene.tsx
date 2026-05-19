@@ -18,14 +18,6 @@ interface OutroSceneProps {
   durationFrames: number;
 }
 
-/**
- * Outro - Quiz Blitz tarzı "GREAT JOB!" + Subscribe + Jess
- * 
- * Akış:
- *  0-20:  "GREAT JOB!" sıçrayarak gelir, confetti yağar
- *  20-45: Subscribe rozeti pulse ederek gelir
- *  45-end: "See you next time!" + Jess wave
- */
 export const OutroScene: React.FC<OutroSceneProps> = ({
   channelName,
   jessPoses,
@@ -35,10 +27,8 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   const { fps, width, height } = useVideoConfig();
   const isVertical = height > width;
   
-  // Outro için canlı pembe/turkuaz mix
   const theme = THEME_COLORS[2]; // teal
   
-  // ─── ANIMASYONLAR ────────────────────────────────
   const greatJobAnim = spring({
     frame,
     fps,
@@ -46,7 +36,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   });
   const greatJobScale = interpolate(greatJobAnim, [0, 1], [0, 1]);
   
-  // Subscribe pulse
   const subAnim = spring({
     frame: frame - 25,
     fps,
@@ -55,7 +44,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   const subScale = interpolate(subAnim, [0, 1], [0, 1]);
   const subPulse = 1 + Math.sin(frame * 0.18) * 0.06;
   
-  // Tagline (See you next time!)
   const taglineAnim = spring({
     frame: frame - 60,
     fps,
@@ -64,7 +52,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   const taglineOpacity = interpolate(taglineAnim, [0, 1], [0, 1]);
   const taglineY = interpolate(taglineAnim, [0, 1], [40, 0]);
   
-  // CONFETTI
   const confetti = Array.from({ length: 40 }).map((_, i) => {
     const startY = -100 - (i * 80) % 600;
     const x = (i * 137 + frame * 2.5) % width;
@@ -73,18 +60,16 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
     return { x, y, rotation, key: i, emoji: ["🎉", "⭐", "🎊", "✨", "💫"][i % 5] };
   });
   
-  // ─── BOYUTLAR ─────────────────────────────────────
-  const titleFontSize = isVertical ? 150 : 200;
-  const subFontSize = isVertical ? 68 : 78;
-  const taglineFontSize = isVertical ? 48 : 56;
+  const titleFontSize = isVertical ? 160 : 210;
+  const subFontSize = isVertical ? 72 : 82;
+  const taglineFontSize = isVertical ? 52 : 60;
   
   return (
     <AbsoluteFill>
       <AnimatedBackground theme={theme} pattern="stars" motionSpeed={1.2} />
       
-      <VerticalBrandTag side="right" topOffset={200} bottomOffset={200} fontSize={isVertical ? 32 : 36} />
+      <VerticalBrandTag side="right" topOffset={200} bottomOffset={200} fontSize={isVertical ? 28 : 32} />
       
-      {/* CONFETTI */}
       {confetti.map((c) => (
         <div
           key={c.key}
@@ -102,21 +87,19 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         </div>
       ))}
       
-      {/* ANA İÇERİK */}
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "8%" : "12%",
+          top: isVertical ? "7%" : "12%",
           left: 0,
           right: 0,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: isVertical ? 28 : 40,
+          gap: isVertical ? 30 : 40,
           zIndex: 10,
         }}
       >
-        {/* "GREAT JOB!" */}
         <div
           style={{
             transform: `scale(${greatJobScale})`,
@@ -134,12 +117,12 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
             textAlign: "center",
             lineHeight: 1,
             letterSpacing: 4,
+            textTransform: "uppercase",
           }}
         >
           GREAT JOB!
         </div>
         
-        {/* Trofi/yıldız emoji */}
         <div
           style={{
             transform: `scale(${greatJobScale})`,
@@ -149,7 +132,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
           🏆 🎊
         </div>
         
-        {/* SUBSCRIBE rozet */}
         <div
           style={{
             transform: `scale(${subScale * subPulse})`,
@@ -166,12 +148,12 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
             alignItems: "center",
             gap: 18,
             letterSpacing: 2,
+            textTransform: "uppercase",
           }}
         >
           ▶ SUBSCRIBE
         </div>
         
-        {/* "See you next time!" */}
         <div
           style={{
             opacity: taglineOpacity,
@@ -188,18 +170,18 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
             `,
             textAlign: "center",
             letterSpacing: 1,
+            textTransform: "uppercase",
           }}
         >
-          See you next time! 👋
+          SEE YOU NEXT TIME! 👋
         </div>
       </div>
       
-      {/* JESS waving - alt orta */}
       <JessCharacter
         pose="outro"
         poses={jessPoses}
         position="bottom-center"
-        size={isVertical ? 500 : 520}
+        size={isVertical ? 460 : 500}
         animate
       />
     </AbsoluteFill>
