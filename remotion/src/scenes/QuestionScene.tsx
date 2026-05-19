@@ -10,82 +10,110 @@ import {
   Sequence,
   Img,
 } from "remotion";
-import { COLORS, FONTS, FIXED_FRAMES, FPS } from "../styles/theme";
+import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor } from "../styles/theme";
 import { Question, JessPoses } from "../types/schemas";
 import { JessCharacter } from "../components/JessCharacter";
-import { CountdownTimer } from "../components/CountdownTimer";
-import { HeaderBar } from "../components/HeaderBar";
-import { BackgroundLayer } from "../components/BackgroundLayer";
+import { QuizHeader, LightningBolt } from "../components/QuizHeader";
+import { AnswerCard, AnswerState } from "../components/AnswerCard";
+import { LiquidProgressBar } from "../components/LiquidProgressBar";
+import { VerticalBrandTag } from "../components/VerticalBrandTag";
+import { AnimatedBackground, getPatternForQuestion } from "../components/AnimatedBackground";
 import { computeQuestionPhases } from "../utils/timing";
 
 interface QuestionSceneProps {
   question: Question;
   imageSrc: string;
+  /**
+   * Reveal anında gösterilecek görsel (bayrak için).
+   * Yoksa imageSrc kalır.
+   */
+  revealImageSrc?: string;
   funFactImageSrc?: string;
   questionNumber: number;
   totalQuestions: number;
+  /**
+   * Bu sorunun tema rengi (KidsQuizComposition tarafından geçilir)
+   */
+  theme: ThemeColor;
   jessPoses: JessPoses;
   channelName: string;
   sfx_tick?: string;
   sfx_drum?: string;
   sfx_correct?: string;
   sfx_whoosh?: string;
-  backgroundImageSrc?: string;
+  sfx_progress?: string;
 }
 
 export const QuestionScene: React.FC<QuestionSceneProps> = ({
   question,
   imageSrc,
+  revealImageSrc,
   funFactImageSrc,
   questionNumber,
   totalQuestions,
+  theme,
   jessPoses,
   channelName,
   sfx_tick,
   sfx_drum,
   sfx_correct,
   sfx_whoosh,
-  backgroundImageSrc,
+  sfx_progress,
 }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const isVertical = height > width;
-
+  
   const phases = computeQuestionPhases(question);
   
+  // ─── FAZ DETECTION ─────────────────────────────────
   const inShow = frame < phases.countdown;
   const inCountdown = frame >= phases.countdown && frame < phases.drumRoll;
   const inDrumRoll = frame >= phases.drumRoll && frame < phases.reveal;
-  const inReveal = frame >= phases.reveal && frame < phases.transition;
+  const inRevealCorrect = frame >= phases.reveal && frame < phases.funFact;
+  const inFunFact = frame >= phases.funFact && frame < phases.transition;
   const inTransition = frame >= phases.transition && frame < phases.end;
   
-  // Reveal'ı 2 alt-faza böl:
-  // İlk %30: "CORRECT! [cevap]" göster
-  // Son %70: Fun fact + fun fact görseli (Canva mock'a göre)
-  const revealDuration = phases.transition - phases.reveal;
-  const revealCorrectEnd = phases.reveal + Math.floor(revealDuration * 0.30);
-  const inRevealCorrect = inReveal && frame < revealCorrectEnd;
-  const inRevealFunFact = inReveal && frame >= revealCorrectEnd;
+  // Reveal başlangıcı sonrası (görsel bayrağa geçer, şıklar state değiştirir)
+  const isRevealed = frame >= phases.reveal;
   
+  // Jess pozu
   let currentJessPose: keyof JessPoses = "question";
-  if (inShow) currentJessPose = "question";
-  else if (inCountdown || inDrumRoll) currentJessPose = "thinking";
-  else if (inReveal) currentJessPose = "correct";
-
+  if (inCountdown || inDrumRoll) currentJessPose = "thinking";
+  else if (inRevealCorrect || inFunFact) currentJessPose = "correct";
+  
+  // Fade out transition'da
   const fadeOut = inTransition
-    ? interpolate(frame - phases.transition, [0, FIXED_FRAMES.transition], [1, 0.3], { extrapolateRight: "clamp" })
+    ? interpolate(
+        frame - phases.transition,
+        [0, FIXED_FRAMES.transition],
+        [1, 0],
+        { extrapolateRight: "clamp" }
+      )
     : 1;
-
-  const tickStartFrame = phases.drumRoll - (2 * FPS);
-  const logoSrc = jessPoses.logo as string | undefined;
-
+  
+  // ─── GÖRSEL: SHOW/COUNTDOWN'da question image, REVEAL'da bayrak/clue ──
+  // Bayrak varsa reveal'de değişir, yoksa question image kalır
+  const hasRevealImage = !!revealImageSrc && revealImageSrc !== imageSrc;
+  const currentImageSrc = (isRevealed && !inFunFact && hasRevealImage)
+    ? revealImageSrc
+    : imageSrc;
+  
+  // Reveal görsel geçişi: 0.3s'lik scale+fade
+  const revealImageTransition = isRevealed
+    ? interpolate(frame - phases.reveal, [0, 8], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+      })
+    : 0;
+  
+  // Pattern - soru başına farklı
+  const pattern = getPatternForQuestion(questionNumber - 1);
+  
   return (
-    <AbsoluteFill
-      style={{
-        opacity: fadeOut,
-      }}
-    >
-      <BackgroundLayer imageSrc={backgroundImageSrc} />
+    <AbsoluteFill style={{ opacity: fadeOut }}>
+      {/* ANIMATED BG */}
+      <AnimatedBackground theme={theme} pattern={pattern} motionSpeed={1} />
       
       {/* AUDIO */}
       {question.question_audio_path && (
@@ -98,80 +126,120 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           <Audio src={staticFile(question.answer_audio_path)} volume={1.2} />
         </Sequence>
       )}
-
+      
       {/* SFX */}
-      {sfx_tick && (
-        <Sequence from={tickStartFrame} durationInFrames={2 * FPS}>
-          <Audio src={staticFile(sfx_tick)} volume={1.0} loop />
+      {/* Progress bar sıvı dolan ses - countdown boyunca */}
+      {sfx_progress && (
+        <Sequence from={phases.countdown} durationInFrames={FIXED_FRAMES.countdown}>
+          <Audio src={staticFile(sfx_progress)} volume={0.8} />
         </Sequence>
       )}
+      {/* Tick - countdown'un son 2 saniyesi (alarm hissi) */}
+      {sfx_tick && (
+        <Sequence
+          from={phases.drumRoll - (2 * FPS)}
+          durationInFrames={2 * FPS}
+        >
+          <Audio src={staticFile(sfx_tick)} volume={0.9} loop />
+        </Sequence>
+      )}
+      {/* Drum - reveal hazırlığı */}
       {sfx_drum && (
         <Sequence from={phases.drumRoll} durationInFrames={FIXED_FRAMES.drumRoll}>
           <Audio src={staticFile(sfx_drum)} volume={1.0} />
         </Sequence>
       )}
+      {/* Correct ding - reveal başlangıcı */}
       {sfx_correct && (
         <Sequence from={phases.reveal} durationInFrames={2 * FPS}>
           <Audio src={staticFile(sfx_correct)} volume={1.0} />
         </Sequence>
       )}
+      {/* Whoosh - transition başlangıcı */}
       {sfx_whoosh && (
         <Sequence from={phases.transition} durationInFrames={FIXED_FRAMES.transition}>
-          <Audio src={staticFile(sfx_whoosh)} volume={0.7} />
+          <Audio src={staticFile(sfx_whoosh)} volume={0.8} />
         </Sequence>
       )}
-
-      {/* HEADER */}
-      <HeaderBar
-        channelName={channelName}
+      
+      {/* HEADER - sol yıldız rozet + orta soru + sağ şimşek */}
+      <QuizHeader
         questionNumber={questionNumber}
-        totalQuestions={totalQuestions}
-        height={isVertical ? 100 : 110}
-        logoSrc={logoSrc}
+        questionText={question.question_text}
+        showFrame={phases.show}
+        isVertical={isVertical}
       />
-
-      {/* LAYOUT - format'a göre AYRI render */}
+      
+      {/* VERTICAL BRAND TAG - sağ kenar */}
+      <VerticalBrandTag
+        side="right"
+        topOffset={isVertical ? 180 : 200}
+        bottomOffset={isVertical ? 280 : 200}
+        fontSize={isVertical ? 32 : 36}
+      />
+      
+      {/* ANA İÇERİK - format'a göre */}
       {isVertical ? (
         <ShortsLayout
           question={question}
-          imageSrc={imageSrc}
+          imageSrc={currentImageSrc}
           funFactImageSrc={funFactImageSrc}
+          theme={theme}
+          phases={phases}
           inShow={inShow}
           inCountdown={inCountdown}
           inDrumRoll={inDrumRoll}
           inRevealCorrect={inRevealCorrect}
-          inRevealFunFact={inRevealFunFact}
-          phases={phases}
-          revealCorrectEnd={revealCorrectEnd}
+          inFunFact={inFunFact}
+          isRevealed={isRevealed}
+          revealImageTransition={revealImageTransition}
           width={width}
           height={height}
         />
       ) : (
         <LongLayout
           question={question}
-          imageSrc={imageSrc}
+          imageSrc={currentImageSrc}
           funFactImageSrc={funFactImageSrc}
+          theme={theme}
+          phases={phases}
           inShow={inShow}
           inCountdown={inCountdown}
           inDrumRoll={inDrumRoll}
           inRevealCorrect={inRevealCorrect}
-          inRevealFunFact={inRevealFunFact}
-          phases={phases}
-          revealCorrectEnd={revealCorrectEnd}
+          inFunFact={inFunFact}
+          isRevealed={isRevealed}
+          revealImageTransition={revealImageTransition}
           width={width}
           height={height}
         />
       )}
-
-      {/* DRUM ROLL: büyük yanıp sönen "?" */}
-      {inDrumRoll && <BigQuestionMark startFrame={phases.drumRoll} />}
-
-      {/* JESS - ALT ORTA */}
+      
+      {/* PROGRESS BAR - alt orta, countdown fazında */}
+      {(inCountdown || inDrumRoll) && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: isVertical ? 380 : 80,
+            left: isVertical ? 60 : 200,
+            right: isVertical ? 60 : 200,
+            zIndex: 20,
+          }}
+        >
+          <LiquidProgressBar
+            startFrame={phases.countdown}
+            durationFrames={FIXED_FRAMES.countdown}
+            height={isVertical ? 50 : 60}
+          />
+        </div>
+      )}
+      
+      {/* JESS - sağ alt köşede küçük (long); alt orta (shorts) */}
       <JessCharacter
         pose={currentJessPose}
         poses={jessPoses}
-        position="bottom-center"
-        size={isVertical ? 380 : 320}
+        position={isVertical ? "bottom-center" : "bottom-right"}
+        size={isVertical ? 320 : 280}
         animate
       />
     </AbsoluteFill>
@@ -179,219 +247,183 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
 };
 
 // ═══════════════════════════════════════════════════
-// SHORTS LAYOUT (9:16 dikey)
+// LONG LAYOUT (16:9) — Sol görsel + Sağ şıklar
 // ═══════════════════════════════════════════════════
-const ShortsLayout: React.FC<any> = ({
-  question, imageSrc, funFactImageSrc,
-  inShow, inCountdown, inDrumRoll, inRevealCorrect, inRevealFunFact,
-  phases, revealCorrectEnd, width, height,
+interface LayoutProps {
+  question: Question;
+  imageSrc: string;
+  funFactImageSrc?: string;
+  theme: ThemeColor;
+  phases: ReturnType<typeof computeQuestionPhases>;
+  inShow: boolean;
+  inCountdown: boolean;
+  inDrumRoll: boolean;
+  inRevealCorrect: boolean;
+  inFunFact: boolean;
+  isRevealed: boolean;
+  revealImageTransition: number;
+  width: number;
+  height: number;
+}
+
+const LongLayout: React.FC<LayoutProps> = ({
+  question, imageSrc, funFactImageSrc, theme, phases,
+  inShow, inCountdown, inDrumRoll, inRevealCorrect, inFunFact, isRevealed,
+  revealImageTransition, width, height,
 }) => {
-  const imageWidth = width - 80;
-  const imageHeight = Math.min(720, Math.floor((width - 80) * 0.55));
-
-  return (
-    <>
-      {/* SHOW/COUNTDOWN/DRUMROLL/CORRECT: question image */}
-      {(inShow || inCountdown || inDrumRoll || inRevealCorrect) && (
-        <div
-          style={{
-            position: "absolute",
-            top: 120,
-            left: 40,
-            right: 40,
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-          }}
-        >
-          <ImageFrame src={imageSrc} width={imageWidth} height={imageHeight} color="primary" />
-
-          {(inShow || inCountdown) && (
-            <>
-              <QuestionTextBlock text={question.question_text} showFrame={phases.show} isCompact />
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <AnswerBoxNew letter="A" text={question.options[0]} flag={question.option_flags?.[0]} showFrame={phases.show + 15} />
-                <AnswerBoxNew letter="B" text={question.options[1]} flag={question.option_flags?.[1]} showFrame={phases.show + 22} />
-                <AnswerBoxNew letter="C" text={question.options[2]} flag={question.option_flags?.[2]} showFrame={phases.show + 29} />
-                <AnswerBoxNew letter="D" text={question.options[3]} flag={question.option_flags?.[3]} showFrame={phases.show + 36} />
-              </div>
-            </>
-          )}
-
-          {inRevealCorrect && (
-            <CorrectBanner
-              letter={["A", "B", "C", "D"][question.correct_answer]}
-              text={question.options[question.correct_answer]}
-              flag={question.option_flags?.[question.correct_answer]}
-              showFrame={phases.reveal}
-            />
-          )}
-        </div>
-      )}
-
-      {/* FUN FACT REVEAL - üst görsel + ampul + alt metin */}
-      {inRevealFunFact && (
-        <div
-          style={{
-            position: "absolute",
-            top: 120,
-            left: 40,
-            right: 40,
-            display: "flex",
-            flexDirection: "column",
-            gap: 24,
-          }}
-        >
-          {/* Fun fact görseli */}
-          {funFactImageSrc && (
-            <FunFactImage
-              src={funFactImageSrc}
-              showFrame={revealCorrectEnd}
-              width={imageWidth}
-              height={imageHeight}
-            />
-          )}
-          
-          {/* Ampul ikonu - büyük */}
-          <BulbIcon showFrame={revealCorrectEnd + 5} size={120} />
-          
-          {/* Fun fact metni - Canva mock'a benzer kutu */}
-          {question.fun_fact && (
-            <FunFactBox text={question.fun_fact} showFrame={revealCorrectEnd + 10} />
-          )}
-        </div>
-      )}
-
-      {/* COUNTDOWN sağ-üst */}
-      {inCountdown && (
-        <>
-          <div style={{ position: "absolute", left: 40, right: 40, bottom: 420, zIndex: 9 }}>
-            <CountdownTimer
-              startFrame={phases.countdown}
-              durationFrames={FIXED_FRAMES.countdown}
-              width="100%"
-              showNumber={false}
-            />
-          </div>
-          <BigCountdownNumberCorner
-            startFrame={phases.countdown}
-            durationFrames={FIXED_FRAMES.countdown}
-          />
-        </>
-      )}
-    </>
-  );
-};
-
-// ═══════════════════════════════════════════════════
-// LONG LAYOUT (16:9 yatay) - Canva mock'a tam uyumlu
-// ═══════════════════════════════════════════════════
-const LongLayout: React.FC<any> = ({
-  question, imageSrc, funFactImageSrc,
-  inShow, inCountdown, inDrumRoll, inRevealCorrect, inRevealFunFact,
-  phases, revealCorrectEnd, width, height,
-}) => {
-  // Header: 0-110, Body: 110-1080, padding 30
-  const bodyTop = 130;
-  const bodyBottom = 60;
-  const bodyHeight = height - bodyTop - bodyBottom;
+  // Header 150, alt boşluk 140 (progress bar + Jess için)
+  const bodyTop = 170;
+  const bodyBottom = 200;
   
-  // SHOW/COUNTDOWN/DRUMROLL: Sol görsel + Sağ soru/cevaplar
-  // REVEAL FUN FACT: Sol BÜYÜK görsel + Sağ ampul + Sağ alt metin (Canva mock)
-  const leftWidth = Math.floor(width * 0.55) - 60;
-  const rightWidth = width - leftWidth - 100;
-  const leftImageHeight = Math.floor(bodyHeight * 0.85);
-
+  // Sol kart 50%, sağ kart 50% (gap için)
+  const colGap = 50;
+  const leftWidth = Math.floor((width - 100 - colGap) * 0.5);
+  const rightWidth = width - 100 - colGap - leftWidth;
+  
+  // Görsel kart boyutu
+  const imageHeight = Math.min(height - bodyTop - bodyBottom, 600);
+  
   return (
     <div
       style={{
         position: "absolute",
         top: bodyTop,
-        left: 40,
-        right: 40,
+        left: 50,
+        right: 50,
         bottom: bodyBottom,
         display: "flex",
-        gap: 40,
+        gap: colGap,
       }}
     >
-      {/* SOL: GÖRSEL */}
+      {/* SOL: Görsel kart */}
       <div
         style={{
           width: leftWidth,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "flex-start",
+          justifyContent: "center",
         }}
       >
-        {/* Show fazlarında question görseli, fun fact fazında fun fact görseli */}
-        {(inShow || inCountdown || inDrumRoll || inRevealCorrect) && (
-          <ImageFrame src={imageSrc} width={leftWidth} height={leftImageHeight} color="primary" />
-        )}
-        {inRevealFunFact && funFactImageSrc && (
-          <FunFactImage src={funFactImageSrc} showFrame={revealCorrectEnd} width={leftWidth} height={leftImageHeight} />
+        {!inFunFact ? (
+          <ImageCard
+            src={imageSrc}
+            width={leftWidth}
+            height={imageHeight}
+            isReveal={isRevealed}
+            revealTransition={revealImageTransition}
+          />
+        ) : (
+          funFactImageSrc && (
+            <ImageCard
+              src={funFactImageSrc}
+              width={leftWidth}
+              height={imageHeight}
+              isReveal={false}
+              revealTransition={1}
+            />
+          )
         )}
       </div>
-
-      {/* SAĞ: SORU + CEVAPLAR | YA DA FUN FACT */}
+      
+      {/* SAĞ: Şıklar veya Fun fact */}
       <div
         style={{
           width: rightWidth,
           display: "flex",
           flexDirection: "column",
-          gap: 20,
           justifyContent: "center",
+          gap: 22,
         }}
       >
-        {/* Show + Countdown: soru + cevaplar */}
-        {(inShow || inCountdown) && (
-          <>
-            <QuestionTextBlock text={question.question_text} showFrame={phases.show} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <AnswerBoxNew letter="A" text={question.options[0]} flag={question.option_flags?.[0]} showFrame={phases.show + 15} large />
-              <AnswerBoxNew letter="B" text={question.options[1]} flag={question.option_flags?.[1]} showFrame={phases.show + 22} large />
-              <AnswerBoxNew letter="C" text={question.options[2]} flag={question.option_flags?.[2]} showFrame={phases.show + 29} large />
-              <AnswerBoxNew letter="D" text={question.options[3]} flag={question.option_flags?.[3]} showFrame={phases.show + 36} large />
-            </div>
-            {inCountdown && (
-              <div style={{ marginTop: 10 }}>
-                <CountdownTimer
-                  startFrame={phases.countdown}
-                  durationFrames={FIXED_FRAMES.countdown}
-                  width="100%"
-                  showNumber={false}
-                />
-              </div>
-            )}
-          </>
-        )}
-
-        {/* RevealCorrect: CORRECT! banner */}
-        {inRevealCorrect && (
-          <CorrectBanner
-            letter={["A", "B", "C", "D"][question.correct_answer]}
-            text={question.options[question.correct_answer]}
-            flag={question.option_flags?.[question.correct_answer]}
-            showFrame={phases.reveal}
+        {!inFunFact ? (
+          <AnswerStack
+            options={question.options}
+            flags={question.option_flags}
+            correctAnswer={question.correct_answer}
+            isRevealed={isRevealed}
+            phases={phases}
+            large
+          />
+        ) : (
+          <FunFactPanel
+            text={question.fun_fact}
+            showFrame={phases.funFact}
           />
         )}
-
-        {/* RevealFunFact: Ampul + Did You Know metni */}
-        {inRevealFunFact && (
-          <>
-            <BulbIcon showFrame={revealCorrectEnd} size={140} alignSelf="flex-start" />
-            {question.fun_fact && (
-              <FunFactBox text={question.fun_fact} showFrame={revealCorrectEnd + 10} />
-            )}
-          </>
-        )}
       </div>
+    </div>
+  );
+};
 
-      {/* Countdown number - sağ-üst dış katmanda */}
-      {inCountdown && (
-        <BigCountdownNumberCorner
-          startFrame={phases.countdown}
-          durationFrames={FIXED_FRAMES.countdown}
+// ═══════════════════════════════════════════════════
+// SHORTS LAYOUT (9:16) — Üst görsel + Alt şıklar
+// ═══════════════════════════════════════════════════
+const ShortsLayout: React.FC<LayoutProps> = ({
+  question, imageSrc, funFactImageSrc, theme, phases,
+  inShow, inCountdown, inDrumRoll, inRevealCorrect, inFunFact, isRevealed,
+  revealImageTransition, width, height,
+}) => {
+  const bodyTop = 150;
+  const padding = 50;
+  
+  const contentWidth = width - padding * 2;
+  const imageHeight = Math.floor(height * 0.32);
+  
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: bodyTop,
+        left: padding,
+        right: padding,
+        display: "flex",
+        flexDirection: "column",
+        gap: 24,
+      }}
+    >
+      {/* ÜST: Görsel kart */}
+      {!inFunFact ? (
+        <ImageCard
+          src={imageSrc}
+          width={contentWidth}
+          height={imageHeight}
+          isReveal={isRevealed}
+          revealTransition={revealImageTransition}
+        />
+      ) : (
+        funFactImageSrc && (
+          <ImageCard
+            src={funFactImageSrc}
+            width={contentWidth}
+            height={imageHeight}
+            isReveal={false}
+            revealTransition={1}
+          />
+        )
+      )}
+      
+      {/* ALT: Şıklar veya Fun fact */}
+      {!inFunFact ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <AnswerStack
+            options={question.options}
+            flags={question.option_flags}
+            correctAnswer={question.correct_answer}
+            isRevealed={isRevealed}
+            phases={phases}
+          />
+        </div>
+      ) : (
+        <FunFactPanel
+          text={question.fun_fact}
+          showFrame={phases.funFact}
         />
       )}
     </div>
@@ -399,441 +431,192 @@ const LongLayout: React.FC<any> = ({
 };
 
 // ═══════════════════════════════════════════════════
-// ALT KOMPONENTLER
+// ANSWER STACK (3 şık)
 // ═══════════════════════════════════════════════════
-
-const ImageFrame: React.FC<{ src: string; width: number; height: number; color?: "primary" | "accent" }> = ({
-  src, width, height, color = "primary",
-}) => (
-  <div
-    style={{
-      width,
-      height,
-      borderRadius: 24,
-      overflow: "hidden",
-      border: `8px solid ${color === "primary" ? COLORS.primary : COLORS.accent}`,
-      boxShadow: `0 12px 32px rgba(0,0,0,0.5), 0 0 20px ${color === "primary" ? COLORS.primary : COLORS.accent}`,
-      backgroundColor: COLORS.textBlack,
-    }}
-  >
-    <Img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-  </div>
-);
-
-const QuestionTextBlock: React.FC<{
-  text: string;
-  showFrame: number;
-  isCompact?: boolean;
-}> = ({ text, showFrame, isCompact }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const enterAnim = spring({
-    frame: frame - showFrame - 15,
-    fps,
-    config: { damping: 14, stiffness: 90 },
-  });
-  const opacity = interpolate(enterAnim, [0, 1], [0, 1]);
-  const translateY = interpolate(enterAnim, [0, 1], [20, 0]);
-
-  return (
-    <div
-      style={{
-        width: "100%",
-        opacity,
-        transform: `translateY(${translateY}px)`,
-        backgroundColor: "rgba(40, 20, 80, 0.85)",
-        borderRadius: 20,
-        padding: isCompact ? "22px 30px" : "26px 38px",
-        border: `5px solid ${COLORS.primary}`,
-        textAlign: "center",
-        boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: isCompact ? 50 : 46,
-          fontFamily: FONTS.display,
-          fontWeight: 400,
-          color: COLORS.textWhite,
-          textShadow: "3px 3px 5px rgba(0,0,0,0.7)",
-          lineHeight: 1.15,
-          letterSpacing: 0.5,
-        }}
-      >
-        {text}
-      </div>
-    </div>
-  );
-};
-
-// ANSWER BOX - bayrak emoji desteği
-const AnswerBoxNew: React.FC<{
-  letter: string;
-  text: string;
-  flag?: string;
-  showFrame: number;
+interface AnswerStackProps {
+  options: string[];
+  flags?: string[];
+  correctAnswer: number;
+  isRevealed: boolean;
+  phases: ReturnType<typeof computeQuestionPhases>;
   large?: boolean;
-}> = ({ letter, text, flag, showFrame, large }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const enterAnim = spring({
-    frame: frame - showFrame,
-    fps,
-    config: { damping: 12, stiffness: 100 },
-  });
-  const opacity = interpolate(enterAnim, [0, 1], [0, 1]);
-  const translateX = interpolate(enterAnim, [0, 1], [200, 0]);
+}
 
+const AnswerStack: React.FC<AnswerStackProps> = ({
+  options, flags, correctAnswer, isRevealed, phases, large,
+}) => {
+  const letters: Array<"A" | "B" | "C"> = ["A", "B", "C"];
+  
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        padding: large ? "18px 26px" : "16px 22px",
-        backgroundColor: "rgba(40, 20, 80, 0.45)",
-        borderRadius: 50,
-        border: `3px solid ${COLORS.primary}`,
-        opacity,
-        transform: `translateX(${translateX}px)`,
-        width: "100%",
-      }}
-    >
-      {/* Harf rozeti */}
-      <div
-        style={{
-          minWidth: large ? 52 : 44,
-          height: large ? 52 : 44,
-          backgroundColor: COLORS.primary,
-          color: COLORS.textBlack,
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: large ? 28 : 26,
-          fontFamily: FONTS.display,
-          fontWeight: 900,
-          border: "3px solid black",
-          flexShrink: 0,
-        }}
-      >
-        {letter}
-      </div>
-      
-      {/* Bayrak (varsa) */}
-      {flag && flag.trim().length > 0 && (
-        <div
-          style={{
-            fontSize: large ? 44 : 38,
-            lineHeight: 1,
-            flexShrink: 0,
-          }}
-        >
-          {flag}
-        </div>
-      )}
-      
-      {/* Metin */}
-      <div
-        style={{
-          fontSize: large ? 32 : 30,
-          fontFamily: FONTS.display,
-          fontWeight: 400,
-          color: COLORS.textWhite,
-          textShadow: "2px 2px 3px rgba(0,0,0,0.6)",
-          flex: 1,
-        }}
-      >
-        {text}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {options.map((text, i) => {
+        const letter = letters[i];
+        const isCorrect = i === correctAnswer;
+        
+        let state: AnswerState = "idle";
+        if (isRevealed) {
+          state = isCorrect ? "revealedCorrect" : "revealedDim";
+        }
+        
+        return (
+          <AnswerCard
+            key={i}
+            letter={letter}
+            text={text}
+            flag={flags?.[i]}
+            state={state}
+            enterFrame={phases.show + 12 + i * 8}
+            revealFrame={phases.reveal}
+            large={large}
+          />
+        );
+      })}
     </div>
   );
 };
 
-const CorrectBanner: React.FC<{
-  letter: string;
-  text: string;
-  flag?: string;
-  showFrame: number;
-}> = ({ letter, text, flag, showFrame }) => {
+// ═══════════════════════════════════════════════════
+// IMAGE CARD (yuvarlatılmış görsel kart)
+// ═══════════════════════════════════════════════════
+interface ImageCardProps {
+  src: string;
+  width: number;
+  height: number;
+  isReveal?: boolean;
+  revealTransition?: number;
+}
+
+const ImageCard: React.FC<ImageCardProps> = ({
+  src, width, height, isReveal = false, revealTransition = 0,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
-  const enterAnim = spring({
-    frame: frame - showFrame,
-    fps,
-    config: { damping: 8, stiffness: 150 },
-  });
-  const scale = interpolate(enterAnim, [0, 1], [0.3, 1]);
-  const rotation = interpolate(enterAnim, [0, 1], [-12, 0]);
-  const glow = 30 + Math.sin(frame * 0.2) * 20;
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 16,
-        transform: `scale(${scale}) rotate(${rotation}deg)`,
-        padding: 20,
-      }}
-    >
-      <div
-        style={{
-          fontSize: 56,
-          fontFamily: FONTS.display,
-          fontWeight: 400,
-          color: COLORS.primary,
-          textShadow: "4px 4px 0 black, -2px -2px 0 black, 2px -2px 0 black, -2px 2px 0 black",
-          letterSpacing: 2,
-        }}
-      >
-        ✅ CORRECT!
-      </div>
-      <div
-        style={{
-          fontSize: 50,
-          fontFamily: FONTS.display,
-          fontWeight: 400,
-          color: COLORS.textWhite,
-          backgroundColor: COLORS.correctGreen,
-          padding: "22px 36px",
-          borderRadius: 24,
-          border: "5px solid black",
-          boxShadow: `0 0 ${glow}px ${COLORS.correctGreen}, 0 8px 24px rgba(0,0,0,0.4)`,
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-        }}
-      >
-        <span style={{ fontSize: 65 }}>{letter}</span>
-        {flag && flag.trim().length > 0 && (
-          <span style={{ fontSize: 60 }}>{flag}</span>
-        )}
-        <span>{text}</span>
-      </div>
-    </div>
-  );
-};
-
-// FUN FACT GÖRSELİ
-const FunFactImage: React.FC<{
-  src: string;
-  showFrame: number;
-  width: number;
-  height: number;
-}> = ({ src, showFrame, width, height }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const enterAnim = spring({
-    frame: frame - showFrame,
-    fps,
-    config: { damping: 14, stiffness: 100 },
-  });
-  const opacity = interpolate(enterAnim, [0, 1], [0, 1]);
-  const scale = interpolate(enterAnim, [0, 1], [0.7, 1]);
+  // Görsel reveal'de yumuşak fade-scale geçiş
+  const scale = isReveal
+    ? interpolate(revealTransition, [0, 1], [0.95, 1])
+    : 1;
+  const opacity = isReveal
+    ? interpolate(revealTransition, [0, 0.5, 1], [0.5, 0.8, 1])
+    : 1;
+  
+  if (!src) return null;
   
   return (
     <div
       style={{
         width,
         height,
-        opacity,
-        transform: `scale(${scale})`,
-        borderRadius: 24,
+        borderRadius: 28,
         overflow: "hidden",
-        border: `8px solid ${COLORS.primary}`,
-        boxShadow: `0 12px 32px rgba(0,0,0,0.5), 0 0 30px ${COLORS.primary}`,
-      }}
-    >
-      <Img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-    </div>
-  );
-};
-
-// AMPUL İKONU (Canva mock'undaki gibi)
-const BulbIcon: React.FC<{
-  showFrame: number;
-  size?: number;
-  alignSelf?: string;
-}> = ({ showFrame, size = 140, alignSelf }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const enterAnim = spring({
-    frame: frame - showFrame,
-    fps,
-    config: { damping: 10, stiffness: 100 },
-  });
-  const scale = interpolate(enterAnim, [0, 1], [0, 1]);
-  const opacity = interpolate(enterAnim, [0, 1], [0, 1]);
-  // Hafif yanıp sönme
-  const glow = 0.8 + Math.abs(Math.sin(frame * 0.15)) * 0.2;
-  
-  return (
-    <div
-      style={{
-        fontSize: size,
+        backgroundColor: BRAND.white,
+        border: `6px solid ${BRAND.white}`,
+        boxShadow: "0 14px 32px rgba(0,0,0,0.45), 0 0 0 3px rgba(0,0,0,0.15)",
         transform: `scale(${scale})`,
         opacity,
-        textAlign: "center",
-        lineHeight: 1,
-        filter: `drop-shadow(0 0 ${20 * glow}px ${COLORS.primary})`,
-        alignSelf: alignSelf as any,
       }}
     >
-      💡
+      <Img
+        src={src}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+        }}
+      />
     </div>
   );
 };
 
-// FUN FACT KUTUSU (Canva mock'undaki gibi mor kutu)
-const FunFactBox: React.FC<{
+// ═══════════════════════════════════════════════════
+// FUN FACT PANEL
+// ═══════════════════════════════════════════════════
+interface FunFactPanelProps {
   text: string;
   showFrame: number;
-}> = ({ text, showFrame }) => {
+}
+
+const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  
   const enterAnim = spring({
     frame: frame - showFrame,
     fps,
-    config: { damping: 14, stiffness: 90 },
+    config: { damping: 14, stiffness: 100 },
   });
   const opacity = interpolate(enterAnim, [0, 1], [0, 1]);
-  const translateY = interpolate(enterAnim, [0, 1], [30, 0]);
+  const translateY = interpolate(enterAnim, [0, 1], [40, 0]);
+  
+  // Ampul pulse
+  const bulbPulse = 1 + Math.sin(frame * 0.15) * 0.05;
   
   return (
     <div
       style={{
         opacity,
         transform: `translateY(${translateY}px)`,
-        backgroundColor: COLORS.accent,
-        borderRadius: 20,
-        padding: "28px 32px",
-        border: `5px solid ${COLORS.primary}`,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 24,
+        padding: "0 20px",
       }}
     >
+      {/* Ampul ikonu */}
       <div
         style={{
-          fontSize: 38,
-          fontFamily: FONTS.display,
-          fontWeight: 400,
-          color: COLORS.textWhite,
-          textShadow: "3px 3px 4px rgba(0,0,0,0.5)",
-          lineHeight: 1.25,
-          textAlign: "center",
+          fontSize: 130,
+          transform: `scale(${bulbPulse})`,
+          filter: `drop-shadow(0 0 30px ${BRAND.yellow})`,
+          lineHeight: 1,
         }}
       >
-        {text}
+        💡
       </div>
-    </div>
-  );
-};
-
-// COUNTDOWN sağ-üst köşede daire
-const BigCountdownNumberCorner: React.FC<{
-  startFrame: number;
-  durationFrames: number;
-}> = ({ startFrame, durationFrames }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  
-  const elapsed = frame - startFrame;
-  const remainingSeconds = Math.max(1, Math.ceil((durationFrames - elapsed) / fps));
-  
-  const secondInTime = elapsed % fps;
-  const pulse = secondInTime < 6 ? interpolate(secondInTime, [0, 6], [1.6, 1.0]) : 1.0;
-  
-  const isDanger = remainingSeconds <= 2;
-  const color = isDanger ? COLORS.timerFillDanger : COLORS.primary;
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        right: 50,
-        top: 140,
-        zIndex: 25,
-        pointerEvents: "none",
-      }}
-    >
+      
+      {/* "DID YOU KNOW?" başlık */}
       <div
         style={{
-          width: 160,
-          height: 160,
-          backgroundColor: "rgba(0,0,0,0.7)",
-          borderRadius: "50%",
-          border: `6px solid ${color}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: `0 0 30px ${color}`,
+          fontSize: 48,
+          fontFamily: FONTS.display,
+          fontWeight: 900,
+          color: BRAND.yellow,
+          textShadow: `
+            -3px -3px 0 ${BRAND.black},
+            3px -3px 0 ${BRAND.black},
+            -3px 3px 0 ${BRAND.black},
+            3px 3px 0 ${BRAND.black}
+          `,
+          letterSpacing: 2,
+        }}
+      >
+        DID YOU KNOW?
+      </div>
+      
+      {/* Fact metni - beyaz arka plan kart */}
+      <div
+        style={{
+          backgroundColor: BRAND.white,
+          borderRadius: 24,
+          padding: "32px 40px",
+          boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
+          border: `5px solid ${BRAND.yellow}`,
+          maxWidth: "90%",
         }}
       >
         <div
           style={{
-            fontSize: 110,
-            fontFamily: '"Lilita One", sans-serif',
+            fontSize: 36,
+            fontFamily: FONTS.display,
             fontWeight: 900,
-            color,
-            textShadow: "5px 5px 0 black, -3px -3px 0 black, 3px -3px 0 black, -3px 3px 0 black",
-            lineHeight: 1,
-            transform: `scale(${pulse})`,
+            color: BRAND.black,
+            lineHeight: 1.3,
+            textAlign: "center",
           }}
         >
-          {remainingSeconds}
+          {text}
         </div>
-      </div>
-    </div>
-  );
-};
-
-const BigQuestionMark: React.FC<{ startFrame: number }> = ({ startFrame }) => {
-  const frame = useCurrentFrame();
-  const { fps, width, height } = useVideoConfig();
-  
-  const enterAnim = spring({
-    frame: frame - startFrame,
-    fps,
-    config: { damping: 10, stiffness: 100 },
-  });
-  const scale = interpolate(enterAnim, [0, 1], [0.3, 1]);
-  const blink = 0.7 + Math.abs(Math.sin(frame * 0.6)) * 0.3;
-  const shake = Math.sin(frame * 0.8) * 5;
-
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: 0,
-        right: 0,
-        top: "30%",
-        display: "flex",
-        justifyContent: "center",
-        zIndex: 15,
-        pointerEvents: "none",
-      }}
-    >
-      <div
-        style={{
-          fontSize: Math.min(width, height) * 0.5,
-          fontFamily: '"Lilita One", Arial Black, sans-serif',
-          fontWeight: 900,
-          color: COLORS.primary,
-          textShadow: `
-            -10px -10px 0 black,
-            10px -10px 0 black,
-            -10px 10px 0 black,
-            10px 10px 0 black,
-            0 0 80px ${COLORS.primary}
-          `,
-          transform: `translateX(${shake}px) scale(${scale})`,
-          opacity: blink,
-          lineHeight: 1,
-        }}
-      >
-        ?
       </div>
     </div>
   );
