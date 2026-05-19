@@ -1,8 +1,8 @@
 import React from "react";
-import { useCurrentFrame, interpolate, Img, staticFile } from "remotion";
+import { useCurrentFrame, interpolate, Img } from "remotion";
 
 interface JessCharacterProps {
-  pose: "intro" | "question" | "thinking" | "correct" | "outro";
+  pose: "intro" | "question" | "thinking" | "correct" | "outro" | "transition";
   poses: { [key: string]: string | undefined };
   position?: "center" | "bottom-right" | "bottom-left" | "bottom-center" | "right" | "left";
   size?: number;
