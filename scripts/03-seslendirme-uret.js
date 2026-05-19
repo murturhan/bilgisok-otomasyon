@@ -1,11 +1,12 @@
 /**
- * 03 - Seslendirme v5 (Her ses parçası ayrı MP3 - SES-VİDEO SENKRON)
+ * 03 - Seslendirme v6 (Voice değişikliği: Kore → Leda, pitch +2 → +3)
  *
- * Önceki v4: Tek MP3 üretiyordu (intro+sorular+outro birleşik)
- * Bu v5: AYRI MP3'ler üretir:
+ * Önceki v5: Kore voice + pitch +2
+ * Bu v6: Leda voice (daha yumuşak/sempatik) + pitch +3 (daha sevimli/çocuksu)
+ *
+ * AYRI MP3'ler üretir:
  *   - intro.mp3
  *   - q01-question.mp3, q01-answer.mp3
- *   - q02-question.mp3, q02-answer.mp3
  *   - ...
  *   - outro.mp3
  *
@@ -14,7 +15,7 @@
  *
  * Akış:
  * 1. questions.json'dan tüm metinleri oku
- * 2. Her metin için ayrı TTS çağrısı (en-US-Chirp3-HD-Kore + pitch shift +2)
+ * 2. Her metin için ayrı TTS çağrısı (en-US-Chirp3-HD-Leda + pitch shift +3)
  * 3. Her MP3'ü Drive'a yükle (02-ses/ klasörüne)
  * 4. audio-segments.json yaz (süre bilgileri)
  */
@@ -36,10 +37,12 @@ import { telegram } from "./lib/telegram.js";
 const execAsync = promisify(exec);
 const { JOB_ID } = process.env;
 
-const VOICE_NAME = "en-US-Chirp3-HD-Kore";
+// ⚠️ DEĞİŞTİ: Kore → Leda (daha yumuşak, sempatik kadın sesi)
+const VOICE_NAME = "en-US-Chirp3-HD-Leda";
 const LANGUAGE_CODE = "en-US";
-const PITCH_SHIFT_SEMITONES = 2;
-const MAX_CHARS_PER_REQUEST = 4500; // Tek parça için yüksek limit, böleceğiz nadiren
+// ⚠️ DEĞİŞTİ: 2 → 3 (daha sevimli/çocuksu)
+const PITCH_SHIFT_SEMITONES = 3;
+const MAX_CHARS_PER_REQUEST = 4500;
 
 // ─── METIN TEMİZLEME (TTS için) ─────────────────────────────────
 function ttsMetinTemizle(metin) {
@@ -110,12 +113,10 @@ async function ttsCagri(metin, accessToken) {
 async function pitchShiftUygula(girdiYol, ciktiYol) {
   const pitchRatio = Math.pow(2, PITCH_SHIFT_SEMITONES / 12);
   
-  // rubberband dene
   try {
     const cmd = `ffmpeg -y -hide_banner -loglevel error -i "${girdiYol}" -af "rubberband=pitch=${pitchRatio.toFixed(6)}" -ar 24000 "${ciktiYol}"`;
     await execAsync(cmd);
   } catch (e) {
-    // Fallback: asetrate + atempo
     console.warn("rubberband yok, asetrate fallback");
     const cmd = `ffmpeg -y -hide_banner -loglevel error -i "${girdiYol}" -af "asetrate=24000*${pitchRatio.toFixed(6)},atempo=${(1/pitchRatio).toFixed(6)},aresample=24000" "${ciktiYol}"`;
     await execAsync(cmd);
@@ -139,19 +140,15 @@ async function sesParcasiUret(metin, ciktiAdi, accessToken, tmpDir) {
     return null;
   }
   
-  // TTS
   const buffer = await ttsCagri(temizMetin, accessToken);
   const hamYol = path.join(tmpDir, `ham-${ciktiAdi}`);
   fs.writeFileSync(hamYol, buffer);
   
-  // Pitch shift
   const shiftedYol = path.join(tmpDir, ciktiAdi);
   await pitchShiftUygula(hamYol, shiftedYol);
   
-  // Ham dosyayı sil
   try { fs.unlinkSync(hamYol); } catch (e) {}
   
-  // Süreyi ölç
   const sure = await mp3Suresi(shiftedYol);
   const stats = fs.statSync(shiftedYol);
   
@@ -166,11 +163,10 @@ async function sesParcasiUret(metin, ciktiAdi, accessToken, tmpDir) {
   };
 }
 
-// ─── questions.json'u Drive'dan oku (önce 02-ses, sonra ana klasör) ────
+// ─── questions.json'u Drive'dan oku ───────────────────────────
 async function questionsJsonOku(jobFolderId, auth, hedefYol) {
   const drive = google.drive({ version: "v3", auth });
   
-  // 1. Önce 02-ses alt klasöründe ara
   const sesKlasor = await driveAltKlasorBul("02-ses", jobFolderId);
   let fileId = null;
   
@@ -186,7 +182,6 @@ async function questionsJsonOku(jobFolderId, auth, hedefYol) {
     }
   }
   
-  // 2. Bulunmadıysa ana klasörde ara (backward compat)
   if (!fileId) {
     const res2 = await drive.files.list({
       q: `'${jobFolderId}' in parents and name='questions.json' and trashed=false`,
@@ -224,15 +219,12 @@ async function main() {
     
     await jobGuncelle(JOB_ID, { ses_status: "running" });
     
-    // Çalışma klasörü
     const tmpDir = "/tmp/seslendirme";
     fs.rmSync(tmpDir, { recursive: true, force: true });
     fs.mkdirSync(tmpDir, { recursive: true });
     
-    // OAuth (Drive okuma için)
     const oauthAuth = getOAuthClient();
     
-    // questions.json'u indir
     const questionsJsonYol = path.join(tmpDir, "questions.json");
     const questionsData = await questionsJsonOku(job.drive_folder_id, oauthAuth, questionsJsonYol);
     if (!questionsData) throw new Error("questions.json bulunamadı!");
@@ -242,7 +234,6 @@ async function main() {
     console.log(`📋 ${soruSayisi} soru için ses parçaları üretilecek`);
     console.log(`Voice: ${VOICE_NAME} (pitch +${PITCH_SHIFT_SEMITONES})`);
     
-    // Google TTS Access Token (Service Account)
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT_JSON),
       scopes: ["https://www.googleapis.com/auth/cloud-platform"],
@@ -253,17 +244,14 @@ async function main() {
     if (!accessToken) throw new Error("TTS access token alınamadı");
     console.log("✓ TTS access token alındı");
     
-    // ─── Tüm ses parçaları için liste oluştur ────────────────
     const segmentTasks = [];
     
-    // Intro
     segmentTasks.push({
       key: "intro",
       filename: "intro.mp3",
       text: questionsData.intro_audio_text,
     });
     
-    // Her soru için 2 parça: question + answer
     for (let i = 0; i < soruSayisi; i++) {
       const q = questions[i];
       const idx = String(i + 1).padStart(2, "0");
@@ -284,7 +272,6 @@ async function main() {
       });
     }
     
-    // Outro
     segmentTasks.push({
       key: "outro",
       filename: "outro.mp3",
@@ -294,7 +281,6 @@ async function main() {
     console.log(`📊 Toplam ${segmentTasks.length} ses parçası üretilecek`);
     console.log(`   (1 intro + ${soruSayisi*2} soru + 1 outro)`);
     
-    // ─── Her parçayı üret (sırayla, TTS rate limit yememek için) ───
     const segments = [];
     for (let i = 0; i < segmentTasks.length; i++) {
       const task = segmentTasks[i];
@@ -310,7 +296,6 @@ async function main() {
         });
       }
       
-      // Hafif bekleme (TTS rate limit)
       if (i < segmentTasks.length - 1) {
         await new Promise(r => setTimeout(r, 200));
       }
@@ -318,13 +303,11 @@ async function main() {
     
     console.log(`✓ ${segments.length} parça üretildi`);
     
-    // ─── Drive'a yükle (02-ses klasörü) ──────────────────────
     const sesKlasor = await driveAltKlasorBul("02-ses", job.drive_folder_id);
     if (sesKlasor.length === 0) throw new Error("02-ses klasörü yok");
     
     console.log(`⬆️ Drive'a yükleniyor (${segments.length} dosya)...`);
     
-    // Paralel yükleme (4 thread)
     const PARALLEL = 4;
     for (let i = 0; i < segments.length; i += PARALLEL) {
       const batch = segments.slice(i, i + PARALLEL);
@@ -338,7 +321,6 @@ async function main() {
     }
     console.log(`✓ Tüm ses parçaları Drive'a yüklendi`);
     
-    // ─── audio-segments.json yaz ─────────────────────────────
     const segmentsManifest = {
       voice: VOICE_NAME,
       pitch_shift_semitones: PITCH_SHIFT_SEMITONES,
@@ -362,7 +344,6 @@ async function main() {
     );
     console.log(`✓ audio-segments.json yüklendi`);
     
-    // Temizlik
     fs.rmSync(tmpDir, { recursive: true, force: true });
     
     const toplamSure = ((Date.now() - baslangic) / 1000).toFixed(0);
@@ -372,7 +353,8 @@ async function main() {
     await telegram(
       job.chat_id,
       `🦊 *Jess voice ready!*\n` +
-      `🎙 ${segments.length} segments (${voiceTotal}s total)\n` +
+      `🎙 Voice: ${VOICE_NAME} (pitch +${PITCH_SHIFT_SEMITONES})\n` +
+      `📊 ${segments.length} segments (${voiceTotal}s total)\n` +
       `⏱ Generation: ${toplamSure}s`
     );
     
