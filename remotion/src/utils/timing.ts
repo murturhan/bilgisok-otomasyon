@@ -1,58 +1,92 @@
+/**
+ * Soru başına faz timing'leri (Quiz Blitz tarzı, çocuk hızında)
+ * 
+ * Bir soru şu fazlardan oluşur:
+ *   [show] → [countdown] → [drumRoll] → [revealCorrect] → [funFact] → [transition]
+ * 
+ * Frame cinsinden offset'ler döner.
+ */
+
 import { FPS, FIXED_FRAMES } from "../styles/theme";
 import { Question } from "../types/schemas";
 
-// Bir soru için faz başlangıç frame'leri (soru başlangıcına göre relatif)
 export interface QuestionPhases {
-  show: number;      // 0
-  countdown: number; // question_audio_duration
-  drumRoll: number;  // + countdown
-  reveal: number;    // + drumRoll (answer audio start)
-  transition: number; // + answer_audio_duration
-  end: number;       // + transition
+  show: number;          // 0 - başlangıç
+  countdown: number;     // show + question_audio
+  drumRoll: number;      // countdown + 5s
+  reveal: number;        // drumRoll + 1s
+  funFact: number;       // reveal + 2s
+  transition: number;    // funFact + 5s
+  end: number;           // transition + 1s
 }
 
+/**
+ * Bir sorunun tüm fazlarının başlangıç frame'lerini hesapla
+ * Her faz local frame (soru başlangıcından itibaren)
+ */
 export function computeQuestionPhases(question: Question): QuestionPhases {
-  const qFrames = Math.ceil(question.question_audio_duration * FPS);
-  const aFrames = Math.ceil(question.answer_audio_duration * FPS);
+  // Show fazı: Question audio kadar (en az 1s)
+  const showDuration = Math.max(
+    FIXED_FRAMES.showMin,
+    Math.ceil(question.question_audio_duration * FPS)
+  );
   
   const show = 0;
-  const countdown = show + qFrames;
+  const countdown = show + showDuration;
   const drumRoll = countdown + FIXED_FRAMES.countdown;
   const reveal = drumRoll + FIXED_FRAMES.drumRoll;
-  const transition = reveal + aFrames;
+  
+  // FunFact fazı: Answer audio kadar veya sabit (hangisi büyükse)
+  // Ama önce 2s correct reveal animasyonu var
+  const funFact = reveal + FIXED_FRAMES.revealCorrect;
+  
+  const funFactDuration = Math.max(
+    FIXED_FRAMES.funFact,
+    Math.ceil(question.answer_audio_duration * FPS)
+  );
+  const transition = funFact + funFactDuration;
   const end = transition + FIXED_FRAMES.transition;
   
-  return { show, countdown, drumRoll, reveal, transition, end };
+  return { show, countdown, drumRoll, reveal, funFact, transition, end };
 }
 
-// Bir sorunun başlangıç frame'i (intro + tüm önceki soruların süresi)
+/**
+ * Belirli bir sorunun video içindeki başlangıç frame'ini hesapla
+ */
 export function questionStartFrame(
   questionIndex: number,
-  introDuration: number,
+  introAudioDuration: number,
   questions: Question[]
 ): number {
-  let frame = Math.ceil(introDuration * FPS);
+  const introFrames = Math.ceil(introAudioDuration * FPS);
+  let frame = introFrames;
+  
   for (let i = 0; i < questionIndex; i++) {
     const phases = computeQuestionPhases(questions[i]);
     frame += phases.end;
   }
+  
   return frame;
 }
 
-// Outro başlangıç frame'i
+/**
+ * Outro'nun başlangıç frame'i (tüm soruların sonundaki frame)
+ */
 export function outroStartFrame(
-  introDuration: number,
+  introAudioDuration: number,
   questions: Question[]
 ): number {
-  let frame = Math.ceil(introDuration * FPS);
-  for (const q of questions) {
-    const phases = computeQuestionPhases(q);
-    frame += phases.end;
-  }
-  return frame;
+  return questionStartFrame(questions.length, introAudioDuration, questions);
 }
 
-// Frame to second
-export function frameToSecond(frame: number): number {
-  return frame / FPS;
+/**
+ * Toplam video süresini frame cinsinden hesapla
+ */
+export function totalDurationFrames(
+  introAudioDuration: number,
+  outroAudioDuration: number,
+  questions: Question[]
+): number {
+  const outroFrames = Math.ceil(outroAudioDuration * FPS);
+  return outroStartFrame(introAudioDuration, questions) + outroFrames;
 }
