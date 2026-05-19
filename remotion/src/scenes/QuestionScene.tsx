@@ -13,7 +13,7 @@ import {
 import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor } from "../styles/theme";
 import { Question, JessPoses } from "../types/schemas";
 import { JessCharacter } from "../components/JessCharacter";
-import { QuizHeader, LightningBolt } from "../components/QuizHeader";
+import { QuizHeader } from "../components/QuizHeader";
 import { AnswerCard, AnswerState } from "../components/AnswerCard";
 import { LiquidProgressBar } from "../components/LiquidProgressBar";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
@@ -23,17 +23,10 @@ import { computeQuestionPhases } from "../utils/timing";
 interface QuestionSceneProps {
   question: Question;
   imageSrc: string;
-  /**
-   * Reveal anında gösterilecek görsel (bayrak için).
-   * Yoksa imageSrc kalır.
-   */
   revealImageSrc?: string;
   funFactImageSrc?: string;
   questionNumber: number;
   totalQuestions: number;
-  /**
-   * Bu sorunun tema rengi (KidsQuizComposition tarafından geçilir)
-   */
   theme: ThemeColor;
   jessPoses: JessPoses;
   channelName: string;
@@ -66,7 +59,6 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   
   const phases = computeQuestionPhases(question);
   
-  // ─── FAZ DETECTION ─────────────────────────────────
   const inShow = frame < phases.countdown;
   const inCountdown = frame >= phases.countdown && frame < phases.drumRoll;
   const inDrumRoll = frame >= phases.drumRoll && frame < phases.reveal;
@@ -74,15 +66,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   const inFunFact = frame >= phases.funFact && frame < phases.transition;
   const inTransition = frame >= phases.transition && frame < phases.end;
   
-  // Reveal başlangıcı sonrası (görsel bayrağa geçer, şıklar state değiştirir)
   const isRevealed = frame >= phases.reveal;
   
-  // Jess pozu
   let currentJessPose: keyof JessPoses = "question";
   if (inCountdown || inDrumRoll) currentJessPose = "thinking";
   else if (inRevealCorrect || inFunFact) currentJessPose = "correct";
   
-  // Fade out transition'da
   const fadeOut = inTransition
     ? interpolate(
         frame - phases.transition,
@@ -92,14 +81,11 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       )
     : 1;
   
-  // ─── GÖRSEL: SHOW/COUNTDOWN'da question image, REVEAL'da bayrak/clue ──
-  // Bayrak varsa reveal'de değişir, yoksa question image kalır
   const hasRevealImage = !!revealImageSrc && revealImageSrc !== imageSrc;
   const currentImageSrc = (isRevealed && !inFunFact && hasRevealImage)
     ? revealImageSrc
     : imageSrc;
   
-  // Reveal görsel geçişi: 0.3s'lik scale+fade
   const revealImageTransition = isRevealed
     ? interpolate(frame - phases.reveal, [0, 8], [0, 1], {
         extrapolateLeft: "clamp",
@@ -107,12 +93,10 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       })
     : 0;
   
-  // Pattern - soru başına farklı
   const pattern = getPatternForQuestion(questionNumber - 1);
   
   return (
     <AbsoluteFill style={{ opacity: fadeOut }}>
-      {/* ANIMATED BG */}
       <AnimatedBackground theme={theme} pattern={pattern} motionSpeed={1} />
       
       {/* AUDIO */}
@@ -127,42 +111,37 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </Sequence>
       )}
       
-      {/* SFX */}
-      {/* Progress bar sıvı dolan ses - countdown boyunca */}
+      {/* SFX — Quiz Blitz tarzı, sade ve temiz */}
+      {/* Progress dolan ses - tüm countdown boyunca */}
       {sfx_progress && (
         <Sequence from={phases.countdown} durationInFrames={FIXED_FRAMES.countdown}>
-          <Audio src={staticFile(sfx_progress)} volume={0.8} />
+          <Audio src={staticFile(sfx_progress)} volume={0.5} />
         </Sequence>
       )}
-      {/* Tick - countdown'un son 2 saniyesi (alarm hissi) */}
+      {/* Saat tik-tak - countdown'un son 3 saniyesi (aciliyet) */}
       {sfx_tick && (
         <Sequence
-          from={phases.drumRoll - (2 * FPS)}
-          durationInFrames={2 * FPS}
+          from={phases.drumRoll - (3 * FPS)}
+          durationInFrames={3 * FPS}
         >
-          <Audio src={staticFile(sfx_tick)} volume={0.9} loop />
+          <Audio src={staticFile(sfx_tick)} volume={0.6} loop />
         </Sequence>
       )}
-      {/* Drum - reveal hazırlığı */}
+      {/* Drum sadece reveal'den 0.3s önce (kısa bump) */}
       {sfx_drum && (
-        <Sequence from={phases.drumRoll} durationInFrames={FIXED_FRAMES.drumRoll}>
-          <Audio src={staticFile(sfx_drum)} volume={1.0} />
+        <Sequence from={phases.reveal - Math.floor(FPS * 0.3)} durationInFrames={Math.floor(FPS * 0.3)}>
+          <Audio src={staticFile(sfx_drum)} volume={0.4} />
         </Sequence>
       )}
-      {/* Correct ding - reveal başlangıcı */}
+      {/* Correct ding - reveal başında, sade */}
       {sfx_correct && (
-        <Sequence from={phases.reveal} durationInFrames={2 * FPS}>
-          <Audio src={staticFile(sfx_correct)} volume={1.0} />
+        <Sequence from={phases.reveal} durationInFrames={Math.floor(FPS * 1.5)}>
+          <Audio src={staticFile(sfx_correct)} volume={0.7} />
         </Sequence>
       )}
-      {/* Whoosh - transition başlangıcı */}
-      {sfx_whoosh && (
-        <Sequence from={phases.transition} durationInFrames={FIXED_FRAMES.transition}>
-          <Audio src={staticFile(sfx_whoosh)} volume={0.8} />
-        </Sequence>
-      )}
+      {/* Whoosh KALDIRILDI - artık çatlama yapan overlap yok */}
       
-      {/* HEADER - sol yıldız rozet + orta soru + sağ şimşek */}
+      {/* HEADER */}
       <QuizHeader
         questionNumber={questionNumber}
         questionText={question.question_text}
@@ -170,15 +149,15 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         isVertical={isVertical}
       />
       
-      {/* VERTICAL BRAND TAG - sağ kenar */}
+      {/* VERTICAL BRAND TAG */}
       <VerticalBrandTag
         side="right"
-        topOffset={isVertical ? 180 : 200}
-        bottomOffset={isVertical ? 280 : 200}
-        fontSize={isVertical ? 32 : 36}
+        topOffset={isVertical ? 170 : 200}
+        bottomOffset={isVertical ? 250 : 200}
+        fontSize={isVertical ? 28 : 32}
       />
       
-      {/* ANA İÇERİK - format'a göre */}
+      {/* ANA İÇERİK */}
       {isVertical ? (
         <ShortsLayout
           question={question}
@@ -186,10 +165,6 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           funFactImageSrc={funFactImageSrc}
           theme={theme}
           phases={phases}
-          inShow={inShow}
-          inCountdown={inCountdown}
-          inDrumRoll={inDrumRoll}
-          inRevealCorrect={inRevealCorrect}
           inFunFact={inFunFact}
           isRevealed={isRevealed}
           revealImageTransition={revealImageTransition}
@@ -203,10 +178,6 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           funFactImageSrc={funFactImageSrc}
           theme={theme}
           phases={phases}
-          inShow={inShow}
-          inCountdown={inCountdown}
-          inDrumRoll={inDrumRoll}
-          inRevealCorrect={inRevealCorrect}
           inFunFact={inFunFact}
           isRevealed={isRevealed}
           revealImageTransition={revealImageTransition}
@@ -215,12 +186,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         />
       )}
       
-      {/* PROGRESS BAR - alt orta, countdown fazında */}
+      {/* PROGRESS BAR */}
       {(inCountdown || inDrumRoll) && (
         <div
           style={{
             position: "absolute",
-            bottom: isVertical ? 380 : 80,
+            bottom: isVertical ? 320 : 80,
             left: isVertical ? 60 : 200,
             right: isVertical ? 60 : 200,
             zIndex: 20,
@@ -234,12 +205,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </div>
       )}
       
-      {/* JESS - sağ alt köşede küçük (long); alt orta (shorts) */}
+      {/* JESS - shorts'ta sağ alt köşede (orta yerine - dah az yer kaplar) */}
       <JessCharacter
         pose={currentJessPose}
         poses={jessPoses}
-        position={isVertical ? "bottom-center" : "bottom-right"}
-        size={isVertical ? 320 : 280}
+        position={isVertical ? "bottom-right" : "bottom-right"}
+        size={isVertical ? 260 : 280}
         animate
       />
     </AbsoluteFill>
@@ -247,7 +218,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
 };
 
 // ═══════════════════════════════════════════════════
-// LONG LAYOUT (16:9) — Sol görsel + Sağ şıklar
+// LONG LAYOUT (16:9)
 // ═══════════════════════════════════════════════════
 interface LayoutProps {
   question: Question;
@@ -255,10 +226,6 @@ interface LayoutProps {
   funFactImageSrc?: string;
   theme: ThemeColor;
   phases: ReturnType<typeof computeQuestionPhases>;
-  inShow: boolean;
-  inCountdown: boolean;
-  inDrumRoll: boolean;
-  inRevealCorrect: boolean;
   inFunFact: boolean;
   isRevealed: boolean;
   revealImageTransition: number;
@@ -267,20 +234,16 @@ interface LayoutProps {
 }
 
 const LongLayout: React.FC<LayoutProps> = ({
-  question, imageSrc, funFactImageSrc, theme, phases,
-  inShow, inCountdown, inDrumRoll, inRevealCorrect, inFunFact, isRevealed,
-  revealImageTransition, width, height,
+  question, imageSrc, funFactImageSrc, phases,
+  inFunFact, isRevealed, revealImageTransition, width, height,
 }) => {
-  // Header 150, alt boşluk 140 (progress bar + Jess için)
   const bodyTop = 170;
   const bodyBottom = 200;
   
-  // Sol kart 50%, sağ kart 50% (gap için)
   const colGap = 50;
   const leftWidth = Math.floor((width - 100 - colGap) * 0.5);
   const rightWidth = width - 100 - colGap - leftWidth;
   
-  // Görsel kart boyutu
   const imageHeight = Math.min(height - bodyTop - bodyBottom, 600);
   
   return (
@@ -295,7 +258,6 @@ const LongLayout: React.FC<LayoutProps> = ({
         gap: colGap,
       }}
     >
-      {/* SOL: Görsel kart */}
       <div
         style={{
           width: leftWidth,
@@ -326,7 +288,6 @@ const LongLayout: React.FC<LayoutProps> = ({
         )}
       </div>
       
-      {/* SAĞ: Şıklar veya Fun fact */}
       <div
         style={{
           width: rightWidth,
@@ -349,6 +310,7 @@ const LongLayout: React.FC<LayoutProps> = ({
           <FunFactPanel
             text={question.fun_fact}
             showFrame={phases.funFact}
+            isVertical={false}
           />
         )}
       </div>
@@ -357,18 +319,24 @@ const LongLayout: React.FC<LayoutProps> = ({
 };
 
 // ═══════════════════════════════════════════════════
-// SHORTS LAYOUT (9:16) — Üst görsel + Alt şıklar
+// SHORTS LAYOUT (9:16) — BOŞ ALAN KAPATILDI
 // ═══════════════════════════════════════════════════
 const ShortsLayout: React.FC<LayoutProps> = ({
-  question, imageSrc, funFactImageSrc, theme, phases,
-  inShow, inCountdown, inDrumRoll, inRevealCorrect, inFunFact, isRevealed,
-  revealImageTransition, width, height,
+  question, imageSrc, funFactImageSrc, phases,
+  inFunFact, isRevealed, revealImageTransition, width, height,
 }) => {
-  const bodyTop = 150;
-  const padding = 50;
+  // YENİ LAYOUT (boş alan kapatıldı):
+  // Top:    150 (header) 
+  // Body:   Görsel (büyütüldü %40 → %38)
+  // Body:   Şıklar (3 büyük kart, geniş gap)
+  // Bottom: Progress + Jess (sağ alt köşede)
   
+  const bodyTop = 160;
+  const padding = 40;
   const contentWidth = width - padding * 2;
-  const imageHeight = Math.floor(height * 0.32);
+  
+  // Görsel %38 ekran yüksekliği (önceki %32'den artırıldı)
+  const imageHeight = Math.floor(height * 0.38);
   
   return (
     <div
@@ -377,12 +345,14 @@ const ShortsLayout: React.FC<LayoutProps> = ({
         top: bodyTop,
         left: padding,
         right: padding,
+        bottom: 280, // Progress bar + Jess için yer ayır
         display: "flex",
         flexDirection: "column",
-        gap: 24,
+        justifyContent: "flex-start",
+        gap: 30,
       }}
     >
-      {/* ÜST: Görsel kart */}
+      {/* GÖRSEL veya FUN FACT */}
       {!inFunFact ? (
         <ImageCard
           src={imageSrc}
@@ -396,20 +366,22 @@ const ShortsLayout: React.FC<LayoutProps> = ({
           <ImageCard
             src={funFactImageSrc}
             width={contentWidth}
-            height={imageHeight}
+            height={Math.floor(height * 0.32)}
             isReveal={false}
             revealTransition={1}
           />
         )
       )}
       
-      {/* ALT: Şıklar veya Fun fact */}
+      {/* ŞIKLAR veya FUN FACT METİN */}
       {!inFunFact ? (
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 16,
+            gap: 22,
+            flex: 1,
+            justifyContent: "center",
           }}
         >
           <AnswerStack
@@ -418,20 +390,31 @@ const ShortsLayout: React.FC<LayoutProps> = ({
             correctAnswer={question.correct_answer}
             isRevealed={isRevealed}
             phases={phases}
+            large
           />
         </div>
       ) : (
-        <FunFactPanel
-          text={question.fun_fact}
-          showFrame={phases.funFact}
-        />
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <FunFactPanel
+            text={question.fun_fact}
+            showFrame={phases.funFact}
+            isVertical
+          />
+        </div>
       )}
     </div>
   );
 };
 
 // ═══════════════════════════════════════════════════
-// ANSWER STACK (3 şık)
+// ANSWER STACK
 // ═══════════════════════════════════════════════════
 interface AnswerStackProps {
   options: string[];
@@ -448,7 +431,7 @@ const AnswerStack: React.FC<AnswerStackProps> = ({
   const letters: Array<"A" | "B" | "C"> = ["A", "B", "C"];
   
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {options.map((text, i) => {
         const letter = letters[i];
         const isCorrect = i === correctAnswer;
@@ -476,7 +459,7 @@ const AnswerStack: React.FC<AnswerStackProps> = ({
 };
 
 // ═══════════════════════════════════════════════════
-// IMAGE CARD (yuvarlatılmış görsel kart)
+// IMAGE CARD
 // ═══════════════════════════════════════════════════
 interface ImageCardProps {
   src: string;
@@ -489,10 +472,6 @@ interface ImageCardProps {
 const ImageCard: React.FC<ImageCardProps> = ({
   src, width, height, isReveal = false, revealTransition = 0,
 }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  
-  // Görsel reveal'de yumuşak fade-scale geçiş
   const scale = isReveal
     ? interpolate(revealTransition, [0, 1], [0.95, 1])
     : 1;
@@ -529,14 +508,15 @@ const ImageCard: React.FC<ImageCardProps> = ({
 };
 
 // ═══════════════════════════════════════════════════
-// FUN FACT PANEL
+// FUN FACT PANEL — UPPERCASE, daha geniş, ortalı
 // ═══════════════════════════════════════════════════
 interface FunFactPanelProps {
   text: string;
   showFrame: number;
+  isVertical?: boolean;
 }
 
-const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame }) => {
+const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
@@ -548,7 +528,6 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame }) => {
   const opacity = interpolate(enterAnim, [0, 1], [0, 1]);
   const translateY = interpolate(enterAnim, [0, 1], [40, 0]);
   
-  // Ampul pulse
   const bulbPulse = 1 + Math.sin(frame * 0.15) * 0.05;
   
   return (
@@ -559,14 +538,14 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame }) => {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 24,
-        padding: "0 20px",
+        gap: isVertical ? 18 : 24,
+        padding: "0 16px",
+        width: "100%",
       }}
     >
-      {/* Ampul ikonu */}
       <div
         style={{
-          fontSize: 130,
+          fontSize: isVertical ? 110 : 130,
           transform: `scale(${bulbPulse})`,
           filter: `drop-shadow(0 0 30px ${BRAND.yellow})`,
           lineHeight: 1,
@@ -575,10 +554,9 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame }) => {
         💡
       </div>
       
-      {/* "DID YOU KNOW?" başlık */}
       <div
         style={{
-          fontSize: 48,
+          fontSize: isVertical ? 44 : 52,
           fontFamily: FONTS.display,
           fontWeight: 900,
           color: BRAND.yellow,
@@ -589,30 +567,32 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame }) => {
             3px 3px 0 ${BRAND.black}
           `,
           letterSpacing: 2,
+          textTransform: "uppercase",
         }}
       >
         DID YOU KNOW?
       </div>
       
-      {/* Fact metni - beyaz arka plan kart */}
       <div
         style={{
           backgroundColor: BRAND.white,
           borderRadius: 24,
-          padding: "32px 40px",
+          padding: isVertical ? "28px 32px" : "32px 40px",
           boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
           border: `5px solid ${BRAND.yellow}`,
-          maxWidth: "90%",
+          maxWidth: "100%",
         }}
       >
         <div
           style={{
-            fontSize: 36,
+            fontSize: isVertical ? 36 : 40,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.black,
             lineHeight: 1.3,
             textAlign: "center",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
           }}
         >
           {text}
