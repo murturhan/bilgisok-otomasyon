@@ -251,11 +251,14 @@ async function main() {
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
     fs.mkdirSync(TMP_DIR, { recursive: true });
     
-    fs.rmSync(REMOTION_PUBLIC, { recursive: true, force: true });
+    // ÖNEMLİ: 'brand/' klasörünü silmiyoruz - logo/tail/gozluk asset'leri orada
+    // Sadece her render'da değişen alt klasörleri (questions, jess, audio) temizliyoruz
     fs.mkdirSync(REMOTION_PUBLIC, { recursive: true });
-    fs.mkdirSync(path.join(REMOTION_PUBLIC, "questions"), { recursive: true });
-    fs.mkdirSync(path.join(REMOTION_PUBLIC, "jess"), { recursive: true });
-    fs.mkdirSync(path.join(REMOTION_PUBLIC, "audio"), { recursive: true });
+    for (const sub of ["questions", "jess", "audio"]) {
+      const subPath = path.join(REMOTION_PUBLIC, sub);
+      fs.rmSync(subPath, { recursive: true, force: true });
+      fs.mkdirSync(subPath, { recursive: true });
+    }
 
     const oauthAuth = getOAuthClient();
     const saAuth = getServiceAccountAuth();
@@ -545,7 +548,10 @@ async function main() {
     const yuklenen = await driveDosyaYukle({ filename, filepath }, videoKlasorId, "video/mp4");
 
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
-    fs.rmSync(REMOTION_PUBLIC, { recursive: true, force: true });
+    // brand/ klasörünü koru, sadece geçici alt klasörleri temizle
+    for (const sub of ["questions", "jess", "audio"]) {
+      fs.rmSync(path.join(REMOTION_PUBLIC, sub), { recursive: true, force: true });
+    }
 
     const toplamSureSec = ((Date.now() - toplamBaslangic) / 1000).toFixed(0);
     
