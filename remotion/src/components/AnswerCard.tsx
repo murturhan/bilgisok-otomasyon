@@ -9,29 +9,11 @@ interface AnswerCardProps {
   text: string;
   flag?: string;
   state: AnswerState;
-  /**
-   * Bu kart hangi frame'de görünmeye başlasın (idle stagger için)
-   */
   enterFrame: number;
-  /**
-   * Reveal anında bu kart hangi frame'de state'i değiştirdi (animasyon için)
-   */
   revealFrame?: number;
   large?: boolean;
 }
 
-/**
- * Quiz Blitz tarzı cevap kartı.
- * 
- * IDLE: Yarı-saydam kart + renkli daire içinde harf + cevap metni
- *   → Stagger ile enter: sağdan kayarak gelir
- * 
- * REVEALED CORRECT: Büyür, beyaz arka plan, yeşil daire, kalın siyah metin
- *   → Spring scale + glow efekti
- * 
- * REVEALED DIM: Küçülür, daha soluk, gri tonlu
- *   → Soluklaşma animasyonu
- */
 export const AnswerCard: React.FC<AnswerCardProps> = ({
   letter,
   text,
@@ -44,7 +26,6 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
-  // ─── ENTER ANIMASYONU (sağdan kayarak gel) ─────
   const enterAnim = spring({
     frame: frame - enterFrame,
     fps,
@@ -53,14 +34,12 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
   const enterTranslateX = interpolate(enterAnim, [0, 1], [300, 0]);
   const enterOpacity = interpolate(enterAnim, [0, 1], [0, 1]);
   
-  // ─── REVEAL ANIMASYONU (correct/dim state için) ─
   const revealAnim = spring({
     frame: frame - revealFrame,
     fps,
     config: { damping: 12, stiffness: 100 },
   });
   
-  // Hedef değerleri state'e göre belirle
   let targetScale = 1;
   let targetOpacity = 1;
   let bgColor = "rgba(255, 255, 255, 0.92)";
@@ -83,8 +62,6 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
     dimFilter = "saturate(0.4) brightness(0.9)";
   }
   
-  // Reveal animasyonu - mevcut state hedef değere doğru
-  // Eğer reveal başladıysa animate et
   const isRevealed = state !== "idle";
   const revealProgress = isRevealed
     ? interpolate(revealAnim, [0, 1], [0, 1], {
@@ -93,19 +70,17 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
       })
     : 0;
   
-  // Anlık değerleri interpolate
   const currentScale = 1 + (targetScale - 1) * revealProgress;
   const currentOpacity = 1 + (targetOpacity - 1) * revealProgress;
   
-  // Glow pulse (sadece correct için)
   const correctPulse = state === "revealedCorrect"
     ? 1 + Math.sin(frame * 0.2) * 0.03
     : 1;
   
-  const cardPadding = large ? "20px 32px" : "18px 28px";
-  const badgeSize = large ? 62 : 56;
-  const textSize = large ? 34 : 30;
-  const letterSize = large ? 30 : 28;
+  const cardPadding = large ? "22px 36px" : "20px 30px";
+  const badgeSize = large ? 68 : 60;
+  const textSize = large ? 38 : 34;
+  const letterSize = large ? 32 : 30;
   
   return (
     <div
@@ -122,10 +97,8 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         boxShadow: `0 8px 24px rgba(0,0,0,0.35)${extraShadow}`,
         width: "100%",
         filter: dimFilter,
-        transition: "background-color 0.3s ease",
       }}
     >
-      {/* SOL: Renkli daire içinde harf */}
       <div
         style={{
           minWidth: badgeSize,
@@ -148,11 +121,10 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         {letter}
       </div>
       
-      {/* Bayrak emoji (varsa) */}
       {flag && flag.trim().length > 0 && (
         <div
           style={{
-            fontSize: large ? 44 : 38,
+            fontSize: large ? 48 : 42,
             lineHeight: 1,
             flexShrink: 0,
           }}
@@ -161,7 +133,6 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         </div>
       )}
       
-      {/* SAĞ: Cevap metni */}
       <div
         style={{
           fontSize: textSize,
@@ -169,7 +140,8 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
           fontWeight: 900,
           color: textColor,
           flex: 1,
-          letterSpacing: 0.5,
+          letterSpacing: 0.8,
+          textTransform: "uppercase",
         }}
       >
         {text}
