@@ -6,9 +6,11 @@ import {
   interpolate,
   spring,
 } from "remotion";
-import { COLORS, FONTS } from "../styles/theme";
+import { BRAND, FONTS, THEME_COLORS } from "../styles/theme";
 import { JessCharacter } from "../components/JessCharacter";
-import { BackgroundLayer } from "../components/BackgroundLayer";
+import { AnimatedBackground } from "../components/AnimatedBackground";
+import { LightningBolt } from "../components/QuizHeader";
+import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { JessPoses } from "../types/schemas";
 
 interface IntroSceneProps {
@@ -16,182 +18,201 @@ interface IntroSceneProps {
   topic: string;
   jessPoses: JessPoses;
   durationFrames: number;
-  backgroundImageSrc?: string;
 }
 
+/**
+ * Intro sahnesi - Quiz Blitz tarzı logo reveal.
+ * 
+ * Akış:
+ *  0-20:  "GENIMINI" sol yumruğuyla, "TESTS" sağ yumruğuyla aynı anda gelir, ortada şimşek belirir
+ *  20-45: "Fun & Smart Learning" tagline aşağıdan gelir
+ *  45-75: "Today: {topic}" rozet sıçrayarak gelir
+ *  75-end: Jess karakter ortada, hafif bounce
+ */
 export const IntroScene: React.FC<IntroSceneProps> = ({
   channelName,
   topic,
   jessPoses,
   durationFrames,
-  backgroundImageSrc,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const isVertical = height > width;
-
-  const logoAnim = spring({
-    frame,
-    fps,
-    config: { damping: 12, stiffness: 80 },
-  });
-  const logoScale = interpolate(logoAnim, [0, 1], [0, 1]);
-  const logoY = interpolate(logoAnim, [0, 1], [-100, 0]);
-
-  const taglineAnim = spring({
-    frame: frame - 30,
-    fps,
-    config: { damping: 14, stiffness: 90 },
-  });
+  
+  // Intro için canlı bir tema (pembe-mor mix)
+  const theme = THEME_COLORS[0]; // pink
+  
+  // ─── ANIMASYONLAR ─────────────────────────────────
+  // Logo "GENIMINI" - soldan gelir (yumruk hissi)
+  const leftAnim = spring({ frame: frame - 0, fps, config: { damping: 11, stiffness: 130 } });
+  const leftX = interpolate(leftAnim, [0, 1], [-400, 0]);
+  const leftScale = interpolate(leftAnim, [0, 1], [0, 1]);
+  
+  // Logo "TESTS" - sağdan gelir
+  const rightAnim = spring({ frame: frame - 5, fps, config: { damping: 11, stiffness: 130 } });
+  const rightX = interpolate(rightAnim, [0, 1], [400, 0]);
+  const rightScale = interpolate(rightAnim, [0, 1], [0, 1]);
+  
+  // Şimşek - ortada büyüyerek belirir
+  const boltAnim = spring({ frame: frame - 15, fps, config: { damping: 9, stiffness: 100 } });
+  const boltScale = interpolate(boltAnim, [0, 1], [0, 1]);
+  const boltRotate = interpolate(frame, [15, 30], [180, 0], { extrapolateRight: "clamp" });
+  
+  // Tagline
+  const taglineAnim = spring({ frame: frame - 30, fps, config: { damping: 14, stiffness: 100 } });
   const taglineOpacity = interpolate(taglineAnim, [0, 1], [0, 1]);
   const taglineY = interpolate(taglineAnim, [0, 1], [40, 0]);
-
-  const topicAnim = spring({
-    frame: frame - 75,
-    fps,
-    config: { damping: 14, stiffness: 90 },
-  });
-  const topicOpacity = interpolate(topicAnim, [0, 1], [0, 1]);
-  const topicScale = interpolate(topicAnim, [0, 1], [0.5, 1]);
-
-  // Yıldızlar
-  const stars = Array.from({ length: 12 }).map((_, i) => {
-    const angle = (i / 12) * Math.PI * 2;
-    const radius = Math.min(width, height) * 0.4;
-    const x = width / 2 + Math.cos(angle + frame * 0.02) * radius;
-    const y = height / 2 + Math.sin(angle + frame * 0.02) * radius;
-    const size = 30 + Math.sin(frame * 0.1 + i) * 10;
-    return { x, y, size, key: i };
-  });
-
+  
+  // Topic rozet
+  const topicAnim = spring({ frame: frame - 50, fps, config: { damping: 10, stiffness: 110 } });
+  const topicScale = interpolate(topicAnim, [0, 1], [0, 1]);
+  const topicOpacity = interpolate(topicAnim, [0, 0.5], [0, 1]);
+  
+  // ─── BOYUTLAR ─────────────────────────────────────
+  const logoFontSize = isVertical ? 140 : 180;
+  const taglineFontSize = isVertical ? 48 : 56;
+  const topicFontSize = isVertical ? 46 : 56;
+  
+  // Logo dönemi - frame'e göre hafif sallanma
+  const logoIdleBounce = frame > 30 ? Math.sin(frame * 0.1) * 4 : 0;
+  
   return (
     <AbsoluteFill>
-      <BackgroundLayer imageSrc={backgroundImageSrc} />
-      {stars.map((s) => (
-        <div
-          key={s.key}
-          style={{
-            position: "absolute",
-            left: s.x,
-            top: s.y,
-            fontSize: s.size,
-            opacity: 0.6,
-            pointerEvents: "none",
-          }}
-        >
-          ⭐
-        </div>
-      ))}
-
-      {/* METIN BLOĞU - üst 1/3'te */}
+      <AnimatedBackground theme={theme} pattern="bolt" motionSpeed={1.5} />
+      
+      <VerticalBrandTag side="right" topOffset={200} bottomOffset={200} fontSize={isVertical ? 32 : 36} />
+      
+      {/* ÜST: LOGO BLOĞU */}
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "12%" : "20%",
+          top: isVertical ? "10%" : "12%",
           left: 0,
           right: 0,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: isVertical ? 24 : 50,
-          zIndex: 5,
+          gap: 30,
         }}
       >
-        {/* GENIMINI logo - DAHA BÜYÜK */}
+        {/* "GENIMINI ⚡ TESTS" tek satır - sembol ortada */}
         <div
           style={{
-            transform: `translateY(${logoY}px) scale(${logoScale})`,
             display: "flex",
-            flexDirection: "column",
             alignItems: "center",
-            gap: isVertical ? 18 : 20,
+            justifyContent: "center",
+            gap: 30,
+            flexWrap: isVertical ? "wrap" : "nowrap",
+            transform: `translateY(${logoIdleBounce}px)`,
           }}
         >
+          {/* GENIMINI */}
           <div
             style={{
-              fontSize: isVertical ? 160 : 180,  // 110 → 160 (BÜYÜTÜLDÜ)
+              fontSize: logoFontSize,
               fontFamily: FONTS.display,
               fontWeight: 900,
-              color: COLORS.primary,
+              color: BRAND.white,
               textShadow: `
-                -8px -8px 0 black,
-                8px -8px 0 black,
-                -8px 8px 0 black,
-                8px 8px 0 black,
-                15px 15px 0 ${COLORS.accent}
+                -6px -6px 0 ${BRAND.black},
+                6px -6px 0 ${BRAND.black},
+                -6px 6px 0 ${BRAND.black},
+                6px 6px 0 ${BRAND.black},
+                10px 10px 0 #FF1493
               `,
+              letterSpacing: 4,
+              transform: `translateX(${leftX}px) scale(${leftScale})`,
               lineHeight: 1,
-              textAlign: "center",
             }}
           >
-            GeniMini
+            GENIMINI
           </div>
+          
+          {/* Şimşek */}
           <div
             style={{
-              fontSize: isVertical ? 120 : 130,  // 80 → 120 (BÜYÜTÜLDÜ)
+              transform: `scale(${boltScale}) rotate(${boltRotate}deg)`,
+            }}
+          >
+            <LightningBolt size={isVertical ? 130 : 160} color={BRAND.yellow} />
+          </div>
+          
+          {/* TESTS */}
+          <div
+            style={{
+              fontSize: logoFontSize,
               fontFamily: FONTS.display,
               fontWeight: 900,
-              color: COLORS.textWhite,
+              color: BRAND.yellow,
               textShadow: `
-                -6px -6px 0 black,
-                6px -6px 0 black,
-                -6px 6px 0 black,
-                6px 6px 0 black
+                -6px -6px 0 ${BRAND.black},
+                6px -6px 0 ${BRAND.black},
+                -6px 6px 0 ${BRAND.black},
+                6px 6px 0 ${BRAND.black},
+                10px 10px 0 #FF1493
               `,
+              letterSpacing: 4,
+              transform: `translateX(${rightX}px) scale(${rightScale})`,
               lineHeight: 1,
-              letterSpacing: 12,
             }}
           >
             TESTS
           </div>
         </div>
-
+        
         {/* Tagline */}
         <div
           style={{
             transform: `translateY(${taglineY}px)`,
             opacity: taglineOpacity,
-            fontSize: isVertical ? 52 : 56,  // 42 → 52
-            fontFamily: FONTS.body,
-            fontWeight: 700,
-            color: COLORS.textWhite,
-            textShadow: "4px 4px 0 black",
+            fontSize: taglineFontSize,
+            fontFamily: FONTS.display,
+            fontWeight: 900,
+            color: BRAND.white,
+            textShadow: `
+              -4px -4px 0 ${BRAND.black},
+              4px -4px 0 ${BRAND.black},
+              -4px 4px 0 ${BRAND.black},
+              4px 4px 0 ${BRAND.black}
+            `,
             textAlign: "center",
+            letterSpacing: 2,
           }}
         >
           🎉 Fun &amp; Smart Learning 🦊
         </div>
-
-        {/* Konu rozetı */}
+        
+        {/* Today: Topic */}
         {topic && (
           <div
             style={{
-              opacity: topicOpacity,
               transform: `scale(${topicScale})`,
-              backgroundColor: COLORS.primary,
-              color: COLORS.textBlack,
-              padding: isVertical ? "22px 44px" : "30px 60px",
-              borderRadius: 30,
-              fontSize: isVertical ? 50 : 60,  // 44 → 50
+              opacity: topicOpacity,
+              backgroundColor: BRAND.white,
+              color: BRAND.black,
+              padding: isVertical ? "22px 50px" : "28px 70px",
+              borderRadius: 60,
+              fontSize: topicFontSize,
               fontFamily: FONTS.display,
               fontWeight: 900,
-              border: "6px solid black",
-              boxShadow: `0 8px 24px rgba(0,0,0,0.4), 0 0 40px ${COLORS.primary}`,
+              border: `6px solid ${BRAND.yellow}`,
+              boxShadow: `0 10px 28px rgba(0,0,0,0.5), 0 0 50px ${BRAND.yellow}`,
               maxWidth: "85%",
               textAlign: "center",
+              letterSpacing: 1,
             }}
           >
             Today: {topic}
           </div>
         )}
       </div>
-
-      {/* Jess - ALT ORTA, BÜYÜK */}
+      
+      {/* JESS - alt orta, BÜYÜK */}
       <JessCharacter
         pose="intro"
         poses={jessPoses}
         position="bottom-center"
-        size={isVertical ? 480 : 500}
+        size={isVertical ? 500 : 520}
         animate
       />
     </AbsoluteFill>
