@@ -1,26 +1,20 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { useCurrentFrame } from "remotion";
 import { BRAND, FONTS } from "../styles/theme";
+import { JessTailIcon } from "./JessTailIcon";
 
 interface VerticalBrandTagProps {
   text?: string;
   side?: "right" | "left";
-  /**
-   * Üstten/alttan ne kadar boşluk
-   */
   topOffset?: number;
   bottomOffset?: number;
-  /**
-   * Yazı boyutu
-   */
   fontSize?: number;
 }
 
 /**
- * Sağ (veya sol) kenarda dikey duran marka yazısı.
- * Quiz Blitz'in "QUIZ BLITZ" sağ kenar yazısının aynısı.
- * 
- * Yapı: Yazı 90° dönmüş, küçük bir şimşek ikonu yanında.
- * Sabit, animasyonsuz - sahne stabilizer'ı gibi davranıyor.
+ * Sağ (veya sol) kenarda dikey marka yazısı.
+ * Üstte küçük Jess kuyruğu (önceki şimşek yerine).
+ * Sabit, hafif animasyonlu.
  */
 export const VerticalBrandTag: React.FC<VerticalBrandTagProps> = ({
   text = "GENIMINI TESTS",
@@ -29,6 +23,11 @@ export const VerticalBrandTag: React.FC<VerticalBrandTagProps> = ({
   bottomOffset = 200,
   fontSize = 28,
 }) => {
+  const frame = useCurrentFrame();
+  
+  // Kuyruk hafif sallanır
+  const wag = Math.sin(frame * 0.1) * 6;
+  
   return (
     <div
       style={{
@@ -45,17 +44,14 @@ export const VerticalBrandTag: React.FC<VerticalBrandTagProps> = ({
         pointerEvents: "none",
       }}
     >
-      {/* Sarı şimşek (üstte küçük) */}
-      <div style={{ fontSize: fontSize * 1.2, lineHeight: 1 }}>
-        <svg width={fontSize * 1.1} height={fontSize * 1.5} viewBox="0 0 30 40">
-          <path
-            d="M 18 2 L 6 22 L 14 22 L 12 38 L 24 18 L 16 18 Z"
-            fill={BRAND.yellow}
-            stroke={BRAND.black}
-            strokeWidth="1.5"
-            strokeLinejoin="round"
-          />
-        </svg>
+      {/* Jess kuyruğu (şimşek yerine) */}
+      <div
+        style={{
+          transform: `rotate(${wag}deg)`,
+          transformOrigin: "center bottom",
+        }}
+      >
+        <JessTailIcon size={fontSize * 1.5} />
       </div>
       
       {/* Dikey yazı */}
@@ -75,7 +71,8 @@ export const VerticalBrandTag: React.FC<VerticalBrandTagProps> = ({
             -2px 2px 0 ${BRAND.black},
             2px 2px 0 ${BRAND.black}
           `,
-          opacity: 0.85,
+          opacity: 0.9,
+          textTransform: "uppercase",
         }}
       >
         {text}
