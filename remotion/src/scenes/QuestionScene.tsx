@@ -64,7 +64,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   const inCountdown = frame >= phases.countdown && frame < phases.drumRoll;
   const inDrumRoll = frame >= phases.drumRoll && frame < phases.reveal;
   const inRevealCorrect = frame >= phases.reveal && frame < phases.funFact;
-  const inFunFact = frame >= phases.funFact && frame < phases.transition;
+  const inFunFact = frame >= phases.funFact && frame < phases.end; // ⚠️ transition'a kadar değil, end'e kadar - eski soru geri görünmesin
   const inTransition = frame >= phases.transition && frame < phases.end;
   
   const isRevealed = frame >= phases.reveal;
@@ -123,14 +123,22 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           <Audio src={staticFile(sfx_tick)} volume={0.6} loop />
         </Sequence>
       )}
+      {/* DRUM - countdown bitince DRUMROLL fazında çalar (1s), sonra SESSIZ silentPause 1s */}
       {sfx_drum && (
-        <Sequence from={phases.reveal - Math.floor(FPS * 0.3)} durationInFrames={Math.floor(FPS * 0.3)}>
-          <Audio src={staticFile(sfx_drum)} volume={0.4} />
+        <Sequence from={phases.drumRoll} durationInFrames={FIXED_FRAMES.drumRoll}>
+          <Audio src={staticFile(sfx_drum)} volume={0.5} />
         </Sequence>
       )}
+      {/* CORRECT - reveal anında çalar (silentPause bittikten sonra) */}
       {sfx_correct && (
         <Sequence from={phases.reveal} durationInFrames={Math.floor(FPS * 1.5)}>
           <Audio src={staticFile(sfx_correct)} volume={0.7} />
+        </Sequence>
+      )}
+      {/* WHOOSH - sonraki soruya transition'da çalar (kullanıcı talebi) */}
+      {sfx_whoosh && (
+        <Sequence from={phases.transition} durationInFrames={FIXED_FRAMES.transition}>
+          <Audio src={staticFile(sfx_whoosh)} volume={0.6} />
         </Sequence>
       )}
       
@@ -314,7 +322,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases,
   inFunFact, isRevealed, revealImageTransition, width, height,
 }) => {
-  const bodyTop = 160;
+  const bodyTop = 200;  // header 180 oldu, biraz boşluk
   const padding = 40;
   const contentWidth = width - padding * 2;
   const imageHeight = Math.floor(height * 0.38);
