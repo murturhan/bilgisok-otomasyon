@@ -62,15 +62,16 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   
   const inShow = frame < phases.countdown;
   const inCountdown = frame >= phases.countdown && frame < phases.drumRoll;
-  const inDrumRoll = frame >= phases.drumRoll && frame < phases.reveal;
+  const inDrumRoll = frame >= phases.drumRoll && frame < phases.silentPause;  // sadece drum çalıyor
+  const inSilentPause = frame >= phases.silentPause && frame < phases.reveal; // sessiz gerilim
   const inRevealCorrect = frame >= phases.reveal && frame < phases.funFact;
-  const inFunFact = frame >= phases.funFact && frame < phases.end; // ⚠️ transition'a kadar değil, end'e kadar - eski soru geri görünmesin
+  const inFunFact = frame >= phases.funFact && frame < phases.end;
   const inTransition = frame >= phases.transition && frame < phases.end;
   
   const isRevealed = frame >= phases.reveal;
   
   let currentJessPose: keyof JessPoses = "question";
-  if (inCountdown || inDrumRoll) currentJessPose = "thinking";
+  if (inCountdown || inDrumRoll || inSilentPause) currentJessPose = "thinking";
   else if (inRevealCorrect) currentJessPose = "correct";
   
   const fadeOut = inTransition
@@ -171,6 +172,9 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           revealImageTransition={revealImageTransition}
           width={width}
           height={height}
+          inCountdown={inCountdown}
+          inDrumRoll={inDrumRoll}
+          inSilentPause={inSilentPause}
         />
       ) : (
         <LongLayout
@@ -187,32 +191,32 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         />
       )}
       
-      {/* PROGRESS BAR */}
-      {(inCountdown || inDrumRoll) && (
+      {/* PROGRESS BAR - sadece LONG'ta absolute, shorts'ta layout içinde */}
+      {!isVertical && (inCountdown || inDrumRoll || inSilentPause) && (
         <div
           style={{
             position: "absolute",
-            bottom: isVertical ? 320 : 80,
-            left: isVertical ? 60 : 200,
-            right: isVertical ? 60 : 200,
+            bottom: 80,
+            left: 200,
+            right: 200,
             zIndex: 20,
           }}
         >
           <LiquidProgressBar
             startFrame={phases.countdown}
             durationFrames={FIXED_FRAMES.countdown}
-            height={isVertical ? 50 : 60}
+            height={60}
           />
         </div>
       )}
       
-      {/* JESS - sadece soru fazlarında, fun fact'te YOK (gözlük gösteriyoruz) */}
+      {/* JESS - soru fazlarında, fun fact'te YOK */}
       {!inFunFact && (
         <JessCharacter
           pose={currentJessPose}
           poses={jessPoses}
           position="bottom-center"
-          size={isVertical ? 280 : 280}
+          size={isVertical ? 230 : 280}
           animate
         />
       )}
@@ -231,6 +235,10 @@ interface LayoutProps {
   revealImageTransition: number;
   width: number;
   height: number;
+  // Yeni: progress bar kontrolü için faz bilgileri
+  inCountdown?: boolean;
+  inDrumRoll?: boolean;
+  inSilentPause?: boolean;
 }
 
 const LongLayout: React.FC<LayoutProps> = ({
@@ -320,16 +328,18 @@ const LongLayout: React.FC<LayoutProps> = ({
 };
 
 const ShortsLayout: React.FC<LayoutProps> = ({
-  question, imageSrc, funFactImageSrc, phases,
+  question, imageSrc, funFactImageSrc, phases, inDrumRoll, inSilentPause, inCountdown,
   inFunFact, isRevealed, revealImageTransition, width, height,
 }) => {
-  const bodyTop = 200;  // header 180 oldu, biraz boşluk
+  const bodyTop = 250;  // header 240 + 10 padding
   const padding = 40;
   const contentWidth = width - padding * 2;
-  const imageHeight = Math.floor(height * 0.38);
+  const imageHeight = Math.floor(height * 0.34);
   
-  // Fun fact'te alt boşluk daha az (Jess olmadığı için)
-  const bodyBottom = inFunFact ? 120 : 280;
+  const bodyBottom = inFunFact ? 60 : 240;  // soru fazlarında: Jess için 240
+  
+  // Progress bar countdown veya drumRoll/silentPause sırasında görünür
+  const showProgressBar = inCountdown || inDrumRoll || inSilentPause;
   
   return (
     <div
@@ -341,58 +351,59 @@ const ShortsLayout: React.FC<LayoutProps> = ({
         bottom: bodyBottom,
         display: "flex",
         flexDirection: "column",
-        justifyContent: "flex-start",
-        gap: 30,
+        // Eşit dağıtım: resim - şıklar - progress bar
+        justifyContent: "space-between",
       }}
     >
       {!inFunFact ? (
-        <ImageCard
-          src={imageSrc}
-          width={contentWidth}
-          height={imageHeight}
-          isReveal={isRevealed}
-          revealTransition={revealImageTransition}
-        />
-      ) : (
-        funFactImageSrc && (
+        <>
+          {/* RESİM */}
           <ImageCard
-            src={funFactImageSrc}
+            src={imageSrc}
             width={contentWidth}
-            height={Math.floor(height * 0.32)}
-            isReveal={false}
-            revealTransition={1}
+            height={imageHeight}
+            isReveal={isRevealed}
+            revealTransition={revealImageTransition}
           />
-        )
-      )}
-      
-      {!inFunFact ? (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 22,
-            flex: 1,
-            justifyContent: "center",
-          }}
-        >
-          <AnswerStack
-            options={question.options}
-            flags={question.option_flags}
-            correctAnswer={question.correct_answer}
-            isRevealed={isRevealed}
-            phases={phases}
-            large
-            questionAudioDuration={question.question_audio_duration}
-          />
-        </div>
+          
+          {/* ŞIKLAR - 3 tane, aralarında eşit boşluk */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 22,
+            }}
+          >
+            <AnswerStack
+              options={question.options}
+              flags={question.option_flags}
+              correctAnswer={question.correct_answer}
+              isRevealed={isRevealed}
+              phases={phases}
+              large
+              questionAudioDuration={question.question_audio_duration}
+            />
+          </div>
+          
+          {/* PROGRESS BAR - en altta, son şıkkın altında resim-A boşluğu kadar mesafe */}
+          {showProgressBar ? (
+            <LiquidProgressBar
+              startFrame={phases.countdown}
+              durationFrames={FIXED_FRAMES.countdown}
+              height={50}
+            />
+          ) : (
+            // Progress bar görünmediği zamanlarda da yerini koru (boş div)
+            <div style={{ height: 50 }} />
+          )}
+        </>
       ) : (
         <div
           style={{
             flex: 1,
             display: "flex",
-            alignItems: "flex-start",
+            alignItems: "center",
             justifyContent: "center",
-            paddingTop: 20,
           }}
         >
           <FunFactPanel
