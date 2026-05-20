@@ -12,9 +12,10 @@ import { Question } from "../types/schemas";
 
 export interface QuestionPhases {
   show: number;          // 0 - başlangıç
-  countdown: number;     // show + question_audio
-  drumRoll: number;      // countdown + 5s
-  reveal: number;        // drumRoll + 1s
+  countdown: number;     // show + question_audio (5s progress)
+  drumRoll: number;      // countdown + 5s (1s drum çalıyor)
+  silentPause: number;   // drumRoll + 1s (drum bitti, 1s sessiz gerilim) ⚠️ YENİ
+  reveal: number;        // silentPause + 1s (cevap açılıyor)
   funFact: number;       // reveal + 2s
   transition: number;    // funFact + 5s
   end: number;           // transition + 1s
@@ -34,7 +35,8 @@ export function computeQuestionPhases(question: Question): QuestionPhases {
   const show = 0;
   const countdown = show + showDuration;
   const drumRoll = countdown + FIXED_FRAMES.countdown;
-  const reveal = drumRoll + FIXED_FRAMES.drumRoll;
+  const silentPause = drumRoll + FIXED_FRAMES.drumRoll;
+  const reveal = silentPause + FIXED_FRAMES.silentPause;
   
   // FunFact fazı: Answer audio kadar veya sabit (hangisi büyükse)
   // Ama önce 2s correct reveal animasyonu var
@@ -47,7 +49,7 @@ export function computeQuestionPhases(question: Question): QuestionPhases {
   const transition = funFact + funFactDuration;
   const end = transition + FIXED_FRAMES.transition;
   
-  return { show, countdown, drumRoll, reveal, funFact, transition, end };
+  return { show, countdown, drumRoll, silentPause, reveal, funFact, transition, end };
 }
 
 /**
