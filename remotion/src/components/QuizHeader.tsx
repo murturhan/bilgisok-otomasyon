@@ -1,6 +1,7 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { BRAND, FONTS } from "../styles/theme";
+import { JessEarBadge } from "./JessEarBadge";
 
 interface QuizHeaderProps {
   questionNumber: number;
@@ -11,9 +12,11 @@ interface QuizHeaderProps {
 
 /**
  * Quiz Blitz tarzı header:
- * - Sol: Mor yıldız rozet + içinde beyaz rakam (soru no)
- * - Orta-üst: Beyaz kalın soru metni (UPPERCASE, siyah outline)
- * - Sağ üst: BOŞ (önceki kuyruk silindi - kullanıcı talebi)
+ * - Sol: Jess kulağı rozet (yıldız yerine) + içinde büyük beyaz rakam
+ * - Orta: Beyaz kalın soru metni (UPPERCASE, siyah outline)
+ * - Sağ üst: BOŞ
+ *
+ * Soru cümlesi tam üst kenara yapışmasın diye padding-top var.
  */
 export const QuizHeader: React.FC<QuizHeaderProps> = ({
   questionNumber,
@@ -31,6 +34,8 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   });
   const badgeX = interpolate(badgeAnim, [0, 1], [-150, 0]);
   const badgeOpacity = interpolate(badgeAnim, [0, 0.5], [0, 1]);
+  // Kulak hafif sallanır (animasyon)
+  const badgeWobble = Math.sin(frame * 0.08) * 3;
   
   const textAnim = spring({
     frame: frame - showFrame - 5,
@@ -40,11 +45,12 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   const textY = interpolate(textAnim, [0, 1], [-30, 0]);
   const textOpacity = interpolate(textAnim, [0, 0.5], [0, 1]);
   
-  // Boyutlar - kullanıcı "yazılar daha büyük" istedi (özellikle soru cümlesi)
-  const badgeSize = isVertical ? 120 : 140;
+  // Boyutlar
+  const badgeSize = isVertical ? 160 : 180;
   const fontSize = isVertical ? 72 : 84;
   const padding = isVertical ? 28 : 50;
-  const headerHeight = isVertical ? 180 : 200;  // header de büyüdü, 2 satır okunaklı dursun
+  const headerHeight = isVertical ? 240 : 240;  // büyüdü - soru cümlesi yukarı yapışmasın
+  const topPadding = isVertical ? 40 : 50;  // üstten boşluk
   
   const questionUpper = questionText.toUpperCase();
   
@@ -58,20 +64,23 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
         height: headerHeight,
         display: "flex",
         alignItems: "center",
-        padding: `0 ${padding}px`,
+        paddingTop: topPadding,
+        paddingLeft: padding,
+        paddingRight: padding,
+        paddingBottom: 12,
         zIndex: 30,
         gap: 20,
       }}
     >
-      <StarBadge
-        number={questionNumber}
-        size={badgeSize}
+      <div
         style={{
-          transform: `translateX(${badgeX}px)`,
+          transform: `translateX(${badgeX}px) rotate(${badgeWobble}deg)`,
           opacity: badgeOpacity,
           flexShrink: 0,
         }}
-      />
+      >
+        <JessEarBadge number={questionNumber} size={badgeSize} />
+      </div>
       
       <div
         style={{
@@ -108,64 +117,5 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   );
 };
 
-interface StarBadgeProps {
-  number: number;
-  size?: number;
-  style?: React.CSSProperties;
-}
-
-export const StarBadge: React.FC<StarBadgeProps> = ({
-  number,
-  size = 130,
-  style,
-}) => {
-  return (
-    <div
-      style={{
-        position: "relative",
-        width: size,
-        height: size,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
-        ...style,
-      }}
-    >
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 100 100"
-        style={{ position: "absolute", top: 0, left: 0 }}
-      >
-        <polygon
-          points="50,5 61,38 96,38 68,58 79,92 50,72 21,92 32,58 4,38 39,38"
-          fill={BRAND.primary}
-          stroke={BRAND.yellow}
-          strokeWidth="4"
-          strokeLinejoin="round"
-        />
-      </svg>
-      
-      <div
-        style={{
-          position: "relative",
-          fontSize: size * 0.4,
-          fontFamily: FONTS.display,
-          fontWeight: 900,
-          color: BRAND.white,
-          textShadow: `
-            -2px -2px 0 ${BRAND.black},
-            2px -2px 0 ${BRAND.black},
-            -2px 2px 0 ${BRAND.black},
-            2px 2px 0 ${BRAND.black}
-          `,
-          zIndex: 2,
-          lineHeight: 1,
-        }}
-      >
-        {number}
-      </div>
-    </div>
-  );
-};
+// Geriye dönük uyumluluk - eski StarBadge import'ları olabilir
+export { JessEarBadge as StarBadge } from "./JessEarBadge";
