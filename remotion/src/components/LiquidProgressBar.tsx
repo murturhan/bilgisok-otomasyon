@@ -149,17 +149,26 @@ export const LiquidProgressBar: React.FC<LiquidProgressBarProps> = ({
           })}
         </g>
         
-        {/* KATMAN 4: Sarı şimşek dolum kafası (sıvının ucunda) */}
+        {/* KATMAN 4: Jess kuyruğu dolum kafası (sıvının ucunda) - kullanıcı talebi: şimşek yerine kuyruk */}
         {progress < 1 && progress > 0.02 && (
           <g
             transform={`translate(${1000 * progress - 35}, ${capsuleHeight / 2 - 30 + boltBounce}) scale(${boltScale})`}
             style={{
-              filter: "drop-shadow(0 0 12px #FFD700)",
+              filter: "drop-shadow(0 0 12px #FFA500)",
             }}
           >
+            {/* Jess kuyruğu - beyaz tüy + turuncu uç */}
+            <defs>
+              <linearGradient id={`tail-grad-${startFrame}`} x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#FFFFFF" />
+                <stop offset="50%" stopColor="#FFFFFF" />
+                <stop offset="70%" stopColor="#FFB347" />
+                <stop offset="100%" stopColor="#FF8C00" />
+              </linearGradient>
+            </defs>
             <path
-              d="M 35 5 L 15 35 L 28 35 L 22 60 L 50 25 L 36 25 Z"
-              fill="#FFD700"
+              d="M 15 55 Q 8 40, 14 28 Q 20 18, 30 15 Q 42 12, 52 18 Q 60 25, 58 35 Q 53 42, 45 42 Q 38 42, 33 48 Q 30 55, 32 62 Q 28 65, 22 63 Q 16 60, 15 55 Z"
+              fill={`url(#tail-grad-${startFrame})`}
               stroke={BRAND.black}
               strokeWidth="2.5"
               strokeLinejoin="round"
