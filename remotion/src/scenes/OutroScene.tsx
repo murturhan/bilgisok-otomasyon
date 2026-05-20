@@ -90,13 +90,13 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "7%" : "12%",
+          top: isVertical ? "5%" : "8%",
           left: 0,
           right: 0,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: isVertical ? 30 : 40,
+          gap: isVertical ? 38 : 48,
           zIndex: 10,
         }}
       >
@@ -126,10 +126,14 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         <div
           style={{
             transform: `scale(${greatJobScale})`,
-            fontSize: isVertical ? 100 : 120,
+            fontSize: isVertical ? 180 : 200,
+            display: "flex",
+            gap: 20,
+            lineHeight: 1,
+            filter: "drop-shadow(0 10px 25px rgba(0,0,0,0.5))",
           }}
         >
-          🏆 🎊
+          🏆 🎊 ⭐
         </div>
         
         <div
@@ -137,16 +141,16 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
             transform: `scale(${subScale * subPulse})`,
             backgroundColor: "#FF0000",
             color: BRAND.white,
-            padding: isVertical ? "30px 80px" : "40px 100px",
-            borderRadius: 60,
+            padding: isVertical ? "36px 90px" : "44px 110px",
+            borderRadius: 70,
             fontSize: subFontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
-            border: `6px solid ${BRAND.black}`,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 60px #FF0000",
+            border: `8px solid ${BRAND.black}`,
+            boxShadow: "0 12px 36px rgba(0,0,0,0.55), 0 0 80px #FF0000",
             display: "flex",
             alignItems: "center",
-            gap: 18,
+            gap: 22,
             letterSpacing: 2,
             textTransform: "uppercase",
           }}
@@ -158,6 +162,9 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
           style={{
             opacity: taglineOpacity,
             transform: `translateY(${taglineY}px)`,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            padding: isVertical ? "20px 40px" : "26px 50px",
+            borderRadius: 40,
             fontSize: taglineFontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
@@ -181,7 +188,7 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         pose="outro"
         poses={jessPoses}
         position="bottom-center"
-        size={isVertical ? 460 : 500}
+        size={isVertical ? 540 : 580}
         animate
       />
     </AbsoluteFill>
