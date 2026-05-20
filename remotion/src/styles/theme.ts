@@ -158,8 +158,11 @@ export const FIXED_FRAMES = {
   // Geri sayım - progress bar dolan/boşalan
   countdown: FPS * 5,      // 5s tam
   
-  // Drum roll - büyük "?" yerine SADECE küçük titreşim
-  drumRoll: FPS * 1,       // 1s
+  // Drum roll - cevap reveal'inden önce gerilim
+  drumRoll: FPS * 1,       // 1s (sadece drum çalıyor)
+  
+  // Drum sonrası sessiz bekleme - kullanıcı talebi: 'drum çaldıktan sonra bekleyecek, doğru cevabı göstermeden'
+  silentPause: FPS * 1,    // 1s sessizlik (drum bitti, henüz reveal yok, gerilim)
   
   // Reveal correct (büyük cevap büyüyor) 
   revealCorrect: FPS * 2,  // 2s
