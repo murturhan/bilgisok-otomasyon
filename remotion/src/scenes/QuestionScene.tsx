@@ -605,7 +605,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
           marginTop: isVertical ? 10 : 20,
         }}
       >
-        <GlassesIcon size={isVertical ? 130 : 160} />
+        <GlassesIcon size={isVertical ? 200 : 240} />
       </div>
     </div>
   );
