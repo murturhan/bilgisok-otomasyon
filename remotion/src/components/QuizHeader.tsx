@@ -1,7 +1,6 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { BRAND, FONTS } from "../styles/theme";
-import { JessTail } from "./BrandAssets";
 
 interface QuizHeaderProps {
   questionNumber: number;
@@ -10,6 +9,12 @@ interface QuizHeaderProps {
   isVertical?: boolean;
 }
 
+/**
+ * Quiz Blitz tarzı header:
+ * - Sol: Mor yıldız rozet + içinde beyaz rakam (soru no)
+ * - Orta-üst: Beyaz kalın soru metni (UPPERCASE, siyah outline)
+ * - Sağ üst: BOŞ (önceki kuyruk silindi - kullanıcı talebi)
+ */
 export const QuizHeader: React.FC<QuizHeaderProps> = ({
   questionNumber,
   questionText,
@@ -35,22 +40,11 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   const textY = interpolate(textAnim, [0, 1], [-30, 0]);
   const textOpacity = interpolate(textAnim, [0, 0.5], [0, 1]);
   
-  const tailAnim = spring({
-    frame: frame - showFrame - 8,
-    fps,
-    config: { damping: 10, stiffness: 130 },
-  });
-  const tailX = interpolate(tailAnim, [0, 1], [120, 0]);
-  const tailOpacity = interpolate(tailAnim, [0, 0.5], [0, 1]);
-  
-  // Tail wagging
-  const tailWag = Math.sin(frame * 0.18) * 12;
-  const tailScale = 1 + Math.sin(frame * 0.15) * 0.06;
-  
-  const badgeSize = isVertical ? 110 : 130;
-  const fontSize = isVertical ? 56 : 64;
-  const padding = isVertical ? 30 : 50;
-  const headerHeight = isVertical ? 130 : 150;
+  // Boyutlar - kullanıcı "yazılar daha büyük" istedi
+  const badgeSize = isVertical ? 120 : 140;
+  const fontSize = isVertical ? 58 : 72;
+  const padding = isVertical ? 28 : 50;
+  const headerHeight = isVertical ? 140 : 160;
   
   const questionUpper = questionText.toUpperCase();
   
@@ -66,7 +60,7 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
         alignItems: "center",
         padding: `0 ${padding}px`,
         zIndex: 30,
-        gap: 24,
+        gap: 20,
       }}
     >
       <StarBadge
@@ -85,12 +79,14 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
           textAlign: "center",
           opacity: textOpacity,
           transform: `translateY(${textY}px)`,
-          padding: "0 16px",
+          padding: "0 8px",
+          // Sağ tarafta artık kuyruk yok → metin daha geniş alanda
+          paddingRight: badgeSize + 8, // sol badge'i dengelemek için sağda boşluk
         }}
       >
         <div
           style={{
-            fontSize: isVertical ? 48 : fontSize,
+            fontSize: isVertical ? 54 : fontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.white,
@@ -108,18 +104,6 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
         >
           {questionUpper}
         </div>
-      </div>
-      
-      {/* Jess kuyruğu - senin SVG */}
-      <div
-        style={{
-          transform: `translateX(${tailX}px) scale(${tailScale}) rotate(${tailWag}deg)`,
-          opacity: tailOpacity,
-          flexShrink: 0,
-          transformOrigin: "center bottom",
-        }}
-      >
-        <JessTail size={isVertical ? 90 : 110} />
       </div>
     </div>
   );
