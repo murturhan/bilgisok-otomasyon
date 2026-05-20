@@ -7,6 +7,7 @@ interface JessCharacterProps {
   position?: "center" | "bottom-right" | "bottom-left" | "bottom-center" | "right" | "left";
   size?: number;
   animate?: boolean;
+  customStyle?: React.CSSProperties;
 }
 
 export const JessCharacter: React.FC<JessCharacterProps> = ({
@@ -15,6 +16,7 @@ export const JessCharacter: React.FC<JessCharacterProps> = ({
   position = "bottom-right",
   size = 350,
   animate = true,
+  customStyle,
 }) => {
   const frame = useCurrentFrame();
   
@@ -66,7 +68,7 @@ export const JessCharacter: React.FC<JessCharacterProps> = ({
   };
 
   return (
-    <div style={{ ...positionStyles[position], zIndex: 10 }}>
+    <div style={{ ...positionStyles[position], zIndex: 10, ...customStyle }}>
       <Img
         src={posePath}
         style={{
