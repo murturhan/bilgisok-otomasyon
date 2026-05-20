@@ -64,8 +64,10 @@ export const quizCompositionSchema = z.object({
   sfx_drum: z.string().optional(),
   sfx_correct: z.string().optional(),
   sfx_whoosh: z.string().optional(),
-  // YENİ: Sıvı progress bar dolan sesi (Quiz Blitz tarzı)
+  // Sıvı progress bar dolan sesi (Quiz Blitz tarzı)
   sfx_progress: z.string().optional(),
+  // Outro alkış sesi - "GREAT JOB!" göründüğünde çalar
+  sfx_applause: z.string().optional(),
   
   channel_name: z.string().default("GeniMini Tests"),
 });
