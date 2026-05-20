@@ -1,7 +1,5 @@
 import React from "react";
-import { useCurrentFrame } from "remotion";
 import { BRAND, FONTS } from "../styles/theme";
-import { JessTail } from "./BrandAssets";
 
 interface VerticalBrandTagProps {
   text?: string;
@@ -11,6 +9,11 @@ interface VerticalBrandTagProps {
   fontSize?: number;
 }
 
+/**
+ * Sağ (veya sol) kenarda dikey marka yazısı.
+ * Kuyruk YOK - sadece dikey yazı.
+ * Kullanıcı talebi: kuyruk SADECE progress bar üzerinde olacak.
+ */
 export const VerticalBrandTag: React.FC<VerticalBrandTagProps> = ({
   text = "GENIMINI TESTS",
   side = "right",
@@ -18,9 +21,6 @@ export const VerticalBrandTag: React.FC<VerticalBrandTagProps> = ({
   bottomOffset = 200,
   fontSize = 28,
 }) => {
-  const frame = useCurrentFrame();
-  const wag = Math.sin(frame * 0.1) * 6;
-  
   return (
     <div
       style={{
@@ -33,21 +33,9 @@ export const VerticalBrandTag: React.FC<VerticalBrandTagProps> = ({
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 12,
         pointerEvents: "none",
       }}
     >
-      {/* Jess kuyruğu */}
-      <div
-        style={{
-          transform: `rotate(${wag}deg)`,
-          transformOrigin: "center bottom",
-        }}
-      >
-        <JessTail size={fontSize * 2} />
-      </div>
-      
-      {/* Dikey yazı */}
       <div
         style={{
           writingMode: "vertical-rl",
