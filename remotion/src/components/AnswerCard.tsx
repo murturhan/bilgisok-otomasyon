@@ -12,6 +12,13 @@ interface AnswerCardProps {
   enterFrame: number;
   revealFrame?: number;
   large?: boolean;
+  /**
+   * Aktif okunma kontrolü:
+   * Bu şıkkın "okunmaya başladığı" ve "okunmasının bittiği" frame'ler.
+   * Bu aralıkta şık hafif sallanır + büyür + parlar.
+   */
+  readingStartFrame?: number;
+  readingEndFrame?: number;
 }
 
 export const AnswerCard: React.FC<AnswerCardProps> = ({
@@ -22,17 +29,21 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
   enterFrame,
   revealFrame = 0,
   large = false,
+  readingStartFrame,
+  readingEndFrame,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
+  // Entry animasyonu - sağdan kayarak gelir, alt-aşağı hafif bounce
   const enterAnim = spring({
     frame: frame - enterFrame,
     fps,
-    config: { damping: 14, stiffness: 100 },
+    config: { damping: 12, stiffness: 110 },
   });
-  const enterTranslateX = interpolate(enterAnim, [0, 1], [300, 0]);
-  const enterOpacity = interpolate(enterAnim, [0, 1], [0, 1]);
+  const enterTranslateX = interpolate(enterAnim, [0, 1], [400, 0]);
+  const enterTranslateY = interpolate(enterAnim, [0, 0.7, 1], [-20, 8, 0]);
+  const enterOpacity = interpolate(enterAnim, [0, 0.5, 1], [0, 1, 1]);
   
   const revealAnim = spring({
     frame: frame - revealFrame,
@@ -77,6 +88,31 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
     ? 1 + Math.sin(frame * 0.2) * 0.03
     : 1;
   
+  // OKUNAN ŞIK SALLANMASI - bu şık şu an okunuyorsa hafif titreşim + büyüme + parlama
+  let readingWobble = 0;
+  let readingScale = 1;
+  let readingGlow = "";
+  if (
+    state === "idle" &&
+    readingStartFrame !== undefined &&
+    readingEndFrame !== undefined &&
+    frame >= readingStartFrame &&
+    frame < readingEndFrame
+  ) {
+    const localFrame = frame - readingStartFrame;
+    // Hızlı sallanma: ~6 derece sinüs
+    readingWobble = Math.sin(localFrame * 0.35) * 2.5;
+    // Hafif büyüme spring
+    const wobbleSpring = spring({
+      frame: localFrame,
+      fps,
+      config: { damping: 12, stiffness: 130 },
+    });
+    readingScale = 1 + interpolate(wobbleSpring, [0, 1], [0, 0.08]);
+    // Sarı parlama (highlighted vibe)
+    readingGlow = `, 0 0 28px rgba(255, 200, 50, 0.55), 0 0 50px rgba(255, 215, 100, 0.35)`;
+  }
+  
   const cardPadding = large ? "28px 42px" : "24px 34px";
   const badgeSize = large ? 86 : 74;
   const textSize = large ? 52 : 44;
@@ -93,8 +129,8 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         borderRadius: 50,
         border: borderWidth > 0 ? `${borderWidth}px solid ${BRAND.correctGreen}` : "none",
         opacity: enterOpacity * currentOpacity,
-        transform: `translateX(${enterTranslateX}px) scale(${currentScale * correctPulse})`,
-        boxShadow: `0 8px 24px rgba(0,0,0,0.35)${extraShadow}`,
+        transform: `translateX(${enterTranslateX}px) translateY(${enterTranslateY}px) scale(${currentScale * correctPulse * readingScale}) rotate(${readingWobble}deg)`,
+        boxShadow: `0 8px 24px rgba(0,0,0,0.35)${extraShadow}${readingGlow}`,
         width: "100%",
         filter: dimFilter,
       }}
