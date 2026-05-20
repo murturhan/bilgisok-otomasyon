@@ -215,12 +215,12 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         </div>
       </div>
       
-      {/* JESS - alt orta */}
+      {/* JESS - alt orta, BÜYÜTÜLDÜ (üst boşluğu da doldursun) */}
       <JessCharacter
         pose="intro"
         poses={jessPoses}
         position="bottom-center"
-        size={isVertical ? 440 : 480}
+        size={isVertical ? 580 : 520}
         animate
       />
     </AbsoluteFill>
