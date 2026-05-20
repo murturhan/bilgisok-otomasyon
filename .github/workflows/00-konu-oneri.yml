@@ -1,0 +1,38 @@
+name: 00 - Konu Öneri (Daily Cron)
+
+on:
+  # Her gün UTC 07:00 = Türkiye saati 10:00 (yaz/kış aynı, Türkiye UTC+3 sabit)
+  schedule:
+    - cron: "0 7 * * *"
+  
+  # Manuel tetikleme için
+  workflow_dispatch:
+
+jobs:
+  konu-oner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      - name: Install deps
+        run: |
+          npm init -y
+          npm pkg set type=module
+          npm install --no-save googleapis
+      
+      - name: Run konu öneri
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
+        run: node scripts/00-konu-oneri.js
