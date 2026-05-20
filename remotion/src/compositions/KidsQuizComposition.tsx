@@ -33,6 +33,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   sfx_correct,
   sfx_whoosh,
   sfx_progress,
+  sfx_applause,
   channel_name,
 }) => {
   const { width, height } = useVideoConfig();
@@ -174,6 +175,13 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       {outro_audio_path && (
         <Sequence from={outroStart} durationInFrames={outroFrames}>
           <Audio src={staticFile(outro_audio_path)} volume={1.2} />
+        </Sequence>
+      )}
+      
+      {/* OUTRO ALKIŞ - "GREAT JOB!" göründüğünde çalar */}
+      {sfx_applause && (
+        <Sequence from={outroStart} durationInFrames={Math.floor(FPS * 3)}>
+          <Audio src={staticFile(sfx_applause)} volume={0.6} />
         </Sequence>
       )}
       
