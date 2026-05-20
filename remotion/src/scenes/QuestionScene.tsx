@@ -305,6 +305,7 @@ const LongLayout: React.FC<LayoutProps> = ({
             isRevealed={isRevealed}
             phases={phases}
             large
+            questionAudioDuration={question.question_audio_duration}
           />
         ) : (
           <FunFactPanel
@@ -381,6 +382,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
             isRevealed={isRevealed}
             phases={phases}
             large
+            questionAudioDuration={question.question_audio_duration}
           />
         </div>
       ) : (
@@ -411,12 +413,28 @@ interface AnswerStackProps {
   isRevealed: boolean;
   phases: ReturnType<typeof computeQuestionPhases>;
   large?: boolean;
+  /** Sorunun ses süresi (saniye). Şıkların okunma penceresini hesaplamak için. */
+  questionAudioDuration?: number;
 }
 
 const AnswerStack: React.FC<AnswerStackProps> = ({
-  options, flags, correctAnswer, isRevealed, phases, large,
+  options, flags, correctAnswer, isRevealed, phases, large, questionAudioDuration,
 }) => {
   const letters: Array<"A" | "B" | "C"> = ["A", "B", "C"];
+  const numOptions = options.length;
+  
+  // Şıkların okunma penceresi (varsayım):
+  // Question audio'nun son %50'sinde şıklar okunuyor.
+  // Yani: ilk yarı "Question text", ikinci yarı "A, B, C" tek tek.
+  // Eğer questionAudioDuration verilmediyse default 8s alalım.
+  const totalAudioFrames = Math.ceil((questionAudioDuration ?? 8) * FPS);
+  const readingZoneStart = phases.show + Math.floor(totalAudioFrames * 0.45); // %45'ten başla (biraz erken)
+  const readingZoneLen = phases.countdown - readingZoneStart;
+  const perOptionLen = Math.max(Math.floor(readingZoneLen / numOptions), 18); // her şık için
+  
+  // Şıklar tek tek stagger ile gelir - 18 frame aralıkla (~0.6s)
+  const STAGGER = 18;
+  const ENTRY_OFFSET = 8;
   
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -429,6 +447,9 @@ const AnswerStack: React.FC<AnswerStackProps> = ({
           state = isCorrect ? "revealedCorrect" : "revealedDim";
         }
         
+        const readingStart = readingZoneStart + i * perOptionLen;
+        const readingEnd = readingStart + perOptionLen;
+        
         return (
           <AnswerCard
             key={i}
@@ -436,9 +457,11 @@ const AnswerStack: React.FC<AnswerStackProps> = ({
             text={text}
             flag={flags?.[i]}
             state={state}
-            enterFrame={phases.show + 12 + i * 8}
+            enterFrame={phases.show + ENTRY_OFFSET + i * STAGGER}
             revealFrame={phases.reveal}
             large={large}
+            readingStartFrame={readingStart}
+            readingEndFrame={readingEnd}
           />
         );
       })}
@@ -506,51 +529,68 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
-  const enterAnim = spring({
+  // STAGGER ENTRY - 3 eleman sırayla giriş yapar
+  // 0f: Ampul + "DID YOU KNOW?" girer
+  // 15f: Fact metni kartı girer
+  // 35f: Gözlük girer
+  
+  const headerAnim = spring({
     frame: frame - showFrame,
     fps,
-    config: { damping: 14, stiffness: 100 },
+    config: { damping: 11, stiffness: 110 },
   });
-  const opacity = interpolate(enterAnim, [0, 1], [0, 1]);
-  const translateY = interpolate(enterAnim, [0, 1], [40, 0]);
+  const headerOpacity = interpolate(headerAnim, [0, 0.5, 1], [0, 1, 1]);
+  const headerScale = interpolate(headerAnim, [0, 1], [0.4, 1]);
+  const headerY = interpolate(headerAnim, [0, 1], [-40, 0]);
   
-  const bulbPulse = 1 + Math.sin(frame * 0.15) * 0.05;
-  
-  // Gözlük animasyonu (metin sonrası gelir)
-  const glassesAnim = spring({
-    frame: frame - showFrame - 30,
+  const cardAnim = spring({
+    frame: frame - showFrame - 15,
     fps,
-    config: { damping: 12, stiffness: 110 },
+    config: { damping: 13, stiffness: 100 },
+  });
+  const cardOpacity = interpolate(cardAnim, [0, 0.5, 1], [0, 1, 1]);
+  const cardY = interpolate(cardAnim, [0, 1], [60, 0]);
+  const cardScale = interpolate(cardAnim, [0, 1], [0.85, 1]);
+  
+  const glassesAnim = spring({
+    frame: frame - showFrame - 35,
+    fps,
+    config: { damping: 10, stiffness: 130 },
   });
   const glassesScale = interpolate(glassesAnim, [0, 1], [0, 1]);
   const glassesOpacity = interpolate(glassesAnim, [0, 0.5], [0, 1]);
+  const glassesRotate = interpolate(glassesAnim, [0, 0.7, 1], [-180, 10, 0]);
+  
+  // Idle animasyonlar
+  const bulbPulse = 1 + Math.sin(frame * 0.15) * 0.06;
+  const glassesIdleBounce = Math.sin((frame - showFrame - 35) * 0.1) * 6;
   
   return (
     <div
       style={{
-        opacity,
-        transform: `translateY(${translateY}px)`,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: isVertical ? 20 : 24,
+        gap: isVertical ? 28 : 32,
         padding: "0 16px",
         width: "100%",
       }}
     >
-      {/* Ampul + DID YOU KNOW yan yana (Canva tasarımı) */}
+      {/* 1. AMPUL + DID YOU KNOW yan yana - stagger 0f */}
       <div
         style={{
+          opacity: headerOpacity,
+          transform: `translateY(${headerY}px) scale(${headerScale})`,
           display: "flex",
           alignItems: "center",
-          gap: 20,
+          gap: 24,
         }}
       >
         <div
           style={{
-            fontSize: isVertical ? 90 : 110,
+            fontSize: isVertical ? 130 : 150,
             transform: `scale(${bulbPulse})`,
-            filter: `drop-shadow(0 0 30px ${BRAND.yellow})`,
+            filter: `drop-shadow(0 0 35px ${BRAND.yellow})`,
             lineHeight: 1,
           }}
         >
@@ -559,15 +599,15 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         
         <div
           style={{
-            fontSize: isVertical ? 56 : 64,
+            fontSize: isVertical ? 72 : 80,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.yellow,
             textShadow: `
-              -3px -3px 0 ${BRAND.black},
-              3px -3px 0 ${BRAND.black},
-              -3px 3px 0 ${BRAND.black},
-              3px 3px 0 ${BRAND.black}
+              -4px -4px 0 ${BRAND.black},
+              4px -4px 0 ${BRAND.black},
+              -4px 4px 0 ${BRAND.black},
+              4px 4px 0 ${BRAND.black}
             `,
             letterSpacing: 2,
             textTransform: "uppercase",
@@ -577,21 +617,23 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         </div>
       </div>
       
-      {/* Fact metni - beyaz kart */}
+      {/* 2. Fact metni kartı - stagger 15f */}
       <div
         style={{
+          opacity: cardOpacity,
+          transform: `translateY(${cardY}px) scale(${cardScale})`,
           backgroundColor: BRAND.white,
-          borderRadius: 16,
-          padding: isVertical ? "26px 30px" : "32px 40px",
-          boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
-          borderTop: `6px solid ${BRAND.yellow}`,
-          borderBottom: `6px solid ${BRAND.yellow}`,
+          borderRadius: 20,
+          padding: isVertical ? "36px 38px" : "44px 50px",
+          boxShadow: "0 16px 40px rgba(0,0,0,0.45), 0 0 0 4px rgba(255, 220, 0, 0.4)",
+          borderTop: `8px solid ${BRAND.yellow}`,
+          borderBottom: `8px solid ${BRAND.yellow}`,
           maxWidth: "100%",
         }}
       >
         <div
           style={{
-            fontSize: isVertical ? 38 : 40,
+            fontSize: isVertical ? 50 : 54,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.black,
@@ -605,15 +647,15 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         </div>
       </div>
       
-      {/* GÖZLÜK (Jess yerine - Canva tasarımı) */}
+      {/* 3. GÖZLÜK - stagger 35f, döne döne gelir */}
       <div
         style={{
-          transform: `scale(${glassesScale})`,
+          transform: `scale(${glassesScale}) rotate(${glassesRotate}deg) translateY(${glassesIdleBounce}px)`,
           opacity: glassesOpacity,
-          marginTop: isVertical ? 10 : 20,
+          marginTop: isVertical ? 16 : 24,
         }}
       >
-        <GlassesIcon size={isVertical ? 200 : 240} />
+        <GlassesIcon size={isVertical ? 280 : 320} />
       </div>
     </div>
   );
