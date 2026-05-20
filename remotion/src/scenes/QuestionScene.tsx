@@ -143,12 +143,15 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </Sequence>
       )}
       
-      {/* HEADER */}
+      {/* HEADER - soru fazında normal, fact fazında doğru cevap büyük */}
       <QuizHeader
         questionNumber={questionNumber}
         questionText={question.question_text}
         showFrame={phases.show}
         isVertical={isVertical}
+        isFactMode={inFunFact}
+        correctAnswerText={question.options[question.correct_answer]}
+        factShowFrame={phases.funFact}
       />
       
       {/* VERTICAL BRAND */}
@@ -398,20 +401,43 @@ const ShortsLayout: React.FC<LayoutProps> = ({
           )}
         </>
       ) : (
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <FunFactPanel
-            text={question.fun_fact}
-            showFrame={phases.funFact}
-            isVertical
-          />
-        </div>
+        <>
+          {/* FACT MODE: Resim üstte + FunFactPanel altta */}
+          {funFactImageSrc ? (
+            <ImageCard
+              src={funFactImageSrc}
+              width={contentWidth}
+              height={Math.floor(height * 0.30)}
+              isReveal={false}
+              revealTransition={1}
+            />
+          ) : (
+            // Fun fact resmi yoksa, soru resmini göster
+            <ImageCard
+              src={imageSrc}
+              width={contentWidth}
+              height={Math.floor(height * 0.30)}
+              isReveal={false}
+              revealTransition={1}
+            />
+          )}
+          
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "center",
+              paddingTop: 10,
+            }}
+          >
+            <FunFactPanel
+              text={question.fun_fact}
+              showFrame={phases.funFact}
+              isVertical
+            />
+          </div>
+        </>
       )}
     </div>
   );
@@ -582,7 +608,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: isVertical ? 28 : 32,
+        gap: isVertical ? 18 : 32,
         padding: "0 16px",
         width: "100%",
       }}
@@ -599,7 +625,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
       >
         <div
           style={{
-            fontSize: isVertical ? 130 : 150,
+            fontSize: isVertical ? 90 : 150,
             transform: `scale(${bulbPulse})`,
             filter: `drop-shadow(0 0 35px ${BRAND.yellow})`,
             lineHeight: 1,
@@ -610,7 +636,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         
         <div
           style={{
-            fontSize: isVertical ? 72 : 80,
+            fontSize: isVertical ? 56 : 80,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.yellow,
@@ -644,7 +670,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
       >
         <div
           style={{
-            fontSize: isVertical ? 50 : 54,
+            fontSize: isVertical ? 42 : 54,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.black,
@@ -666,7 +692,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
           marginTop: isVertical ? 16 : 24,
         }}
       >
-        <GlassesIcon size={isVertical ? 280 : 320} />
+        <GlassesIcon size={isVertical ? 200 : 320} />
       </div>
     </div>
   );
