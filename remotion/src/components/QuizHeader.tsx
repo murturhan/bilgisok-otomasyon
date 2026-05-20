@@ -40,11 +40,11 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   const textY = interpolate(textAnim, [0, 1], [-30, 0]);
   const textOpacity = interpolate(textAnim, [0, 0.5], [0, 1]);
   
-  // Boyutlar - kullanıcı "yazılar daha büyük" istedi
+  // Boyutlar - kullanıcı "yazılar daha büyük" istedi (özellikle soru cümlesi)
   const badgeSize = isVertical ? 120 : 140;
-  const fontSize = isVertical ? 58 : 72;
+  const fontSize = isVertical ? 72 : 84;
   const padding = isVertical ? 28 : 50;
-  const headerHeight = isVertical ? 140 : 160;
+  const headerHeight = isVertical ? 180 : 200;  // header de büyüdü, 2 satır okunaklı dursun
   
   const questionUpper = questionText.toUpperCase();
   
@@ -80,13 +80,12 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
           opacity: textOpacity,
           transform: `translateY(${textY}px)`,
           padding: "0 8px",
-          // Sağ tarafta artık kuyruk yok → metin daha geniş alanda
-          paddingRight: badgeSize + 8, // sol badge'i dengelemek için sağda boşluk
+          paddingRight: badgeSize + 8,
         }}
       >
         <div
           style={{
-            fontSize: isVertical ? 54 : fontSize,
+            fontSize: fontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.white,
