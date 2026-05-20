@@ -176,6 +176,7 @@ async function sfxIndir(auth, hedefKlasor) {
     else if (ad.includes("drum")) sfxKey = "drum";
     else if (ad.includes("correct") || ad.includes("ding")) sfxKey = "correct";
     else if (ad.includes("whoosh") || ad.includes("transition")) sfxKey = "whoosh";
+    else if (ad.includes("applause") || ad.includes("clap") || ad.includes("alkış")) sfxKey = "applause";
     
     if (sfxKey && !sfxMap[sfxKey]) {
       const ext = d.name.substring(d.name.lastIndexOf(".")).toLowerCase();
@@ -489,7 +490,8 @@ async function main() {
       sfx_drum: sfxMap.drum,
       sfx_correct: sfxMap.correct,
       sfx_whoosh: sfxMap.whoosh,
-      sfx_progress: sfxMap.progress, // YENİ - sıvı dolan progress bar
+      sfx_progress: sfxMap.progress, // sıvı dolan progress bar
+      sfx_applause: sfxMap.applause, // outro alkış
     };
 
     const propsJsonPath = path.join(TMP_DIR, "input-props.json");
