@@ -182,29 +182,29 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
           </div>
         )}
         
-        {/* Emoji bandı - sallanan */}
+        {/* Emoji bandı - sallanan, BÜYÜK (kullanıcı talebi: daha büyük + aşağıda) */}
         <div
           style={{
             transform: `translateY(${emojiBandY}px)`,
             opacity: emojiBandOpacity,
             display: "flex",
-            gap: isVertical ? 18 : 32,
+            gap: isVertical ? 30 : 50,
             justifyContent: "center",
-            marginTop: 10,
+            marginTop: 20,
           }}
         >
-          {topicEmojis.slice(0, isVertical ? 4 : 6).map((emoji, i) => {
+          {topicEmojis.slice(0, isVertical ? 3 : 5).map((emoji, i) => {
             const swing = Math.sin(frame * 0.08 + i * 0.6) * 15;
-            const bounce = Math.cos(frame * 0.1 + i * 0.5) * 8;
-            const idleScale = 1 + Math.sin(frame * 0.12 + i) * 0.04;
+            const bounce = Math.cos(frame * 0.1 + i * 0.5) * 10;
+            const idleScale = 1 + Math.sin(frame * 0.12 + i) * 0.05;
             
             return (
               <div
                 key={i}
                 style={{
-                  fontSize: isVertical ? 90 : 110,
+                  fontSize: isVertical ? 170 : 180,
                   transform: `translateY(${bounce}px) rotate(${swing}deg) scale(${idleScale})`,
-                  filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.4))",
+                  filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.5))",
                   lineHeight: 1,
                 }}
               >
