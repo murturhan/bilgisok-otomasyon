@@ -90,13 +90,13 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "5%" : "8%",
+          top: isVertical ? "3%" : "8%",
           left: 0,
           right: 0,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: isVertical ? 38 : 48,
+          gap: isVertical ? 22 : 48,
           zIndex: 10,
         }}
       >
@@ -188,8 +188,12 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         pose="outro"
         poses={jessPoses}
         position="bottom-center"
-        size={isVertical ? 540 : 580}
+        size={isVertical ? 700 : 580}
         animate
+        customStyle={{
+          // Çok büyük + alt kısmı ekrandan çıksın, üstü yüksek olsun
+          bottom: isVertical ? -180 : 20,
+        }}
       />
     </AbsoluteFill>
   );
