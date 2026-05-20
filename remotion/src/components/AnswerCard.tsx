@@ -77,10 +77,10 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
     ? 1 + Math.sin(frame * 0.2) * 0.03
     : 1;
   
-  const cardPadding = large ? "22px 36px" : "20px 30px";
-  const badgeSize = large ? 68 : 60;
-  const textSize = large ? 38 : 34;
-  const letterSize = large ? 32 : 30;
+  const cardPadding = large ? "28px 42px" : "24px 34px";
+  const badgeSize = large ? 86 : 74;
+  const textSize = large ? 52 : 44;
+  const letterSize = large ? 42 : 38;
   
   return (
     <div
