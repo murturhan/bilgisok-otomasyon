@@ -74,15 +74,18 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   if (inCountdown || inDrumRoll || inSilentPause) currentJessPose = "thinking";
   else if (inRevealCorrect) currentJessPose = "correct";
   
-  // Transition flash: 0.3s boyunca beyaz overlay ve scale pulse
-  // Frame 0-3: opacity 0→0.9 (parlama)
-  // Frame 3-9: opacity 0.9→0 (sönme)
+  // GÜÇLENDİRİLMİŞ TRANSITION (0.5s = 15 frame)
+  // Frame 0-5: flash 0→0.95 (güçlü parlama)
+  // Frame 5-15: flash 0.95→0 (yavaş sönme)
+  // Sahne: scale 1 → 1.15 (büyür) + 5° rotation + blur
   const transitionLocalFrame = frame - phases.transition;
+  const TR_LEN = FIXED_FRAMES.transition;
+  
   const flashOpacity = inTransition
     ? interpolate(
         transitionLocalFrame,
-        [0, 3, FIXED_FRAMES.transition],
-        [0, 0.85, 0],
+        [0, 5, TR_LEN],
+        [0, 0.95, 0],
         { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
       )
     : 0;
@@ -90,17 +93,35 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   const sceneScale = inTransition
     ? interpolate(
         transitionLocalFrame,
-        [0, 3, FIXED_FRAMES.transition],
-        [1, 1.05, 1.02],
+        [0, 5, TR_LEN],
+        [1, 1.15, 1.08],
         { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
       )
     : 1;
   
+  const sceneRotate = inTransition
+    ? interpolate(
+        transitionLocalFrame,
+        [0, TR_LEN],
+        [0, 5],
+        { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
+      )
+    : 0;
+  
+  const sceneBlur = inTransition
+    ? interpolate(
+        transitionLocalFrame,
+        [0, 5, TR_LEN],
+        [0, 4, 8],
+        { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
+      )
+    : 0;
+  
   const fadeOut = inTransition
     ? interpolate(
         frame - phases.transition,
-        [0, FIXED_FRAMES.transition],
-        [1, 0],
+        [0, TR_LEN * 0.5, TR_LEN],
+        [1, 0.6, 0],
         { extrapolateRight: "clamp" }
       )
     : 1;
@@ -120,7 +141,11 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   const pattern = getPatternForQuestion(questionNumber - 1);
   
   return (
-    <AbsoluteFill style={{ opacity: fadeOut, transform: `scale(${sceneScale})` }}>
+    <AbsoluteFill style={{
+      opacity: fadeOut,
+      transform: `scale(${sceneScale}) rotate(${sceneRotate}deg)`,
+      filter: sceneBlur > 0 ? `blur(${sceneBlur}px)` : undefined,
+    }}>
       <AnimatedBackground theme={theme} pattern={pattern} motionSpeed={1} />
       
       {/* AUDIO */}
@@ -158,10 +183,13 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           <Audio src={staticFile(sfx_correct)} volume={0.7} />
         </Sequence>
       )}
-      {/* WHOOSH - sonraki soruya transition'da çalar (kullanıcı talebi) */}
+      {/* WHOOSH - güçlendirilmiş transition için biraz daha erken + yüksek volume */}
       {sfx_whoosh && (
-        <Sequence from={phases.transition} durationInFrames={FIXED_FRAMES.transition}>
-          <Audio src={staticFile(sfx_whoosh)} volume={0.6} />
+        <Sequence
+          from={Math.max(0, phases.transition - 3)}
+          durationInFrames={FIXED_FRAMES.transition + 6}
+        >
+          <Audio src={staticFile(sfx_whoosh)} volume={0.85} />
         </Sequence>
       )}
       
@@ -719,8 +747,8 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
     isVertical ? 96 : 110,  // max
   );
   
-  // Gözlük boyutu — DAHA BÜYÜK
-  const glassesSize = isVertical ? 240 : 280;
+  // Gözlük boyutu — KULLANICI TALEBİ: 500
+  const glassesSize = 500;
   
   return (
     <div
