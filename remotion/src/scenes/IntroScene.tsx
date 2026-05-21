@@ -6,7 +6,7 @@ import {
   interpolate,
   spring,
 } from "remotion";
-import { BRAND, FONTS, THEME_COLORS } from "../styles/theme";
+import { BRAND, FONTS, THEME_COLORS, FPS } from "../styles/theme";
 import { JessCharacter } from "../components/JessCharacter";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
@@ -47,6 +47,22 @@ function getTopicEmojis(topic: string): string[] {
   return ["📚", "💡", "🎨", "🔍", "🌟", "🎯"];
 }
 
+/**
+ * INTRO - İKİ SAHNE
+ * 
+ * Sahne 1 (ilk %50): Jess karşılama
+ *   - GeniMini logo üstte
+ *   - Jess BÜYÜK ortada/altta + el sallıyor
+ *   - Alt yazı: "HI FRIENDS!" (greeting metni)
+ * 
+ * Geçiş: 0.4s beyaz flash (perde patlama)
+ * 
+ * Sahne 2 (son %50): Topic reveal
+ *   - Logo KÜÇÜK sol üstte
+ *   - Büyük TOPIC başlığı ortada
+ *   - Altta bouncing emoji bandı
+ *   - Jess YOK
+ */
 export const IntroScene: React.FC<IntroSceneProps> = ({
   channelName,
   topic,
@@ -54,50 +70,25 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   durationFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width, height } = useVideoConfig();
+  const { width, height } = useVideoConfig();
   const isVertical = height > width;
   
   const theme = THEME_COLORS[0]; // pink
-  const topicEmojis = getTopicEmojis(topic);
   
-  // Logo enter animasyonu (yukarıdan iner + büyür)
-  const logoAnim = spring({
-    frame: frame - 0,
-    fps,
-    config: { damping: 11, stiffness: 110 },
-  });
-  const logoScale = interpolate(logoAnim, [0, 1], [0, 1]);
-  const logoY = interpolate(logoAnim, [0, 1], [-100, 0]);
+  // İki sahneye böl
+  const scene1End = Math.floor(durationFrames * 0.5);
+  const scene2Start = scene1End;
+  const inScene1 = frame < scene1End;
+  const inScene2 = frame >= scene2Start;
+  const inTransition = frame >= scene1End && frame < scene1End + 6;
   
-  // Tagline
-  const taglineAnim = spring({ frame: frame - 25, fps, config: { damping: 14, stiffness: 100 } });
-  const taglineOpacity = interpolate(taglineAnim, [0, 1], [0, 1]);
-  const taglineY = interpolate(taglineAnim, [0, 1], [40, 0]);
-  
-  // Topic
-  const topicAnim = spring({ frame: frame - 45, fps, config: { damping: 10, stiffness: 110 } });
-  const topicScale = interpolate(topicAnim, [0, 1], [0, 1]);
-  const topicOpacity = interpolate(topicAnim, [0, 0.5], [0, 1]);
-  
-  // Emoji bandı
-  const emojiBandStart = 60;
-  const emojiBandAnim = spring({
-    frame: frame - emojiBandStart,
-    fps,
-    config: { damping: 12, stiffness: 100 }
-  });
-  const emojiBandOpacity = interpolate(emojiBandAnim, [0, 1], [0, 1]);
-  const emojiBandY = interpolate(emojiBandAnim, [0, 1], [50, 0]);
-  
-  // Logo idle bounce
-  const logoIdleBounce = frame > 30 ? Math.sin(frame * 0.1) * 6 : 0;
-  
-  // Boyutlar
-  const logoWidth = isVertical ? width * 0.85 : width * 0.55;
-  const taglineFontSize = isVertical ? 54 : 60;
-  const topicFontSize = isVertical ? 56 : 64;
-  
-  const topicUpper = (topic || "").toUpperCase();
+  // Flash geçiş
+  const flashOpacity = inTransition
+    ? interpolate(frame - scene1End, [0, 3, 6], [0, 0.9, 0], {
+        extrapolateRight: "clamp",
+        extrapolateLeft: "clamp",
+      })
+    : 0;
   
   return (
     <AbsoluteFill>
@@ -105,11 +96,92 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
       
       <VerticalBrandTag
         side="right"
-        topOffset={200}
-        bottomOffset={200}
+        topOffset={isVertical ? 200 : 100}
+        bottomOffset={isVertical ? 200 : 100}
         fontSize={isVertical ? 28 : 32}
       />
       
+      {inScene1 && (
+        <IntroScene1
+          jessPoses={jessPoses}
+          isVertical={isVertical}
+          width={width}
+          height={height}
+        />
+      )}
+      
+      {inScene2 && (
+        <IntroScene2
+          topic={topic}
+          startFrame={scene2Start}
+          isVertical={isVertical}
+          width={width}
+          height={height}
+        />
+      )}
+      
+      {/* FLASH (perde patlama) */}
+      {inTransition && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: BRAND.white,
+            opacity: flashOpacity,
+            zIndex: 99,
+            pointerEvents: "none",
+          }}
+        />
+      )}
+    </AbsoluteFill>
+  );
+};
+
+// ═══════════════════════════════════════════════════
+// SAHNE 1 — JESS KARŞILAMA
+// ═══════════════════════════════════════════════════
+const IntroScene1: React.FC<{
+  jessPoses: JessPoses;
+  isVertical: boolean;
+  width: number;
+  height: number;
+}> = ({ jessPoses, isVertical, width, height }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  
+  // Logo enter
+  const logoAnim = spring({ frame, fps, config: { damping: 11, stiffness: 110 } });
+  const logoScale = interpolate(logoAnim, [0, 1], [0, 1]);
+  const logoY = interpolate(logoAnim, [0, 1], [-120, 0]);
+  const logoIdleBounce = frame > 25 ? Math.sin(frame * 0.1) * 6 : 0;
+  
+  // Tagline (HI FRIENDS!)
+  const taglineAnim = spring({
+    frame: frame - 30,
+    fps,
+    config: { damping: 13, stiffness: 100 },
+  });
+  const taglineScale = interpolate(taglineAnim, [0, 1], [0, 1]);
+  const taglineOpacity = interpolate(taglineAnim, [0, 0.5], [0, 1]);
+  const taglinePulse = 1 + Math.sin(frame * 0.12) * 0.04;
+  
+  // Jess enter
+  const jessAnim = spring({
+    frame: frame - 12,
+    fps,
+    config: { damping: 12, stiffness: 100 },
+  });
+  const jessScale = interpolate(jessAnim, [0, 1], [0, 1]);
+  
+  const logoWidth = isVertical ? width * 0.85 : width * 0.5;
+  const taglineFontSize = isVertical ? 100 : 110;
+  
+  return (
+    <>
+      {/* LOGO - üstte */}
       <div
         style={{
           position: "absolute",
@@ -117,12 +189,9 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
           left: 0,
           right: 0,
           display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: isVertical ? 26 : 36,
+          justifyContent: "center",
         }}
       >
-        {/* LOGO - senin Canva tasarımı */}
         <div
           style={{
             transform: `translateY(${logoY + logoIdleBounce}px) scale(${logoScale})`,
@@ -132,97 +201,221 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         >
           <GeniMiniLogo width={logoWidth} />
         </div>
-        
-        {/* Tagline */}
+      </div>
+      
+      {/* HI FRIENDS! - ortada, kocaman */}
+      <div
+        style={{
+          position: "absolute",
+          top: isVertical ? "32%" : "34%",
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+          opacity: taglineOpacity,
+        }}
+      >
         <div
           style={{
-            transform: `translateY(${taglineY}px)`,
-            opacity: taglineOpacity,
+            transform: `scale(${taglineScale * taglinePulse})`,
             fontSize: taglineFontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.yellow,
             textShadow: `
-              -4px -4px 0 ${BRAND.black},
-              4px -4px 0 ${BRAND.black},
-              -4px 4px 0 ${BRAND.black},
-              4px 4px 0 ${BRAND.black}
+              -6px -6px 0 ${BRAND.black},
+              6px -6px 0 ${BRAND.black},
+              -6px 6px 0 ${BRAND.black},
+              6px 6px 0 ${BRAND.black},
+              10px 10px 0 #FF1493
             `,
             textAlign: "center",
-            letterSpacing: 2,
+            letterSpacing: 3,
             textTransform: "uppercase",
+            lineHeight: 1,
           }}
         >
-          FUN &amp; SMART LEARNING
-        </div>
-        
-        {/* Topic */}
-        {topic && (
-          <div
-            style={{
-              transform: `scale(${topicScale})`,
-              opacity: topicOpacity,
-              backgroundColor: BRAND.white,
-              color: BRAND.black,
-              padding: isVertical ? "26px 50px" : "32px 70px",
-              borderRadius: 60,
-              fontSize: topicFontSize,
-              fontFamily: FONTS.display,
-              fontWeight: 900,
-              border: `6px solid ${BRAND.yellow}`,
-              boxShadow: `0 10px 28px rgba(0,0,0,0.5), 0 0 50px ${BRAND.yellow}`,
-              maxWidth: "92%",
-              textAlign: "center",
-              letterSpacing: 1,
-              textTransform: "uppercase",
-              lineHeight: 1.1,
-            }}
-          >
-            {topicUpper}
-          </div>
-        )}
-        
-        {/* Emoji bandı - sallanan, BÜYÜK (kullanıcı talebi: daha büyük + aşağıda) */}
-        <div
-          style={{
-            transform: `translateY(${emojiBandY}px)`,
-            opacity: emojiBandOpacity,
-            display: "flex",
-            gap: isVertical ? 30 : 50,
-            justifyContent: "center",
-            marginTop: 20,
-          }}
-        >
-          {topicEmojis.slice(0, isVertical ? 3 : 5).map((emoji, i) => {
-            const swing = Math.sin(frame * 0.08 + i * 0.6) * 15;
-            const bounce = Math.cos(frame * 0.1 + i * 0.5) * 10;
-            const idleScale = 1 + Math.sin(frame * 0.12 + i) * 0.05;
-            
-            return (
-              <div
-                key={i}
-                style={{
-                  fontSize: isVertical ? 170 : 180,
-                  transform: `translateY(${bounce}px) rotate(${swing}deg) scale(${idleScale})`,
-                  filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.5))",
-                  lineHeight: 1,
-                }}
-              >
-                {emoji}
-              </div>
-            );
-          })}
+          HI FRIENDS!
         </div>
       </div>
       
-      {/* JESS - alt orta, BÜYÜTÜLDÜ (üst boşluğu da doldursun) */}
-      <JessCharacter
-        pose="intro"
-        poses={jessPoses}
-        position="bottom-center"
-        size={isVertical ? 580 : 520}
-        animate
-      />
-    </AbsoluteFill>
+      {/* JESS - büyük, ortada-altta, el sallıyor */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: "flex",
+          justifyContent: "center",
+          transform: `scale(${jessScale})`,
+          transformOrigin: "bottom center",
+        }}
+      >
+        <JessCharacter
+          pose="intro"
+          poses={jessPoses}
+          position="bottom-center"
+          size={isVertical ? 850 : 700}
+          animate
+        />
+      </div>
+    </>
+  );
+};
+
+// ═══════════════════════════════════════════════════
+// SAHNE 2 — TOPIC REVEAL
+// ═══════════════════════════════════════════════════
+const IntroScene2: React.FC<{
+  topic: string;
+  startFrame: number;
+  isVertical: boolean;
+  width: number;
+  height: number;
+}> = ({ topic, startFrame, isVertical, width, height }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const localFrame = frame - startFrame;
+  
+  const topicEmojis = getTopicEmojis(topic);
+  const topicUpper = (topic || "").toUpperCase();
+  
+  // Küçük logo sol üst (slide-in)
+  const smallLogoAnim = spring({
+    frame: localFrame,
+    fps,
+    config: { damping: 12, stiffness: 110 },
+  });
+  const smallLogoX = interpolate(smallLogoAnim, [0, 1], [-200, 0]);
+  const smallLogoOpacity = interpolate(smallLogoAnim, [0, 0.5], [0, 1]);
+  
+  // Topic — patlama gibi gelir (büyük scale + rotation)
+  const topicAnim = spring({
+    frame: localFrame - 4,
+    fps,
+    config: { damping: 9, stiffness: 130 },
+  });
+  const topicScale = interpolate(topicAnim, [0, 1], [0, 1]);
+  const topicOpacity = interpolate(topicAnim, [0, 0.5], [0, 1]);
+  const topicRotate = interpolate(topicAnim, [0, 0.7, 1], [-15, 5, 0]);
+  const topicPulse = 1 + Math.sin(localFrame * 0.1) * 0.025;
+  
+  // Emoji band (bouncing)
+  const emojiAnim = spring({
+    frame: localFrame - 18,
+    fps,
+    config: { damping: 11, stiffness: 100 },
+  });
+  const emojiOpacity = interpolate(emojiAnim, [0, 1], [0, 1]);
+  const emojiY = interpolate(emojiAnim, [0, 1], [80, 0]);
+  
+  // Dinamik font - topic uzunluğuna göre
+  const topicLen = topicUpper.length;
+  let topicFontSize: number;
+  if (isVertical) {
+    if (topicLen < 18) topicFontSize = 130;
+    else if (topicLen < 30) topicFontSize = 100;
+    else if (topicLen < 45) topicFontSize = 78;
+    else topicFontSize = 60;
+  } else {
+    if (topicLen < 18) topicFontSize = 150;
+    else if (topicLen < 30) topicFontSize = 120;
+    else if (topicLen < 45) topicFontSize = 90;
+    else topicFontSize = 72;
+  }
+  
+  const smallLogoWidth = isVertical ? width * 0.42 : width * 0.22;
+  
+  return (
+    <>
+      {/* KÜÇÜK LOGO - sol üst */}
+      <div
+        style={{
+          position: "absolute",
+          top: isVertical ? 60 : 40,
+          left: isVertical ? 40 : 60,
+          transform: `translateX(${smallLogoX}px)`,
+          opacity: smallLogoOpacity,
+          zIndex: 5,
+        }}
+      >
+        <GeniMiniLogo width={smallLogoWidth} />
+      </div>
+      
+      {/* TOPIC - ortada KOCAMAN */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingLeft: 40,
+          paddingRight: 40,
+        }}
+      >
+        <div
+          style={{
+            transform: `scale(${topicScale * topicPulse}) rotate(${topicRotate}deg)`,
+            opacity: topicOpacity,
+            backgroundColor: BRAND.white,
+            color: BRAND.black,
+            padding: isVertical ? "36px 56px" : "44px 80px",
+            borderRadius: 60,
+            fontSize: topicFontSize,
+            fontFamily: FONTS.display,
+            fontWeight: 900,
+            border: `8px solid ${BRAND.yellow}`,
+            boxShadow: `0 16px 40px rgba(0,0,0,0.6), 0 0 80px ${BRAND.yellow}`,
+            maxWidth: "94%",
+            textAlign: "center",
+            letterSpacing: 1,
+            textTransform: "uppercase",
+            lineHeight: 1.05,
+          }}
+        >
+          {topicUpper}
+        </div>
+      </div>
+      
+      {/* EMOJI BANDI - altta, zıplayan */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: isVertical ? "8%" : "10%",
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+          gap: isVertical ? 30 : 50,
+          transform: `translateY(${emojiY}px)`,
+          opacity: emojiOpacity,
+        }}
+      >
+        {topicEmojis.slice(0, isVertical ? 3 : 5).map((emoji, i) => {
+          const swing = Math.sin(localFrame * 0.1 + i * 0.7) * 18;
+          const bounce = Math.cos(localFrame * 0.12 + i * 0.5) * 14;
+          const idleScale = 1 + Math.sin(localFrame * 0.13 + i) * 0.06;
+          
+          return (
+            <div
+              key={i}
+              style={{
+                fontSize: isVertical ? 180 : 200,
+                transform: `translateY(${bounce}px) rotate(${swing}deg) scale(${idleScale})`,
+                filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.5))",
+                lineHeight: 1,
+              }}
+            >
+              {emoji}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 };
