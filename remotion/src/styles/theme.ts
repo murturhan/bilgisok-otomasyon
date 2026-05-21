@@ -170,8 +170,8 @@ export const FIXED_FRAMES = {
   // Fun fact ekranı
   funFact: FPS * 5,        // 5s (çocuk okuma hızı için)
   
-  // Sonraki soruya geçiş - kısa flash efekti (kullanıcı talebi: uzatmasın)
-  transition: Math.floor(FPS * 0.3),     // 0.3s = ~9 frame, white flash + scale pulse
+  // Sonraki soruya geçiş - daha hissedilir flash + slide efekti (0.5s)
+  transition: Math.floor(FPS * 0.5),     // 0.5s = 15 frame, beyaz flash + büyük scale + slide
 };
 
 // ─── ESKİ COLORS NESNESI (BACKWARD COMPAT) ───────────
