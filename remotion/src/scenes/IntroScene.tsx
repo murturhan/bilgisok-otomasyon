@@ -20,6 +20,12 @@ interface IntroSceneProps {
   durationFrames: number;
 }
 
+// Sabit greeting metinleri (Kullanıcı talebi)
+// İlerleyen aşamada Hedra ile Jess animasyonlu mp4 gelecek; bu metin altyazı/balon olarak
+// logonun ALTINDA "sevimli" bir alt-yazı olarak görünür.
+const SHORTS_GREETING = "Hey, curious minds! Jess the Fox here… are you ready?";
+const LONG_GREETING = "Hey curious minds! I'm Jess the Fox, and welcome to Geni-Mini Tests! Ready for today's fun challenge?";
+
 function getTopicEmojis(topic: string): string[] {
   const t = topic.toLowerCase();
   
@@ -52,14 +58,14 @@ function getTopicEmojis(topic: string): string[] {
  * 
  * Sahne 1 (ilk %50): Jess karşılama
  *   - GeniMini logo üstte
- *   - Jess BÜYÜK ortada/altta + el sallıyor
- *   - Alt yazı: "HI FRIENDS!" (greeting metni)
+ *   - Logo ALTINDA sevimli greeting altyazısı (konuşma balonu)
+ *   - Jess kocaman altta
  * 
- * Geçiş: 0.4s beyaz flash (perde patlama)
+ * Geçiş: 0.5s güçlü beyaz flash + scale + blur (Scene 1 büyüyerek silinir)
  * 
  * Sahne 2 (son %50): Topic reveal
  *   - Logo KÜÇÜK sol üstte
- *   - Büyük TOPIC başlığı ortada
+ *   - Büyük TOPIC başlığı ortada (patlama efektiyle)
  *   - Altta bouncing emoji bandı
  *   - Jess YOK
  */
@@ -75,19 +81,37 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   
   const theme = THEME_COLORS[0]; // pink
   
+  // Greeting metni: shorts(dikey) için kısa, long için uzun
+  const greetingText = isVertical ? SHORTS_GREETING : LONG_GREETING;
+  
   // İki sahneye böl
   const scene1End = Math.floor(durationFrames * 0.5);
   const scene2Start = scene1End;
   const inScene1 = frame < scene1End;
   const inScene2 = frame >= scene2Start;
-  const inTransition = frame >= scene1End && frame < scene1End + 6;
   
-  // Flash geçiş
+  // GÜÇLÜ FLASH GEÇİŞ — 0.5s
+  const TR_LEN = Math.floor(FPS * 0.5); // 15 frame
+  const inTransition = frame >= scene1End && frame < scene1End + TR_LEN;
+  const trLocal = frame - scene1End;
+  
   const flashOpacity = inTransition
-    ? interpolate(frame - scene1End, [0, 3, 6], [0, 0.9, 0], {
+    ? interpolate(trLocal, [0, 5, TR_LEN], [0, 0.95, 0], {
         extrapolateRight: "clamp",
         extrapolateLeft: "clamp",
       })
+    : 0;
+  
+  // Scene 1'i transition sırasında scale + blur + opacity ile silmek
+  const scene1Exiting = inTransition;
+  const scene1Scale = scene1Exiting
+    ? interpolate(trLocal, [0, TR_LEN], [1, 1.2], { extrapolateRight: "clamp" })
+    : 1;
+  const scene1Opacity = scene1Exiting
+    ? interpolate(trLocal, [0, TR_LEN * 0.6, TR_LEN], [1, 0.6, 0], { extrapolateRight: "clamp" })
+    : 1;
+  const scene1Blur = scene1Exiting
+    ? interpolate(trLocal, [0, TR_LEN], [0, 8], { extrapolateRight: "clamp" })
     : 0;
   
   return (
@@ -101,16 +125,27 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         fontSize={isVertical ? 28 : 32}
       />
       
-      {inScene1 && (
-        <IntroScene1
-          jessPoses={jessPoses}
-          isVertical={isVertical}
-          width={width}
-          height={height}
-        />
+      {(inScene1 || inTransition) && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: scene1Opacity,
+            transform: `scale(${scene1Scale})`,
+            filter: scene1Blur > 0 ? `blur(${scene1Blur}px)` : undefined,
+          }}
+        >
+          <IntroScene1
+            jessPoses={jessPoses}
+            isVertical={isVertical}
+            width={width}
+            height={height}
+            greetingText={greetingText}
+          />
+        </div>
       )}
       
-      {inScene2 && (
+      {inScene2 && !inTransition && (
         <IntroScene2
           topic={topic}
           startFrame={scene2Start}
@@ -120,7 +155,7 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
         />
       )}
       
-      {/* FLASH (perde patlama) */}
+      {/* GÜÇLÜ FLASH */}
       {inTransition && (
         <div
           style={{
@@ -142,13 +177,15 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
 
 // ═══════════════════════════════════════════════════
 // SAHNE 1 — JESS KARŞILAMA
+// Logo + logo altında sevimli greeting balonu + Jess
 // ═══════════════════════════════════════════════════
 const IntroScene1: React.FC<{
   jessPoses: JessPoses;
   isVertical: boolean;
   width: number;
   height: number;
-}> = ({ jessPoses, isVertical, width, height }) => {
+  greetingText: string;
+}> = ({ jessPoses, isVertical, greetingText }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
@@ -158,38 +195,42 @@ const IntroScene1: React.FC<{
   const logoY = interpolate(logoAnim, [0, 1], [-120, 0]);
   const logoIdleBounce = frame > 25 ? Math.sin(frame * 0.1) * 6 : 0;
   
-  // Tagline (HI FRIENDS!)
-  const taglineAnim = spring({
-    frame: frame - 30,
+  // Greeting altyazı - sevimli balon
+  const greetingAnim = spring({
+    frame: frame - 22,
     fps,
     config: { damping: 13, stiffness: 100 },
   });
-  const taglineScale = interpolate(taglineAnim, [0, 1], [0, 1]);
-  const taglineOpacity = interpolate(taglineAnim, [0, 0.5], [0, 1]);
-  const taglinePulse = 1 + Math.sin(frame * 0.12) * 0.04;
+  const greetingScale = interpolate(greetingAnim, [0, 1], [0, 1]);
+  const greetingOpacity = interpolate(greetingAnim, [0, 0.5], [0, 1]);
+  const greetingFloat = Math.sin(frame * 0.08) * 4;
   
   // Jess enter
   const jessAnim = spring({
-    frame: frame - 12,
+    frame: frame - 8,
     fps,
     config: { damping: 12, stiffness: 100 },
   });
   const jessScale = interpolate(jessAnim, [0, 1], [0, 1]);
   
-  const logoWidth = isVertical ? width * 0.85 : width * 0.5;
-  const taglineFontSize = isVertical ? 100 : 110;
+  // Boyutlar
+  const logoWidth = isVertical ? 900 : 800;
+  const greetingFontSize = isVertical ? 42 : 48;
+  const greetingMaxWidth = isVertical ? "84%" : "62%";
   
   return (
     <>
-      {/* LOGO - üstte */}
+      {/* LOGO + GREETING BALONU - üstte */}
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "6%" : "8%",
+          top: isVertical ? "5%" : "7%",
           left: 0,
           right: 0,
           display: "flex",
-          justifyContent: "center",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: isVertical ? 36 : 40,
         }}
       >
         <div
@@ -201,45 +242,32 @@ const IntroScene1: React.FC<{
         >
           <GeniMiniLogo width={logoWidth} />
         </div>
-      </div>
-      
-      {/* HI FRIENDS! - ortada, kocaman */}
-      <div
-        style={{
-          position: "absolute",
-          top: isVertical ? "32%" : "34%",
-          left: 0,
-          right: 0,
-          display: "flex",
-          justifyContent: "center",
-          opacity: taglineOpacity,
-        }}
-      >
+        
+        {/* GREETING ALTYAZI - sevimli konuşma balonu */}
         <div
           style={{
-            transform: `scale(${taglineScale * taglinePulse})`,
-            fontSize: taglineFontSize,
+            transform: `scale(${greetingScale}) translateY(${greetingFloat}px)`,
+            opacity: greetingOpacity,
+            backgroundColor: BRAND.white,
+            color: BRAND.black,
+            padding: isVertical ? "20px 36px" : "24px 44px",
+            borderRadius: 36,
+            fontSize: greetingFontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
-            color: BRAND.yellow,
-            textShadow: `
-              -6px -6px 0 ${BRAND.black},
-              6px -6px 0 ${BRAND.black},
-              -6px 6px 0 ${BRAND.black},
-              6px 6px 0 ${BRAND.black},
-              10px 10px 0 #FF1493
-            `,
+            border: `5px solid ${BRAND.yellow}`,
+            boxShadow: `0 8px 22px rgba(0,0,0,0.45), 0 0 35px ${BRAND.yellow}`,
+            maxWidth: greetingMaxWidth,
             textAlign: "center",
-            letterSpacing: 3,
-            textTransform: "uppercase",
-            lineHeight: 1,
+            letterSpacing: 0.5,
+            lineHeight: 1.2,
           }}
         >
-          HI FRIENDS!
+          {greetingText}
         </div>
       </div>
       
-      {/* JESS - büyük, ortada-altta, el sallıyor */}
+      {/* JESS - alt, BÜYÜK */}
       <div
         style={{
           position: "absolute",
@@ -256,7 +284,7 @@ const IntroScene1: React.FC<{
           pose="intro"
           poses={jessPoses}
           position="bottom-center"
-          size={isVertical ? 850 : 700}
+          size={isVertical ? 780 : 640}
           animate
         />
       </div>
@@ -273,7 +301,7 @@ const IntroScene2: React.FC<{
   isVertical: boolean;
   width: number;
   height: number;
-}> = ({ topic, startFrame, isVertical, width, height }) => {
+}> = ({ topic, startFrame, isVertical, width }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const localFrame = frame - startFrame;
@@ -290,7 +318,7 @@ const IntroScene2: React.FC<{
   const smallLogoX = interpolate(smallLogoAnim, [0, 1], [-200, 0]);
   const smallLogoOpacity = interpolate(smallLogoAnim, [0, 0.5], [0, 1]);
   
-  // Topic — patlama gibi gelir (büyük scale + rotation)
+  // Topic — patlama gibi gelir
   const topicAnim = spring({
     frame: localFrame - 4,
     fps,
