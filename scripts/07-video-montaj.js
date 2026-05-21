@@ -299,7 +299,7 @@ async function main() {
     console.log(`❓ ${soruSayisi} soru`);
 
     // 3. audio-segments.json indir (02-ses klasöründen)
-    const sesKlasor = await driveAltKlasorBul("02-ses", job.drive_folder_id);
+    const sesKlasor = await driveAltKlasorBul("02-ses", job.drive_folder_id, saAuth);
     if (sesKlasor.length === 0) throw new Error("02-ses klasörü yok");
     const segmentsManifest = await jsonIndir(
       sesKlasor[0].id,
@@ -331,7 +331,7 @@ async function main() {
     }
     
     // 5. Soru görsellerini indir
-    const gorselKlasor = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
+    const gorselKlasor = await driveAltKlasorBul("01-gorseller", job.drive_folder_id, saAuth);
     if (gorselKlasor.length === 0) throw new Error("01-gorseller yok");
     const gorseller = await driveKlasorIcerigi(gorselKlasor[0].id, saAuth);
     const gorselDosyalar = gorseller.filter(d => d.name.match(/\.(jpg|jpeg|png|webp)$/i));
@@ -529,10 +529,10 @@ async function main() {
     console.log(`✓ Final video: ${(finalStats.size / 1024 / 1024).toFixed(1)} MB`);
 
     // 12. Drive'a yükle
-    let videoKlasor = await driveAltKlasorBul("07-video", job.drive_folder_id);
+    let videoKlasor = await driveAltKlasorBul("07-video", job.drive_folder_id, saAuth);
     let videoKlasorId;
     if (videoKlasor.length === 0) {
-      const yeni = await driveKlasorAc("07-video", job.drive_folder_id);
+      const yeni = await driveKlasorAc("07-video", job.drive_folder_id, saAuth);
       videoKlasorId = yeni.id;
     } else {
       videoKlasorId = videoKlasor[0].id;
@@ -542,7 +542,7 @@ async function main() {
     const filepath = path.join(TMP_DIR, filename);
     fs.renameSync(finalVideoYol, filepath);
 
-    const yuklenen = await driveDosyaYukle({ filename, filepath }, videoKlasorId, "video/mp4");
+    const yuklenen = await driveDosyaYukle({ filename, filepath }, videoKlasorId, "video/mp4", saAuth);
 
     // Temizlik
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
