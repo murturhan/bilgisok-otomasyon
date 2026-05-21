@@ -214,7 +214,8 @@ export async function jobGuncelle(jobId, updates) {
 
 // ─── DRIVE OPERATIONS (artık SA ile) ──────────────────────────
 export async function driveKlasorAc(ad, parentId) {
-  const drive = getDrive();
+  // ⚠ Service Account quota yok - OAuth kullan
+  const drive = google.drive({ version: "v3", auth: getOAuthClient() });
   const res = await drive.files.create({
     requestBody: {
       name: ad,
@@ -238,7 +239,9 @@ export async function driveAltKlasorBul(adKismi, parentId) {
 }
 
 export async function driveDosyaYukle(dosya, parentId, mimeType) {
-  const drive = getDrive();
+  // ⚠ Service Account'un storage quota yok, upload için OAuth kullan
+  // (murturhan@'ın drive'ında quota var)
+  const drive = google.drive({ version: "v3", auth: getOAuthClient() });
   const res = await drive.files.create({
     requestBody: {
       name: dosya.filename,
@@ -251,4 +254,18 @@ export async function driveDosyaYukle(dosya, parentId, mimeType) {
     fields: "id, name, webViewLink",
   });
   return { drive_id: res.data.id, filename: res.data.name, link: res.data.webViewLink };
+}
+
+// driveKlasorAc da OAuth kullansın - klasör oluşturma da quota gerektirir
+export async function driveKlasorAcOAuth(ad, parentId) {
+  const drive = google.drive({ version: "v3", auth: getOAuthClient() });
+  const res = await drive.files.create({
+    requestBody: {
+      name: ad,
+      mimeType: "application/vnd.google-apps.folder",
+      parents: [parentId || GDRIVE_FOLDER_ID],
+    },
+    fields: "id, name, webViewLink",
+  });
+  return { id: res.data.id, name: res.data.name, link: res.data.webViewLink };
 }
