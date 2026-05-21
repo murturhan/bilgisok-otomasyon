@@ -7,7 +7,13 @@ import {
   Img,
 } from "remotion";
 import { BRAND, FONTS, ThemeColor } from "../styles/theme";
-import { LightningBolt } from "./QuizHeader";
+
+// LightningBolt artık QuizHeader'da yok - basit inline SVG
+const LightningBolt: React.FC<{ size: number; color: string }> = ({ size, color }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+    <path d="M13 2L4.09 12.97 11 14l-1 8 8.91-10.97L12 10l1-8z" />
+  </svg>
+);
 
 interface JessTransitionProps {
   /**
