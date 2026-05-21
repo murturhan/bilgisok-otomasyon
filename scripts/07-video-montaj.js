@@ -1,16 +1,17 @@
 /**
- * 07 - Video Montaj v15 (Quiz Blitz refactor)
+ * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
- * v14'ten farkı:
- * - background_image_path KALDIRILDI (artık SVG pattern animasyonlu bg)
- * - Görsel mapping güncellendi: q1_question, q1_funfact, q1_reveal? (opsiyonel)
- * - SFX'e progress eklendi (sıvı dolan progress bar sesi)
- * - 3 şık desteği (schema)
+ * v13'ten farkı:
+ * - Tek MP3 yerine 03-seslendirme'nin ürettiği N adet MP3 indirilir
+ * - audio-segments.json'dan her parçanın süresi okunur
+ * - inputProps'a intro, outro ve her sorunun question/answer audio path+duration verilir
+ * - Remotion her sahnenin uzunluğunu kendi audio süresine göre dinamik hesaplar
+ * - Tam ses-video senkron
  *
  * Akış:
  * 1. questions.json + audio-segments.json indir
  * 2. Tüm ses parçalarını ve görselleri remotion/public/ içine indir
- * 3. inputProps oluştur
+ * 3. inputProps oluştur (her parçanın path ve süresi dahil)
  * 4. Remotion render
  * 5. Drive'a yükle
  */
@@ -97,41 +98,64 @@ async function jsonIndir(folderId, filename, auth, hedefYol) {
   try {
     await driveIndir(res.data.files[0].id, hedefYol, auth);
     if (!fs.existsSync(hedefYol)) {
-      console.log(`  ⚠ ${filename} indirildi ama dosya yok`);
+      console.log(`  ⚠ ${filename} indirildi ama disk'te yok: ${hedefYol}`);
       return null;
     }
     return JSON.parse(fs.readFileSync(hedefYol, "utf8"));
   } catch (e) {
-    console.log(`  ⚠ ${filename} indirme hatası: ${e.message}`);
+    console.log(`  ⚠ ${filename} okunamadı: ${e.message}`);
     return null;
   }
 }
 
+// Önce 02-ses içinde, yoksa ana klasörde questions.json ara
 async function questionsJsonOku(jobFolderId, auth, hedefYol) {
+  // Hedef klasörü oluştur (yoksa)
+  const dir = path.dirname(hedefYol);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  
   const drive = google.drive({ version: "v3", auth });
   
-  // 1. 02-ses alt klasöründe ara
+  // 1. 02-ses (yeni format) - direct drive.files.list (driveAltKlasorBul'a güvenmiyoruz)
+  console.log(`📂 questions.json aranıyor (önce 02-ses)...`);
   try {
-    const sesKlasor = await driveAltKlasorBul("02-ses", jobFolderId);
-    if (sesKlasor.length > 0) {
-      const res = await drive.files.list({
-        q: `'${sesKlasor[0].id}' in parents and name='questions.json' and trashed=false`,
+    const sesSearchRes = await drive.files.list({
+      q: `'${jobFolderId}' in parents and name='02-ses' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 1,
+    });
+    
+    if (sesSearchRes.data.files && sesSearchRes.data.files.length > 0) {
+      const sesFolderId = sesSearchRes.data.files[0].id;
+      console.log(`  ✓ 02-ses klasörü bulundu: ${sesFolderId}`);
+      
+      const jsonSearchRes = await drive.files.list({
+        q: `'${sesFolderId}' in parents and name='questions.json' and trashed=false`,
         fields: "files(id, name)",
         pageSize: 1,
       });
-      if (res.data.files && res.data.files.length > 0) {
-        await driveIndir(res.data.files[0].id, hedefYol, auth);
+      
+      if (jsonSearchRes.data.files && jsonSearchRes.data.files.length > 0) {
+        const fileId = jsonSearchRes.data.files[0].id;
+        await driveIndir(fileId, hedefYol, auth);
         if (fs.existsSync(hedefYol)) {
           console.log("✓ questions.json '02-ses' klasöründen okundu");
           return JSON.parse(fs.readFileSync(hedefYol, "utf8"));
         }
+      } else {
+        console.log("  ⚠ 02-ses içinde questions.json yok");
       }
+    } else {
+      console.log("  ⚠ 02-ses klasörü yok");
     }
   } catch (e) {
     console.log(`  ⚠ 02-ses arama hatası: ${e.message}`);
   }
   
-  // 2. Ana klasörde ara (backward compat)
+  // 2. Ana klasör (backward compat)
+  console.log(`📂 questions.json ana klasörde aranıyor (backward compat)...`);
   try {
     const anaSearchRes = await drive.files.list({
       q: `'${jobFolderId}' in parents and name='questions.json' and trashed=false`,
@@ -151,10 +175,11 @@ async function questionsJsonOku(jobFolderId, auth, hedefYol) {
     console.log(`  ⚠ Ana klasör arama hatası: ${e.message}`);
   }
   
+  console.log("❌ questions.json hiçbir yerde bulunamadı");
   return null;
 }
 
-// SFX indir, map döner: {tick, drum, correct, whoosh, progress}
+// SFX dosyalarını indir, map döner: {tick: relativePath, drum: ..., correct: ..., whoosh: ...}
 async function sfxIndir(auth, hedefKlasor) {
   if (!GDRIVE_SFX_FOLDER_ID) {
     console.log("⚠ GDRIVE_SFX_FOLDER_ID yok, SFX atlanıyor");
@@ -170,15 +195,13 @@ async function sfxIndir(auth, hedefKlasor) {
     const ad = d.name.toLowerCase();
     let sfxKey = null;
     
-    // Quiz Blitz tarzı: progress = sıvı dolan kapsül sesi
-    if (ad.includes("progress") || ad.includes("fill") || ad.includes("liquid") || ad.includes("countdown-fill")) sfxKey = "progress";
-    else if (ad.includes("tick") || ad.includes("countdown")) sfxKey = "tick";
+    if (ad.includes("tick") || ad.includes("countdown")) sfxKey = "tick";
     else if (ad.includes("drum")) sfxKey = "drum";
     else if (ad.includes("correct") || ad.includes("ding")) sfxKey = "correct";
     else if (ad.includes("whoosh") || ad.includes("transition")) sfxKey = "whoosh";
-    else if (ad.includes("applause") || ad.includes("clap") || ad.includes("alkış")) sfxKey = "applause";
     
     if (sfxKey && !sfxMap[sfxKey]) {
+      // SFX dosyasını .wav uzantılı olsun bizimkilerle uyumlu
       const ext = d.name.substring(d.name.lastIndexOf(".")).toLowerCase();
       const hedefAd = `sfx-${sfxKey}${ext}`;
       const hedef = path.join(hedefKlasor, hedefAd);
@@ -205,7 +228,6 @@ async function jessPozlariniIndir(auth, hedefKlasor) {
     else if (ad.includes("thinking")) pozKey = "thinking";
     else if (ad.includes("correct")) pozKey = "correct";
     else if (ad.includes("outro")) pozKey = "outro";
-    else if (ad.includes("transition") || ad.includes("excited")) pozKey = "transition";
     if (pozKey) {
       const hedef = path.join(hedefKlasor, `jess-${pozKey}.png`);
       await driveIndir(d.id, hedef, auth);
@@ -252,53 +274,50 @@ async function main() {
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
     fs.mkdirSync(TMP_DIR, { recursive: true });
     
-    // ÖNEMLİ: 'brand/' klasörünü silmiyoruz - logo/tail/gozluk asset'leri orada
-    // Sadece her render'da değişen alt klasörleri (questions, jess, audio) temizliyoruz
+    fs.rmSync(REMOTION_PUBLIC, { recursive: true, force: true });
     fs.mkdirSync(REMOTION_PUBLIC, { recursive: true });
-    for (const sub of ["questions", "jess", "audio"]) {
-      const subPath = path.join(REMOTION_PUBLIC, sub);
-      fs.rmSync(subPath, { recursive: true, force: true });
-      fs.mkdirSync(subPath, { recursive: true });
-    }
+    fs.mkdirSync(path.join(REMOTION_PUBLIC, "questions"), { recursive: true });
+    fs.mkdirSync(path.join(REMOTION_PUBLIC, "jess"), { recursive: true });
+    fs.mkdirSync(path.join(REMOTION_PUBLIC, "audio"), { recursive: true });
 
-    const oauthAuth = getOAuthClient();
     const saAuth = getServiceAccountAuth();
 
     // 1. Format tespit
-    const format = await formatTespit(job.drive_folder_id, oauthAuth);
+    const format = await formatTespit(job.drive_folder_id, saAuth);
     const compositionId = format === "shorts" ? "KidsQuizShorts" : "KidsQuizLong";
     console.log(`📺 Format: ${format} → ${compositionId}`);
 
-    // 2. questions.json indir
+    // 2. questions.json indir (önce 02-ses, yoksa ana klasör)
     const questionsData = await questionsJsonOku(
       job.drive_folder_id,
-      oauthAuth,
+      saAuth,
       path.join(TMP_DIR, "questions.json")
     );
     if (!questionsData) throw new Error("questions.json yok!");
     const questions = questionsData.questions;
     const soruSayisi = questions.length;
-    console.log(`❓ ${soruSayisi} soru (Quiz Blitz tarzı, 3 şık)`);
+    console.log(`❓ ${soruSayisi} soru`);
 
-    // 3. audio-segments.json indir
+    // 3. audio-segments.json indir (02-ses klasöründen)
     const sesKlasor = await driveAltKlasorBul("02-ses", job.drive_folder_id);
     if (sesKlasor.length === 0) throw new Error("02-ses klasörü yok");
     const segmentsManifest = await jsonIndir(
       sesKlasor[0].id,
       "audio-segments.json",
-      oauthAuth,
+      saAuth,
       path.join(TMP_DIR, "audio-segments.json")
     );
-    if (!segmentsManifest) throw new Error("audio-segments.json yok!");
+    if (!segmentsManifest) throw new Error("audio-segments.json yok! 03-seslendirme v5 çalıştırıldı mı?");
     
     console.log(`🎙 ${segmentsManifest.total_segments} ses parçası, toplam ${segmentsManifest.total_voice_duration.toFixed(1)}s`);
 
     // 4. Tüm ses parçalarını indir
-    const sesler = await driveKlasorIcerigi(sesKlasor[0].id, oauthAuth);
+    const sesler = await driveKlasorIcerigi(sesKlasor[0].id, saAuth);
     const mp3ler = sesler.filter(d => d.name.toLowerCase().endsWith(".mp3"));
     
     console.log("⬇️ Ses parçaları indiriliyor...");
     const sesIndirmePromises = [];
+    const sesPathMap = {}; // {key: path}
     
     for (const seg of segmentsManifest.segments) {
       const driveDosya = mp3ler.find(m => m.name === seg.filename);
@@ -307,117 +326,88 @@ async function main() {
         continue;
       }
       const yerelYol = path.join(REMOTION_PUBLIC, "audio", seg.filename);
-      sesIndirmePromises.push(driveIndir(driveDosya.id, yerelYol, oauthAuth));
+      sesIndirmePromises.push(driveIndir(driveDosya.id, yerelYol, saAuth));
+      sesPathMap[seg.key] = `audio/${seg.filename}`;
     }
     
-    // 5. GÖRSELLER - YENİ MAPPING (Quiz Blitz refactor)
-    // 01-icerik-uret v15: her soru için question_image, funfact_image, opsiyonel reveal_image
-    // Sıra: Q1.q, Q1.f, [Q1.r], Q2.q, Q2.f, [Q2.r], ...
-    
+    // 5. Soru görsellerini indir
     const gorselKlasor = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
     if (gorselKlasor.length === 0) throw new Error("01-gorseller yok");
-    const gorseller = await driveKlasorIcerigi(gorselKlasor[0].id, oauthAuth);
+    const gorseller = await driveKlasorIcerigi(gorselKlasor[0].id, saAuth);
     const gorselDosyalar = gorseller.filter(d => d.name.match(/\.(jpg|jpeg|png|webp)$/i));
     
-    console.log(`📷 Drive'da ${gorselDosyalar.length} görsel var`);
+    // YENİ: Her soru için 2 görsel (question + fun_fact) + 1 background (en sonda)
+    // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ..., background
+    // Toplam 2N+1 görsel beklenir
+    // Backward compat: eski jobs için 1N veya 2N olabilir (bg yok)
+    const beklenenYeni = soruSayisi * 2 + 1;  // 2N+1 (yeni format)
+    const beklenenOrta = soruSayisi * 2;       // 2N (orta format - bg yok ama fun fact var)
+    const beklenenEski = soruSayisi;           // 1N (eski format - bg ve fun fact yok)
     
-    // questions.json'dan beklenen sıra
-    const gorselSira = []; // [{ qIdx, kind }]
-    let beklenenYeni = 0;
-    for (let i = 0; i < soruSayisi; i++) {
-      gorselSira.push({ qIdx: i, kind: "question" });
-      gorselSira.push({ qIdx: i, kind: "funfact" });
-      beklenenYeni += 2;
-      
-      const q = questions[i];
-      if (q.reveal_image_prompt && q.reveal_image_prompt.trim().length > 0) {
-        gorselSira.push({ qIdx: i, kind: "reveal" });
-        beklenenYeni++;
-      }
-    }
+    let bgGorseli = null;  // Background dosyasının Drive ID'si
+    let tekGorselMu = false;
     
-    // Mapping modu belirle
-    let mappingMod;
-    if (gorselDosyalar.length >= beklenenYeni && beklenenYeni > soruSayisi * 2) {
-      // Yeni format: reveal'ler dahil
-      mappingMod = "yeni-reveal";
-      console.log(`✓ ${gorselDosyalar.length} görsel - yeni format with reveal (${beklenenYeni} bekleniyor)`);
-    } else if (gorselDosyalar.length >= soruSayisi * 2 + 1) {
-      mappingMod = "eski-2n1";
-      console.log(`⚠ ${gorselDosyalar.length} görsel - eski format 2N+1 (bg vardı, atlanacak)`);
-    } else if (gorselDosyalar.length >= soruSayisi * 2) {
-      mappingMod = "eski-2n";
-      console.log(`⚠ ${gorselDosyalar.length} görsel - format 2N (fun fact var)`);
-    } else if (gorselDosyalar.length >= soruSayisi) {
-      mappingMod = "eski-1n";
-      console.log(`⚠ ${gorselDosyalar.length} görsel - eski format 1N`);
+    if (gorselDosyalar.length >= beklenenYeni) {
+      // YENİ FORMAT: 2N+1
+      console.log(`✓ ${gorselDosyalar.length} görsel (yeni format 2N+1 = ${beklenenYeni})`);
+      bgGorseli = gorselDosyalar[beklenenOrta]; // index 2N = background
+    } else if (gorselDosyalar.length >= beklenenOrta) {
+      // ORTA FORMAT: 2N (bg yok, fun fact var)
+      console.log(`✓ ${gorselDosyalar.length} görsel (orta format 2N = ${beklenenOrta}, bg yok)`);
+      tekGorselMu = false;
+    } else if (gorselDosyalar.length >= beklenenEski) {
+      // ESKİ FORMAT: 1N (bg yok, fun fact yok)
+      console.log(`⚠ ${gorselDosyalar.length} görsel (eski format 1N, fun fact aynı görsel)`);
+      tekGorselMu = true;
     } else {
-      throw new Error(`${gorselDosyalar.length} görsel, en az ${soruSayisi} olmalı`);
+      throw new Error(`${gorselDosyalar.length} görsel, ${soruSayisi} soru için yetersiz`);
     }
     
-    console.log("⬇️ Görseller indiriliyor...");
+    console.log("⬇️ Soru + fun fact + background görselleri indiriliyor...");
     const gorselIndirmePromises = [];
     
-    if (mappingMod === "yeni-reveal") {
-      // Sıralı: gorsel-01 → Q1.q, gorsel-02 → Q1.f, gorsel-03 → Q1.r (varsa), ...
-      let gorselIdx = 0;
-      for (const item of gorselSira) {
-        if (gorselIdx >= gorselDosyalar.length) break;
-        const q = questions[item.qIdx];
-        const idx = String(item.qIdx + 1).padStart(2, "0");
-        let dosyaAd, propKey;
-        if (item.kind === "question") {
-          dosyaAd = `q${idx}.jpg`;
-          propKey = "image_path";
-        } else if (item.kind === "funfact") {
-          dosyaAd = `q${idx}-fact.jpg`;
-          propKey = "fun_fact_image_path";
-        } else {
-          dosyaAd = `q${idx}-reveal.jpg`;
-          propKey = "reveal_image_path";
-        }
-        const yerelYol = path.join(REMOTION_PUBLIC, "questions", dosyaAd);
-        gorselIndirmePromises.push(driveIndir(gorselDosyalar[gorselIdx].id, yerelYol, oauthAuth));
-        q[propKey] = `questions/${dosyaAd}`;
-        gorselIdx++;
-      }
-    } else if (mappingMod === "eski-2n1" || mappingMod === "eski-2n") {
-      // 2 görsel per soru: question + funfact
-      // 2N+1 ise son görsel (bg) İGNORE edilir
-      for (let i = 0; i < soruSayisi; i++) {
+    // Background indir (varsa)
+    let backgroundImagePath = null;
+    if (bgGorseli) {
+      const bgYol = path.join(REMOTION_PUBLIC, "questions", "background.jpg");
+      gorselIndirmePromises.push(driveIndir(bgGorseli.id, bgYol, saAuth));
+      backgroundImagePath = "questions/background.jpg";
+      console.log(`  ✓ Background: ${bgGorseli.name}`);
+    }
+    
+    for (let i = 0; i < soruSayisi; i++) {
+      // Soru görseli (q01.jpg)
+      const qAdi = `q${String(i + 1).padStart(2, "0")}.jpg`;
+      const qYol = path.join(REMOTION_PUBLIC, "questions", qAdi);
+      
+      // Fun fact görseli (q01-fact.jpg)
+      const fAdi = `q${String(i + 1).padStart(2, "0")}-fact.jpg`;
+      const fYol = path.join(REMOTION_PUBLIC, "questions", fAdi);
+      
+      if (tekGorselMu) {
+        // Eski yapı: sıralı 5 görsel
+        gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, qYol, saAuth));
+        gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, fYol, saAuth));
+      } else {
+        // Yeni yapı: sıralı 10 görsel, çift index question, tek index fun_fact
         const qIdx = i * 2;
         const fIdx = i * 2 + 1;
-        const qAdi = `q${String(i + 1).padStart(2, "0")}.jpg`;
-        const fAdi = `q${String(i + 1).padStart(2, "0")}-fact.jpg`;
-        const qYol = path.join(REMOTION_PUBLIC, "questions", qAdi);
-        const fYol = path.join(REMOTION_PUBLIC, "questions", fAdi);
-        gorselIndirmePromises.push(driveIndir(gorselDosyalar[qIdx].id, qYol, oauthAuth));
-        gorselIndirmePromises.push(driveIndir(gorselDosyalar[fIdx].id, fYol, oauthAuth));
-        questions[i].image_path = `questions/${qAdi}`;
-        questions[i].fun_fact_image_path = `questions/${fAdi}`;
+        gorselIndirmePromises.push(driveIndir(gorselDosyalar[qIdx].id, qYol, saAuth));
+        gorselIndirmePromises.push(driveIndir(gorselDosyalar[fIdx].id, fYol, saAuth));
       }
-    } else {
-      // 1N - aynı görseli 2 yerde kullan
-      for (let i = 0; i < soruSayisi; i++) {
-        const qAdi = `q${String(i + 1).padStart(2, "0")}.jpg`;
-        const fAdi = `q${String(i + 1).padStart(2, "0")}-fact.jpg`;
-        const qYol = path.join(REMOTION_PUBLIC, "questions", qAdi);
-        const fYol = path.join(REMOTION_PUBLIC, "questions", fAdi);
-        gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, qYol, oauthAuth));
-        gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, fYol, oauthAuth));
-        questions[i].image_path = `questions/${qAdi}`;
-        questions[i].fun_fact_image_path = `questions/${fAdi}`;
-      }
+      
+      questions[i].image_path = `questions/${qAdi}`;
+      questions[i].fun_fact_image_path = `questions/${fAdi}`;
     }
 
-    // 6. Jess pose'ları
+    // 6. Jess pose'larını indir
     const jessPozlarPromise = jessPozlariniIndir(saAuth, path.join(REMOTION_PUBLIC, "jess"));
 
-    // 7. Arka plan müziği
+    // 7. Arka plan müziği indir
     const bgMuzikYol = path.join(REMOTION_PUBLIC, "audio", "bg-music.mp3");
     const bgMuzikPromise = bgMuzikIndir(saAuth, bgMuzikYol);
 
-    // 8. SFX
+    // 8. SFX dosyalarını indir
     console.log("⬇️ SFX indiriliyor...");
     const sfxPromise = sfxIndir(saAuth, path.join(REMOTION_PUBLIC, "audio"));
 
@@ -432,7 +422,7 @@ async function main() {
     console.log(`✓ Tüm materyaller indirildi`);
     console.log(`✓ SFX: ${Object.keys(sfxMap || {}).join(", ") || "yok"}`);
 
-    // 9. Sorulara audio path + duration
+    // 9. Sorulara audio path + duration ata
     const segByKey = {};
     for (const seg of segmentsManifest.segments) {
       segByKey[seg.key] = seg;
@@ -458,7 +448,7 @@ async function main() {
       }
     }
 
-    // 10. inputProps
+    // 10. inputProps hazırla
     const jessPosesForRemotion = {};
     for (const [pose, absPath] of Object.entries(jessPozlar)) {
       jessPosesForRemotion[pose] = path.relative(REMOTION_PUBLIC, absPath);
@@ -474,6 +464,7 @@ async function main() {
       questions: questions,
       jess_poses: jessPosesForRemotion,
       
+      // YENİ: intro/outro audio path + duration
       intro_audio_path: introSeg ? `audio/${introSeg.filename}` : undefined,
       outro_audio_path: outroSeg ? `audio/${outroSeg.filename}` : undefined,
       intro_audio_duration: introSeg?.duration || 5.0,
@@ -483,15 +474,14 @@ async function main() {
         ? path.relative(REMOTION_PUBLIC, bgMuzikYol)
         : undefined,
       
-      // KALDIRILDI: background_image_path
+      // YENİ: Topic-themed background image (Gemini'nin oluşturduğu, FLUX'ın ürettiği)
+      background_image_path: backgroundImagePath,
       
-      // SFX
+      // SFX path'leri
       sfx_tick: sfxMap.tick,
       sfx_drum: sfxMap.drum,
       sfx_correct: sfxMap.correct,
       sfx_whoosh: sfxMap.whoosh,
-      sfx_progress: sfxMap.progress, // sıvı dolan progress bar
-      sfx_applause: sfxMap.applause, // outro alkış
     };
 
     const propsJsonPath = path.join(TMP_DIR, "input-props.json");
@@ -499,28 +489,33 @@ async function main() {
     console.log(`✓ inputProps yazıldı`);
     console.log(`  Intro: ${inputProps.intro_audio_duration.toFixed(1)}s`);
     console.log(`  Outro: ${inputProps.outro_audio_duration.toFixed(1)}s`);
+    console.log(`  Q durations: ${questions.map(q => `${q.question_audio_duration.toFixed(1)}+${q.answer_audio_duration.toFixed(1)}`).join(", ")}`);
 
-    // 11. NPM install
+    // 10. NPM install
     console.log("📦 Remotion bağımlılıkları kuruluyor...");
     await execAsync(`cd "${REMOTION_DIR}" && npm install --silent --no-audit --no-fund`, {
       maxBuffer: 200 * 1024 * 1024,
       timeout: 10 * 60 * 1000,
     });
 
-    // 12. Render
+    // 11. Render - format'a göre optimize
     const finalVideoYol = path.join(TMP_DIR, "final.mp4");
     console.log("🎬 Remotion render başlıyor...");
     
+    // Long video çok uzun render oluyor (1+ saat), shorts kısa
+    // GitHub runner 4 vCPU - concurrency=4 paralel çalıştırır
+    // Long için: concurrency 2 (RAM yetmez 4'e), crf 26 (daha hızlı kod)
+    // Shorts için: concurrency 1 (daha güvenli, kısa zaten)
     const concurrency = format === "long" ? 2 : 1;
-    const crf = format === "long" ? 26 : 22;
+    const crf = format === "long" ? 26 : 22;  // long için biraz düşük kalite, çok daha hızlı
     
     const renderCmd = `cd "${REMOTION_DIR}" && npx remotion render src/index.ts ${compositionId} "${finalVideoYol}" --props="${propsJsonPath}" --concurrency=${concurrency} --codec=h264 --crf=${crf} --pixel-format=yuv420p`;
-    console.log(`🚀 Render: concurrency=${concurrency}, crf=${crf}`);
+    console.log(`🚀 Render config: concurrency=${concurrency}, crf=${crf}`);
     
     const renderBaslangic = Date.now();
     const { stderr: renderErr } = await execAsync(renderCmd, {
       maxBuffer: 500 * 1024 * 1024,
-      timeout: 90 * 60 * 1000,
+      timeout: 90 * 60 * 1000, // 90 dk max (long için)
     });
     const renderSure = ((Date.now() - renderBaslangic) / 1000).toFixed(0);
     console.log(`✓ Render tamam: ${renderSure}s`);
@@ -533,7 +528,7 @@ async function main() {
     const finalStats = fs.statSync(finalVideoYol);
     console.log(`✓ Final video: ${(finalStats.size / 1024 / 1024).toFixed(1)} MB`);
 
-    // 13. Drive'a yükle
+    // 12. Drive'a yükle
     let videoKlasor = await driveAltKlasorBul("07-video", job.drive_folder_id);
     let videoKlasorId;
     if (videoKlasor.length === 0) {
@@ -549,16 +544,15 @@ async function main() {
 
     const yuklenen = await driveDosyaYukle({ filename, filepath }, videoKlasorId, "video/mp4");
 
+    // Temizlik
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
-    // brand/ klasörünü koru, sadece geçici alt klasörleri temizle
-    for (const sub of ["questions", "jess", "audio"]) {
-      fs.rmSync(path.join(REMOTION_PUBLIC, sub), { recursive: true, force: true });
-    }
+    fs.rmSync(REMOTION_PUBLIC, { recursive: true, force: true });
 
     const toplamSureSec = ((Date.now() - toplamBaslangic) / 1000).toFixed(0);
     
+    // Toplam video süresi tahmini
     const tahminToplam = inputProps.intro_audio_duration + 
-      questions.reduce((s, q) => s + q.question_audio_duration + 5 + 1 + 2 + 5 + 1, 0) +
+      questions.reduce((s, q) => s + q.question_audio_duration + 5 + 2 + q.answer_audio_duration + 1, 0) +
       inputProps.outro_audio_duration;
     const videoSureDk = Math.floor(tahminToplam / 60);
     const videoSureSn = Math.floor(tahminToplam % 60);
@@ -569,10 +563,10 @@ async function main() {
 
     await telegram(
       job.chat_id,
-      `🎬 *Quiz Blitz video ready!* ⚡🦊\n\n` +
+      `🎬 *Kids Quiz video ready!* 🦊\n\n` +
         `📌 ${job.baslik}\n` +
         `📺 ${format}\n` +
-        `❓ ${soruSayisi} questions × 3 options\n` +
+        `❓ ${soruSayisi} questions\n` +
         `📦 ${(finalStats.size / 1024 / 1024).toFixed(1)} MB\n` +
         `⏱ ~${videoSureDk}:${String(videoSureSn).padStart(2, "0")}\n` +
         `⚡ Render: ${renderSure}s (Toplam: ${toplamSureSec}s)\n\n` +
