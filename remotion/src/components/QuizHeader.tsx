@@ -1,22 +1,20 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
-import { BRAND, FONTS } from "../styles/theme";
-import { JessEarBadge } from "./JessEarBadge";
+import { BRAND, FONTS, ThemeColor, THEME_COLORS } from "../styles/theme";
+import { BurstBadge } from "./BurstBadge";
+import { TopBar } from "./TopBar";
 
 interface QuizHeaderProps {
   questionNumber: number;
   questionText: string;
   showFrame?: number;
   isVertical?: boolean;
-  /**
-   * Fact modu - true ise:
-   * - Kulak rozet GİZLİ
-   * - Soru cümlesi yerine ortada doğru cevap büyük gösterilir
-   */
+  theme?: ThemeColor;
+  /** Fact modu - true ise: DID YOU KNOW + yeşil pill */
   isFactMode?: boolean;
-  /** Fact modunda gösterilecek doğru cevap metni (örn: "COLONY") */
+  /** Fact modunda gösterilecek doğru cevap */
   correctAnswerText?: string;
-  /** Fact modunun başlangıç frame'i (animasyon için) */
+  /** Fact modunun başlangıç frame'i */
   factShowFrame?: number;
 }
 
@@ -25,6 +23,7 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   questionText,
   showFrame = 0,
   isVertical = false,
+  theme = THEME_COLORS[0],
   isFactMode = false,
   correctAnswerText = "",
   factShowFrame = 0,
@@ -40,7 +39,6 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   });
   const badgeX = interpolate(badgeAnim, [0, 1], [-150, 0]);
   const badgeOpacity = interpolate(badgeAnim, [0, 0.5], [0, 1]);
-  const badgeWobble = Math.sin(frame * 0.08) * 3;
   
   const textAnim = spring({
     frame: frame - showFrame - 5,
@@ -51,135 +49,187 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   const textOpacity = interpolate(textAnim, [0, 0.5], [0, 1]);
   
   // ─── FACT MODU ANİMASYONLARI ───
-  const factAnim = spring({
+  const bulbAnim = spring({
     frame: frame - factShowFrame,
+    fps,
+    config: { damping: 12, stiffness: 110 },
+  });
+  const bulbX = interpolate(bulbAnim, [0, 1], [-200, 0]);
+  const bulbOpacity = interpolate(bulbAnim, [0, 0.5], [0, 1]);
+  const bulbPulse = 1 + Math.sin(frame * 0.15) * 0.06;
+  
+  const factTitleAnim = spring({
+    frame: frame - factShowFrame - 6,
+    fps,
+    config: { damping: 13, stiffness: 100 },
+  });
+  const factTitleOpacity = interpolate(factTitleAnim, [0, 0.5], [0, 1]);
+  const factTitleY = interpolate(factTitleAnim, [0, 1], [-20, 0]);
+  
+  const pillAnim = spring({
+    frame: frame - factShowFrame - 12,
     fps,
     config: { damping: 11, stiffness: 110 },
   });
-  const factScale = interpolate(factAnim, [0, 1], [0.3, 1]);
-  const factOpacity = interpolate(factAnim, [0, 0.5, 1], [0, 1, 1]);
-  const factPulse = 1 + Math.sin(frame * 0.12) * 0.04;
+  const pillX = interpolate(pillAnim, [0, 1], [300, 0]);
+  const pillOpacity = interpolate(pillAnim, [0, 0.5], [0, 1]);
   
   // Boyutlar
   const badgeSize = isVertical ? 160 : 180;
-  const fontSize = isVertical ? 72 : 84;
-  const factFontSize = isVertical ? 96 : 110; // fact mode için DAHA BÜYÜK
+  const fontSize = isVertical ? 64 : 76;
+  const barHeight = isVertical ? 180 : 200;
   const padding = isVertical ? 28 : 50;
-  const headerHeight = isVertical ? 240 : 240;
-  const topPadding = isVertical ? 40 : 50;
   
-  // ═══ FACT MODU: Doğru cevap büyük, kulak yok ═══
+  // ═══ FACT MODU: Ampul sol + DID YOU KNOW + yeşil pill sağ ═══
   if (isFactMode) {
+    const bulbSize = isVertical ? 90 : 120;
+    const didYouKnowFontSize = isVertical ? 56 : 68;
+    const pillFontSize = isVertical ? 52 : 64;
+    
     return (
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: headerHeight,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          paddingTop: topPadding,
-          paddingLeft: padding,
-          paddingRight: padding,
-          paddingBottom: 12,
-          zIndex: 30,
-        }}
-      >
+      <TopBar theme={theme} height={barHeight}>
         <div
           style={{
-            opacity: factOpacity,
-            transform: `scale(${factScale * factPulse})`,
-            fontSize: factFontSize,
-            fontFamily: FONTS.display,
-            fontWeight: 900,
-            color: BRAND.correctGreen,
-            textShadow: `
-              -5px -5px 0 ${BRAND.black},
-              5px -5px 0 ${BRAND.black},
-              -5px 5px 0 ${BRAND.black},
-              5px 5px 0 ${BRAND.black},
-              0 8px 16px rgba(0,0,0,0.5),
-              0 0 40px rgba(76, 209, 55, 0.6)
-            `,
-            textAlign: "center",
-            letterSpacing: 3,
-            textTransform: "uppercase",
-            lineHeight: 1,
+            display: "flex",
+            alignItems: "center",
+            width: "100%",
+            paddingLeft: padding,
+            paddingRight: padding,
+            gap: 16,
           }}
         >
-          {(correctAnswerText || "").toUpperCase()}
+          {/* SOL: Ampul */}
+          <div
+            style={{
+              transform: `translateX(${bulbX}px) scale(${bulbPulse})`,
+              opacity: bulbOpacity,
+              fontSize: bulbSize,
+              lineHeight: 1,
+              filter: `drop-shadow(0 0 25px ${BRAND.yellow})`,
+              flexShrink: 0,
+            }}
+          >
+            💡
+          </div>
+          
+          {/* ORTA: DID YOU KNOW */}
+          <div
+            style={{
+              flex: 1,
+              opacity: factTitleOpacity,
+              transform: `translateY(${factTitleY}px)`,
+              fontSize: didYouKnowFontSize,
+              fontFamily: FONTS.display,
+              fontWeight: 900,
+              color: BRAND.yellow,
+              textShadow: `
+                -3px -3px 0 ${BRAND.black},
+                3px -3px 0 ${BRAND.black},
+                -3px 3px 0 ${BRAND.black},
+                3px 3px 0 ${BRAND.black}
+              `,
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              textAlign: "left",
+            }}
+          >
+            DID YOU KNOW?
+          </div>
+          
+          {/* SAĞ: Yeşil pill - cevap */}
+          <div
+            style={{
+              transform: `translateX(${pillX}px)`,
+              opacity: pillOpacity,
+              backgroundColor: "#E8F5E8",
+              padding: isVertical ? "14px 32px" : "18px 44px",
+              borderRadius: 50,
+              border: `5px solid ${BRAND.black}`,
+              boxShadow: "0 6px 14px rgba(0,0,0,0.4)",
+              maxWidth: "45%",
+              flexShrink: 1,
+            }}
+          >
+            <div
+              style={{
+                fontSize: pillFontSize,
+                fontFamily: FONTS.display,
+                fontWeight: 900,
+                color: BRAND.correctGreen,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                lineHeight: 1.1,
+              }}
+            >
+              {(correctAnswerText || "").toUpperCase()}
+            </div>
+          </div>
         </div>
-      </div>
+      </TopBar>
     );
   }
   
-  // ═══ NORMAL MOD: Kulak + soru cümlesi ═══
+  // ═══ NORMAL MOD: BurstBadge + soru cümlesi ═══
   const questionUpper = questionText.toUpperCase();
   
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        height: headerHeight,
-        display: "flex",
-        alignItems: "center",
-        paddingTop: topPadding,
-        paddingLeft: padding,
-        paddingRight: padding,
-        paddingBottom: 12,
-        zIndex: 30,
-        gap: 20,
-      }}
-    >
+    <TopBar theme={theme} height={barHeight}>
       <div
         style={{
-          transform: `translateX(${badgeX}px) rotate(${badgeWobble}deg)`,
-          opacity: badgeOpacity,
-          flexShrink: 0,
-        }}
-      >
-        <JessEarBadge number={questionNumber} size={badgeSize} />
-      </div>
-      
-      <div
-        style={{
-          flex: 1,
-          textAlign: "center",
-          opacity: textOpacity,
-          transform: `translateY(${textY}px)`,
-          padding: "0 8px",
-          paddingRight: badgeSize + 8,
+          display: "flex",
+          alignItems: "center",
+          width: "100%",
+          paddingLeft: padding,
+          paddingRight: padding,
+          gap: 20,
         }}
       >
         <div
           style={{
-            fontSize: fontSize,
-            fontFamily: FONTS.display,
-            fontWeight: 900,
-            color: BRAND.white,
-            textShadow: `
-              -3px -3px 0 ${BRAND.black},
-              3px -3px 0 ${BRAND.black},
-              -3px 3px 0 ${BRAND.black},
-              3px 3px 0 ${BRAND.black},
-              0 6px 12px rgba(0,0,0,0.5)
-            `,
-            lineHeight: 1.1,
-            letterSpacing: 1,
-            textTransform: "uppercase",
+            transform: `translateX(${badgeX}px)`,
+            opacity: badgeOpacity,
+            flexShrink: 0,
           }}
         >
-          {questionUpper}
+          <BurstBadge number={questionNumber} size={badgeSize} theme={theme} />
+        </div>
+        
+        <div
+          style={{
+            flex: 1,
+            textAlign: "center",
+            opacity: textOpacity,
+            transform: `translateY(${textY}px)`,
+            paddingRight: badgeSize + 8,
+          }}
+        >
+          <div
+            style={{
+              fontSize: fontSize,
+              fontFamily: FONTS.display,
+              fontWeight: 900,
+              color: BRAND.white,
+              textShadow: `
+                -3px -3px 0 ${BRAND.black},
+                3px -3px 0 ${BRAND.black},
+                -3px 3px 0 ${BRAND.black},
+                3px 3px 0 ${BRAND.black},
+                0 6px 12px rgba(0,0,0,0.5)
+              `,
+              lineHeight: 1.1,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+            }}
+          >
+            {questionUpper}
+          </div>
         </div>
       </div>
-    </div>
+    </TopBar>
   );
 };
 
-export { JessEarBadge as StarBadge } from "./JessEarBadge";
+export { BurstBadge as StarBadge } from "./BurstBadge";
