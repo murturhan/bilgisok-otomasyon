@@ -19,8 +19,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   height = 180,
   children,
 }) => {
-  // Theme rengine göre koyu varyant (theme'in birincil rengini koyulaştır)
-  const barColor = darken(theme.primary, 0.6);
+  // Theme rengine göre koyu varyant (theme.primary güvenli fallback)
+  const primaryColor = theme?.primary ?? BRAND.primary ?? "#A0006F";
+  const barColor = darken(primaryColor, 0.6);
   
   return (
     <div
@@ -49,17 +50,24 @@ export const TopBar: React.FC<TopBarProps> = ({
  * amount = 0.5 → %50 daha koyu
  */
 function darken(hex: string, amount: number): string {
+  // Defensive: hex undefined/null/boş ise fallback
+  if (!hex || typeof hex !== "string") return "#3a0030";
+  
   // #RRGGBB → RGB
   const clean = hex.replace("#", "");
+  if (clean.length < 6) return "#3a0030";
+  
   const r = parseInt(clean.substring(0, 2), 16);
   const g = parseInt(clean.substring(2, 4), 16);
   const b = parseInt(clean.substring(4, 6), 16);
   
-  const darken = (c: number) => Math.max(0, Math.floor(c * (1 - amount)));
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return "#3a0030";
   
-  const rd = darken(r);
-  const gd = darken(g);
-  const bd = darken(b);
+  const darkenChannel = (c: number) => Math.max(0, Math.floor(c * (1 - amount)));
+  
+  const rd = darkenChannel(r);
+  const gd = darkenChannel(g);
+  const bd = darkenChannel(b);
   
   return `#${rd.toString(16).padStart(2, "0")}${gd.toString(16).padStart(2, "0")}${bd.toString(16).padStart(2, "0")}`;
 }
