@@ -1,0 +1,77 @@
+/**
+ * jess-greeting-uret.js
+ * 
+ * Jess'in sabit intro/outro greeting'lerini mevcut sistemle aynı seste üretir:
+ *   - Google Cloud TTS Chirp3-HD-Leda
+ *   - Pitch +3
+ *   - Speaking rate 1.0
+ * 
+ * Çıktılar: ./jess-audio/
+ *   - shorts-intro.mp3
+ *   - shorts-outro.mp3
+ *   - long-intro.mp3
+ *   - long-outro.mp3
+ * 
+ * Bu mp3'leri Hedra'ya audio olarak upload et + Jess PNG ile lip-sync video al.
+ * 
+ * Çalıştırma:
+ *   GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa-key.json node jess-greeting-uret.js
+ * 
+ * Ya da GitHub Actions secret üzerinden:
+ *   echo "$GOOGLE_SERVICE_ACCOUNT" > /tmp/sa.json
+ *   GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json node jess-greeting-uret.js
+ */
+
+import textToSpeech from "@google-cloud/text-to-speech";
+import fs from "fs";
+import path from "path";
+
+const OUT_DIR = "./jess-audio";
+
+const SHORTS_INTRO = "Hey, curious minds! Jess the Fox here… are you ready?";
+const LONG_INTRO = "Hey curious minds! I'm Jess the Fox, and welcome to Geni-Mini Tests! Ready for today's fun challenge?";
+const SHORTS_OUTRO = "Great job, friends! Thanks for watching!";
+const LONG_OUTRO = "Great job, curious minds! Thanks for watching — see you in the next Geni-Mini Test!";
+
+const VOICE_CONFIG = {
+  languageCode: "en-US",
+  name: "en-US-Chirp3-HD-Leda",
+};
+
+const AUDIO_CONFIG = {
+  audioEncoding: "MP3",
+  speakingRate: 1.0,
+  pitch: 3.0,
+};
+
+async function urettiSesKaydet(client, text, outFile) {
+  const [response] = await client.synthesizeSpeech({
+    input: { text },
+    voice: VOICE_CONFIG,
+    audioConfig: AUDIO_CONFIG,
+  });
+  fs.writeFileSync(outFile, response.audioContent, "binary");
+  const sizeKB = (response.audioContent.length / 1024).toFixed(1);
+  console.log(`  ✓ ${path.basename(outFile)} (${sizeKB} KB)`);
+}
+
+async function main() {
+  if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
+  
+  console.log("Jess greeting sesleri üretiliyor (Chirp3-HD-Leda, pitch +3)...\n");
+  
+  const client = new textToSpeech.TextToSpeechClient();
+  
+  await urettiSesKaydet(client, SHORTS_INTRO, path.join(OUT_DIR, "shorts-intro.mp3"));
+  await urettiSesKaydet(client, LONG_INTRO, path.join(OUT_DIR, "long-intro.mp3"));
+  await urettiSesKaydet(client, SHORTS_OUTRO, path.join(OUT_DIR, "shorts-outro.mp3"));
+  await urettiSesKaydet(client, LONG_OUTRO, path.join(OUT_DIR, "long-outro.mp3"));
+  
+  console.log(`\n✅ Bitti. Dosyalar: ${path.resolve(OUT_DIR)}`);
+  console.log("\nSonraki adım: Hedra'ya bu mp3'leri yükle + Jess PNG ile lip-sync video çıkart.");
+}
+
+main().catch((err) => {
+  console.error("HATA:", err);
+  process.exit(1);
+});
