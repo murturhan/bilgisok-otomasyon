@@ -18,16 +18,20 @@ interface OutroSceneProps {
   durationFrames: number;
 }
 
+// Outro greeting metinleri (Jess'in konuşması — sonradan Hedra mp4'iyle değişecek)
+const SHORTS_OUTRO = "Great job, friends! Thanks for watching!";
+const LONG_OUTRO = "Great job, curious minds! Thanks for watching — see you in the next Geni-Mini Test!";
+
 /**
  * Outro 2 sahnede:
- * Sahne 1 (ilk %55): GREAT JOB! + 🏆🎊⭐ + Jess + THANKS FOR WATCHING tagline
+ * Sahne 1 (ilk %55): GREAT JOB! + 🏆 + greeting balonu + Jess
  *   - Üst: GREAT JOB! (büyük)
- *   - Orta: 🏆 (kocaman, ortada) + yan emojiler
- *   - Alt-üstü: THANKS FOR WATCHING! tagline
- *   - Alt: Jess (büyük, daha yukarı)
+ *   - Orta: 🏆 (kocaman, ortada) + yan emojiler ⭐ 🎊
+ *   - Jess'in üzerinde: greeting balonu (logo formatında)
+ *   - Alt: Jess (büyük, yukarı çekilmiş)
  * Sahne 2 (son %45): SUBSCRIBE + SEE YOU NEXT TIME (Jess yok, sade)
  * 
- * Sahnenin ortasında beyaz flash geçişi
+ * Güçlü 0.5s flash + scale + blur geçişi
  */
 export const OutroScene: React.FC<OutroSceneProps> = ({
   channelName,
@@ -35,21 +39,38 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   durationFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width, height } = useVideoConfig();
+  const { width, height } = useVideoConfig();
   const isVertical = height > width;
   
   const theme = THEME_COLORS[2]; // teal
+  const outroText = isVertical ? SHORTS_OUTRO : LONG_OUTRO;
   
   // Sahne 1 ve 2 bölünme noktası
   const scene1End = Math.floor(durationFrames * 0.55);
   const scene2Start = scene1End;
   const inScene1 = frame < scene1End;
   const inScene2 = frame >= scene2Start;
-  const inTransition = frame >= scene1End && frame < scene1End + 5;
   
-  // Flash arası
+  // GÜÇLÜ FLASH GEÇİŞ — 0.5s
+  const TR_LEN = Math.floor(FPS * 0.5);
+  const inTransition = frame >= scene1End && frame < scene1End + TR_LEN;
+  const trLocal = frame - scene1End;
+  
   const flashOpacity = inTransition
-    ? interpolate(frame - scene1End, [0, 3, 5], [0, 0.85, 0], { extrapolateRight: "clamp" })
+    ? interpolate(trLocal, [0, 5, TR_LEN], [0, 0.95, 0], {
+        extrapolateRight: "clamp",
+        extrapolateLeft: "clamp",
+      })
+    : 0;
+  
+  const scene1Scale = inTransition
+    ? interpolate(trLocal, [0, TR_LEN], [1, 1.2], { extrapolateRight: "clamp" })
+    : 1;
+  const scene1Opacity = inTransition
+    ? interpolate(trLocal, [0, TR_LEN * 0.6, TR_LEN], [1, 0.6, 0], { extrapolateRight: "clamp" })
+    : 1;
+  const scene1Blur = inTransition
+    ? interpolate(trLocal, [0, TR_LEN], [0, 8], { extrapolateRight: "clamp" })
     : 0;
   
   return (
@@ -63,21 +84,31 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
         fontSize={isVertical ? 28 : 32}
       />
       
-      {inScene1 && (
-        <OutroScene1
-          jessPoses={jessPoses}
-          isVertical={isVertical}
-        />
+      {(inScene1 || inTransition) && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: scene1Opacity,
+            transform: `scale(${scene1Scale})`,
+            filter: scene1Blur > 0 ? `blur(${scene1Blur}px)` : undefined,
+          }}
+        >
+          <OutroScene1
+            jessPoses={jessPoses}
+            isVertical={isVertical}
+            outroText={outroText}
+          />
+        </div>
       )}
       
-      {inScene2 && (
+      {inScene2 && !inTransition && (
         <OutroScene2
           startFrame={scene2Start}
           isVertical={isVertical}
         />
       )}
       
-      {/* FLASH GEÇİŞİ - sahne 1'den 2'ye */}
       {inTransition && (
         <div
           style={{
@@ -97,11 +128,12 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   );
 };
 
-// ═══ SAHNE 1: GREAT JOB + emoji + tagline + Jess (DOLU LAYOUT) ═══
-const OutroScene1: React.FC<{ jessPoses: JessPoses; isVertical: boolean }> = ({
-  jessPoses,
-  isVertical,
-}) => {
+// ═══ SAHNE 1: GREAT JOB + trofe + greeting balonu + Jess ═══
+const OutroScene1: React.FC<{
+  jessPoses: JessPoses;
+  isVertical: boolean;
+  outroText: string;
+}> = ({ jessPoses, isVertical, outroText }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
@@ -114,7 +146,7 @@ const OutroScene1: React.FC<{ jessPoses: JessPoses; isVertical: boolean }> = ({
   const titleScale = interpolate(titleAnim, [0, 1], [0, 1]);
   const titlePulse = 1 + Math.sin(frame * 0.12) * 0.03;
   
-  // Trofe ortada - geç gelir, BÜYÜK
+  // Trofe ortada
   const trophyAnim = spring({
     frame: frame - 14,
     fps,
@@ -133,14 +165,15 @@ const OutroScene1: React.FC<{ jessPoses: JessPoses; isVertical: boolean }> = ({
   const sideEmojiOpacity = interpolate(sideEmojiAnim, [0, 1], [0, 1]);
   const sideEmojiY = interpolate(sideEmojiAnim, [0, 1], [40, 0]);
   
-  // Tagline (THANKS FOR WATCHING)
-  const taglineAnim = spring({
-    frame: frame - 26,
+  // Greeting balonu
+  const greetingAnim = spring({
+    frame: frame - 28,
     fps,
     config: { damping: 13, stiffness: 100 },
   });
-  const taglineOpacity = interpolate(taglineAnim, [0, 1], [0, 1]);
-  const taglineY = interpolate(taglineAnim, [0, 1], [40, 0]);
+  const greetingScale = interpolate(greetingAnim, [0, 1], [0, 1]);
+  const greetingOpacity = interpolate(greetingAnim, [0, 0.5], [0, 1]);
+  const greetingFloat = Math.sin(frame * 0.08) * 4;
   
   // Jess enter
   const jessAnim = spring({
@@ -151,7 +184,8 @@ const OutroScene1: React.FC<{ jessPoses: JessPoses; isVertical: boolean }> = ({
   const jessScale = interpolate(jessAnim, [0, 1], [0, 1]);
   
   const titleFontSize = isVertical ? 200 : 220;
-  const taglineFontSize = isVertical ? 64 : 72;
+  const greetingFontSize = isVertical ? 42 : 48;
+  const greetingMaxWidth = isVertical ? "84%" : "62%";
   
   return (
     <>
@@ -159,7 +193,7 @@ const OutroScene1: React.FC<{ jessPoses: JessPoses; isVertical: boolean }> = ({
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "5%" : "8%",
+          top: isVertical ? "4%" : "7%",
           left: 0,
           right: 0,
           display: "flex",
@@ -195,7 +229,7 @@ const OutroScene1: React.FC<{ jessPoses: JessPoses; isVertical: boolean }> = ({
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "27%" : "30%",
+          top: isVertical ? "24%" : "28%",
           left: 0,
           right: 0,
           display: "flex",
@@ -244,17 +278,17 @@ const OutroScene1: React.FC<{ jessPoses: JessPoses; isVertical: boolean }> = ({
         </div>
       </div>
       
-      {/* JESS arkasında TAGLINE - "THANKS FOR WATCHING!" */}
+      {/* GREETING BALONU - trofe ile Jess arasında */}
       <div
         style={{
           position: "absolute",
-          bottom: isVertical ? "32%" : "30%",
+          bottom: isVertical ? "30%" : "28%",
           left: 0,
           right: 0,
           display: "flex",
           justifyContent: "center",
-          opacity: taglineOpacity,
-          transform: `translateY(${taglineY}px)`,
+          opacity: greetingOpacity,
+          transform: `scale(${greetingScale}) translateY(${greetingFloat}px)`,
           zIndex: 10,
         }}
       >
@@ -262,20 +296,20 @@ const OutroScene1: React.FC<{ jessPoses: JessPoses; isVertical: boolean }> = ({
           style={{
             backgroundColor: BRAND.white,
             color: BRAND.black,
-            padding: isVertical ? "20px 44px" : "26px 56px",
-            borderRadius: 50,
-            fontSize: taglineFontSize,
+            padding: isVertical ? "20px 36px" : "24px 44px",
+            borderRadius: 36,
+            fontSize: greetingFontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
-            border: `6px solid ${BRAND.yellow}`,
-            boxShadow: `0 10px 30px rgba(0,0,0,0.5), 0 0 50px ${BRAND.yellow}`,
+            border: `5px solid ${BRAND.yellow}`,
+            boxShadow: `0 8px 22px rgba(0,0,0,0.45), 0 0 35px ${BRAND.yellow}`,
+            maxWidth: greetingMaxWidth,
             textAlign: "center",
-            letterSpacing: 1.5,
-            textTransform: "uppercase",
-            lineHeight: 1.1,
+            letterSpacing: 0.5,
+            lineHeight: 1.2,
           }}
         >
-          THANKS FOR WATCHING!
+          {outroText}
         </div>
       </div>
       
@@ -360,7 +394,7 @@ const OutroScene2: React.FC<{ startFrame: number; isVertical: boolean }> = ({
         zIndex: 10,
       }}
     >
-      {/* Üstte aşağı doğru ok (animasyon: zıplar) */}
+      {/* Üstte aşağı doğru ok */}
       <div
         style={{
           opacity: arrowOpacity,
@@ -373,7 +407,7 @@ const OutroScene2: React.FC<{ startFrame: number; isVertical: boolean }> = ({
         👇
       </div>
       
-      {/* SUBSCRIBE - kocaman kırmızı buton */}
+      {/* SUBSCRIBE */}
       <div
         style={{
           transform: `scale(${subScale * subPulse})`,
