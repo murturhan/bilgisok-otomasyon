@@ -74,17 +74,17 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   const pillX = interpolate(pillAnim, [0, 1], [300, 0]);
   const pillOpacity = interpolate(pillAnim, [0, 0.5], [0, 1]);
   
-  // Boyutlar
+  // Boyutlar - soru başlığı BÜYÜTÜLDÜ (kullanıcı talebi)
   const badgeSize = isVertical ? 160 : 180;
-  const fontSize = isVertical ? 64 : 76;
-  const barHeight = isVertical ? 180 : 200;
+  const fontSize = isVertical ? 78 : 90;
+  const barHeight = isVertical ? 200 : 220;
   const padding = isVertical ? 28 : 50;
   
   // ═══ FACT MODU: Ampul sol + DID YOU KNOW + yeşil pill sağ ═══
   if (isFactMode) {
-    const bulbSize = isVertical ? 90 : 120;
-    const didYouKnowFontSize = isVertical ? 56 : 68;
-    const pillFontSize = isVertical ? 52 : 64;
+    const bulbSize = isVertical ? 110 : 140;
+    const didYouKnowFontSize = isVertical ? 72 : 86;
+    const pillFontSize = isVertical ? 62 : 76;
     
     return (
       <TopBar theme={theme} height={barHeight}>
