@@ -74,6 +74,28 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   if (inCountdown || inDrumRoll || inSilentPause) currentJessPose = "thinking";
   else if (inRevealCorrect) currentJessPose = "correct";
   
+  // Transition flash: 0.3s boyunca beyaz overlay ve scale pulse
+  // Frame 0-3: opacity 0→0.9 (parlama)
+  // Frame 3-9: opacity 0.9→0 (sönme)
+  const transitionLocalFrame = frame - phases.transition;
+  const flashOpacity = inTransition
+    ? interpolate(
+        transitionLocalFrame,
+        [0, 3, FIXED_FRAMES.transition],
+        [0, 0.85, 0],
+        { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
+      )
+    : 0;
+  
+  const sceneScale = inTransition
+    ? interpolate(
+        transitionLocalFrame,
+        [0, 3, FIXED_FRAMES.transition],
+        [1, 1.05, 1.02],
+        { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
+      )
+    : 1;
+  
   const fadeOut = inTransition
     ? interpolate(
         frame - phases.transition,
@@ -98,7 +120,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   const pattern = getPatternForQuestion(questionNumber - 1);
   
   return (
-    <AbsoluteFill style={{ opacity: fadeOut }}>
+    <AbsoluteFill style={{ opacity: fadeOut, transform: `scale(${sceneScale})` }}>
       <AnimatedBackground theme={theme} pattern={pattern} motionSpeed={1} />
       
       {/* AUDIO */}
@@ -143,12 +165,13 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
         </Sequence>
       )}
       
-      {/* HEADER - soru fazında normal, fact fazında doğru cevap büyük */}
+      {/* HEADER - soru fazında BurstBadge, fact fazında DID YOU KNOW + yeşil pill */}
       <QuizHeader
         questionNumber={questionNumber}
         questionText={question.question_text}
         showFrame={phases.show}
         isVertical={isVertical}
+        theme={theme}
         isFactMode={inFunFact}
         correctAnswerText={question.options[question.correct_answer]}
         factShowFrame={phases.funFact}
@@ -223,6 +246,23 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           animate
         />
       )}
+      
+      {/* TRANSITION FLASH - kısa beyaz parlama efekti, geçişler için */}
+      {inTransition && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: BRAND.white,
+            opacity: flashOpacity,
+            zIndex: 99,
+            pointerEvents: "none",
+          }}
+        />
+      )}
     </AbsoluteFill>
   );
 };
@@ -248,7 +288,7 @@ const LongLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases,
   inFunFact, isRevealed, revealImageTransition, width, height,
 }) => {
-  const bodyTop = 170;
+  const bodyTop = 220;  // long header 200 + 20 padding
   const bodyBottom = 200;
   
   const colGap = 50;
@@ -287,15 +327,13 @@ const LongLayout: React.FC<LayoutProps> = ({
             revealTransition={revealImageTransition}
           />
         ) : (
-          funFactImageSrc && (
-            <ImageCard
-              src={funFactImageSrc}
-              width={leftWidth}
-              height={imageHeight}
-              isReveal={false}
-              revealTransition={1}
-            />
-          )
+          <ImageCard
+            src={funFactImageSrc || imageSrc}
+            width={leftWidth}
+            height={imageHeight}
+            isReveal={false}
+            revealTransition={1}
+          />
         )}
       </div>
       
@@ -334,7 +372,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases, inDrumRoll, inSilentPause, inCountdown,
   inFunFact, isRevealed, revealImageTransition, width, height,
 }) => {
-  const bodyTop = 250;  // header 240 + 10 padding
+  const bodyTop = 210;  // shorts header 180 + 30 padding
   const padding = 40;
   const contentWidth = width - padding * 2;
   const imageHeight = Math.floor(height * 0.34);
@@ -553,8 +591,8 @@ const ImageCard: React.FC<ImageCardProps> = ({
 };
 
 // ═══════════════════════════════════════════════════
-// FUN FACT PANEL — Canva tasarımına uygun: ampul + DID YOU KNOW yan yana,
-// metin altında GÖZLÜK (Jess yerine)
+// FUN FACT PANEL — sadece beyaz kart + gözlük
+// (DID YOU KNOW + ampul + yeşil cevap pill ARTIK üst barda, TopBar component'inde)
 // ═══════════════════════════════════════════════════
 interface FunFactPanelProps {
   text: string;
@@ -566,22 +604,9 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
-  // STAGGER ENTRY - 3 eleman sırayla giriş yapar
-  // 0f: Ampul + "DID YOU KNOW?" girer
-  // 15f: Fact metni kartı girer
-  // 35f: Gözlük girer
-  
-  const headerAnim = spring({
-    frame: frame - showFrame,
-    fps,
-    config: { damping: 11, stiffness: 110 },
-  });
-  const headerOpacity = interpolate(headerAnim, [0, 0.5, 1], [0, 1, 1]);
-  const headerScale = interpolate(headerAnim, [0, 1], [0.4, 1]);
-  const headerY = interpolate(headerAnim, [0, 1], [-40, 0]);
-  
+  // Kart enter animasyonu
   const cardAnim = spring({
-    frame: frame - showFrame - 15,
+    frame: frame - showFrame,
     fps,
     config: { damping: 13, stiffness: 100 },
   });
@@ -589,18 +614,32 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
   const cardY = interpolate(cardAnim, [0, 1], [60, 0]);
   const cardScale = interpolate(cardAnim, [0, 1], [0.85, 1]);
   
+  // Gözlük geç gelir
   const glassesAnim = spring({
-    frame: frame - showFrame - 35,
+    frame: frame - showFrame - 20,
     fps,
     config: { damping: 10, stiffness: 130 },
   });
   const glassesScale = interpolate(glassesAnim, [0, 1], [0, 1]);
   const glassesOpacity = interpolate(glassesAnim, [0, 0.5], [0, 1]);
   const glassesRotate = interpolate(glassesAnim, [0, 0.7, 1], [-180, 10, 0]);
+  const glassesIdleBounce = Math.sin((frame - showFrame - 20) * 0.1) * 6;
   
-  // Idle animasyonlar
-  const bulbPulse = 1 + Math.sin(frame * 0.15) * 0.06;
-  const glassesIdleBounce = Math.sin((frame - showFrame - 35) * 0.1) * 6;
+  // DİNAMİK FONT BOYUTU - Fact metin uzunluğuna göre küçültür
+  // Kısa fact (< 60 karakter): büyük font
+  // Orta (60-120): orta
+  // Uzun (>120): küçük
+  const len = text.length;
+  let dynamicFontSize: number;
+  if (isVertical) {
+    if (len < 60) dynamicFontSize = 56;
+    else if (len < 120) dynamicFontSize = 46;
+    else dynamicFontSize = 38;
+  } else {
+    if (len < 60) dynamicFontSize = 64;
+    else if (len < 120) dynamicFontSize = 56;
+    else dynamicFontSize = 46;
+  }
   
   return (
     <div
@@ -608,73 +647,39 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: isVertical ? 18 : 32,
+        gap: isVertical ? 20 : 28,
         padding: "0 16px",
         width: "100%",
+        height: "100%",
+        justifyContent: "center",
       }}
     >
-      {/* 1. AMPUL + DID YOU KNOW yan yana - stagger 0f */}
-      <div
-        style={{
-          opacity: headerOpacity,
-          transform: `translateY(${headerY}px) scale(${headerScale})`,
-          display: "flex",
-          alignItems: "center",
-          gap: 24,
-        }}
-      >
-        <div
-          style={{
-            fontSize: isVertical ? 90 : 150,
-            transform: `scale(${bulbPulse})`,
-            filter: `drop-shadow(0 0 35px ${BRAND.yellow})`,
-            lineHeight: 1,
-          }}
-        >
-          💡
-        </div>
-        
-        <div
-          style={{
-            fontSize: isVertical ? 56 : 80,
-            fontFamily: FONTS.display,
-            fontWeight: 900,
-            color: BRAND.yellow,
-            textShadow: `
-              -4px -4px 0 ${BRAND.black},
-              4px -4px 0 ${BRAND.black},
-              -4px 4px 0 ${BRAND.black},
-              4px 4px 0 ${BRAND.black}
-            `,
-            letterSpacing: 2,
-            textTransform: "uppercase",
-          }}
-        >
-          DID YOU KNOW?
-        </div>
-      </div>
-      
-      {/* 2. Fact metni kartı - stagger 15f */}
+      {/* Fact metin kartı - genişlik tam, içerde dinamik ortalanır */}
       <div
         style={{
           opacity: cardOpacity,
           transform: `translateY(${cardY}px) scale(${cardScale})`,
           backgroundColor: BRAND.white,
           borderRadius: 20,
-          padding: isVertical ? "36px 38px" : "44px 50px",
-          boxShadow: "0 16px 40px rgba(0,0,0,0.45), 0 0 0 4px rgba(255, 220, 0, 0.4)",
+          padding: isVertical ? "36px 36px" : "44px 50px",
+          boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
           borderTop: `8px solid ${BRAND.yellow}`,
           borderBottom: `8px solid ${BRAND.yellow}`,
+          width: "100%",
           maxWidth: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: isVertical ? 280 : 320,
         }}
       >
         <div
           style={{
-            fontSize: isVertical ? 42 : 54,
+            fontSize: dynamicFontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.black,
-            lineHeight: 1.3,
+            lineHeight: 1.25,
             textAlign: "center",
             textTransform: "uppercase",
             letterSpacing: 0.5,
@@ -684,15 +689,14 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         </div>
       </div>
       
-      {/* 3. GÖZLÜK - stagger 35f, döne döne gelir */}
+      {/* Gözlük - stagger 20f */}
       <div
         style={{
           transform: `scale(${glassesScale}) rotate(${glassesRotate}deg) translateY(${glassesIdleBounce}px)`,
           opacity: glassesOpacity,
-          marginTop: isVertical ? 16 : 24,
         }}
       >
-        <GlassesIcon size={isVertical ? 200 : 320} />
+        <GlassesIcon size={isVertical ? 160 : 180} />
       </div>
     </div>
   );
