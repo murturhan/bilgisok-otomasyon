@@ -1,11 +1,10 @@
 /**
- * 01 - İçerik Üretimi v16 (Quiz Blitz refactor + FLUX kalite iyileştirmesi)
- *
- * v15'ten farkı:
- * - FLUX prompt'larında "no fox, no mascot, no text on image" zorunlu kılındı
- *   (Jess olmayan fox karakteri sorunu + "RUTERIAM" gibi sahte text sorunu)
- * - Fun fact prompt'ları daha somut/literal (Wright Brothers → biplane uçak gösteriyor olmalı)
- * - Question prompt'larında "studio photography style, clean object on plain background" preferenceı
+ * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
+ * v13'ten farkı:
+ * - Her soru için AYRI question_audio_text ve answer_audio_text üretir
+ * - questions.json'da bu yapı: { intro_audio_text, outro_audio_text, questions: [{..., question_audio_text, answer_audio_text}] }
+ * - Bu sayede 03-seslendirme her parçayı ayrı MP3 yapacak
+ * - Video tam ses süresine göre senkron olacak
  */
 
 import fs from "fs";
@@ -36,25 +35,6 @@ function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// ─── FLUX PROMPT IYİLEŞTİRİCİ ─────────────────────
-// Tüm FLUX prompt'larına eklenecek negatif/pozitif kuralları
-const FLUX_QUALITY_SUFFIX = ", clean studio lighting, kid-friendly Pixar 3D cartoon style, vibrant colors, sharp focus, NO TEXT in image, NO LETTERS, NO LOGOS, NO WATERMARKS, NO FOX CHARACTER, NO MASCOT, NO ANIMAL CHARACTERS in scene";
-
-function enhanceFluxPrompt(prompt) {
-  if (!prompt) return prompt;
-  // Eğer prompt'ta zaten "no fox" gibi negatifler varsa eklemiyoruz
-  if (/NO TEXT|no text|no fox/i.test(prompt)) return prompt;
-  // Hayvanlarla ilgili sorularda hayvan olmalı - "NO ANIMAL CHARACTERS" hayvan konularını kırıyor
-  // O yüzden hayvan kelimesi varsa NO ANIMAL CHARACTERS çıkar
-  const isAnimalTopic = /animal|fox|dog|cat|bear|bird|fish|cow|lion|tiger|monkey|elephant|zebra/i.test(prompt);
-  let suffix = FLUX_QUALITY_SUFFIX;
-  if (isAnimalTopic) {
-    suffix = suffix.replace(", NO ANIMAL CHARACTERS in scene", "");
-    suffix = suffix.replace(", NO FOX CHARACTER, NO MASCOT", ", NO FOX CHARACTER, NO MASCOT (animals from question are OK)");
-  }
-  return prompt + suffix;
-}
-
 async function icerikUret(konu) {
   console.log(`Gemini quiz üretiyor: "${konu}", format: ${FORMAT}, ${QUESTION_COUNT} soru`);
   
@@ -64,166 +44,173 @@ async function icerikUret(konu) {
   const prompt = `You are an expert content creator for "GeniMini Tests" - educational quiz YouTube channel for kids ages 4-12.
 
 Channel mascot: **Jess the Fox** - cute, friendly Pixar-style fox who hosts the quiz.
-IMPORTANT: Jess is the host. She is NEVER part of the visual scenes — DO NOT put a fox character in any image_prompt.
 
 TOPIC: "${konu}"
-FORMAT: ${FORMAT === "shorts" ? "YouTube Shorts (60-90 seconds, 5 quick questions)" : "Long video (12-15 minutes, 25 questions with mixed difficulty)"}
+FORMAT: ${FORMAT === "shorts" ? "YouTube Shorts (60-90 seconds, 5 quick questions)" : "Long video (10-12 minutes, 25 questions with mixed difficulty)"}
 
 ═══════════════════════════════════════════════════
-QUIZ STRUCTURE (Quiz Blitz style - 3 OPTIONS)
+QUIZ STRUCTURE
 ═══════════════════════════════════════════════════
 
-Create:
-1. **Intro audio** (Jess greets, 2-3 sentences)
-2. **${QUESTION_COUNT} questions** with **3 multiple choice answers** each (A, B, C)
-3. **Outro audio** (Jess says goodbye)
+You will create:
+1. **Intro audio** (Jess greets viewers, 2-3 sentences)
+2. **${QUESTION_COUNT} questions** with 3 multiple choice answers each
+3. **Outro audio** (Jess says goodbye, 2-3 sentences)
 
-For EACH question:
-- The question + 3 options
-- **question_audio_text**: Jess reads question + 3 options
-- **answer_audio_text**: Jess reveals correct answer + fun fact
-- **image_prompt**: visual for the QUESTION (literal subject only)
-- **fun_fact_image_prompt**: visual illustrating the FUN FACT
-- **reveal_image_prompt** (optional): for country quizzes - flag of answer country
+For EACH question, you must create:
+- The question itself + 3 options
+- **question_audio_text**: What Jess SAYS when introducing the question (reads question + 3 options out loud)
+- **answer_audio_text**: What Jess SAYS when revealing the answer (confirms correct answer + fun fact)
+- image_prompt for the question visual
 
-DIFFICULTY DISTRIBUTION:
-${FORMAT === "shorts" ? `- Easy: 3, Medium: 2` : `- Easy: 8, Medium: 12, Hard: 5
-- Progress easy → medium → hard`}
+DIFFICULTY DISTRIBUTION (for ${QUESTION_COUNT} questions):
+${FORMAT === "shorts" ? `- Easy: 3 questions (ages 4-7)
+- Medium: 2 questions (ages 7-12)` : `- Easy: 8 questions (ages 4-7, basic recognition)
+- Medium: 12 questions (ages 7-10, knowledge)
+- Hard: 5 questions (ages 10-12, challenging)
 
-═══════════════════════════════════════════════════
-AUDIO TEXT FORMAT (CRITICAL)
-═══════════════════════════════════════════════════
-
-question_audio_text: "Question N. [question]. Is it A: [opt1], B: [opt2], or C: [opt3]?"
-answer_audio_text: "The correct answer is [Letter]: [correct option]! [Fun fact sentence]."
-
-Each question audio: 6-9 seconds. Answer audio: 5-8 seconds.
+QUESTIONS MUST PROGRESS from easy → medium → hard.`}
 
 ═══════════════════════════════════════════════════
-INTRO & OUTRO
+AUDIO TEXT FORMAT (CRITICAL!)
 ═══════════════════════════════════════════════════
 
-intro_audio_text: 2-3 energetic sentences. Example: "Hi friends! I'm Jess the Fox! Today we're exploring amazing animals! Let's play!"
-outro_audio_text: 2-3 farewell sentences. Example: "Wow, you did great! Subscribe for more! See you next time!"
+**question_audio_text** template (what Jess says when showing the question):
+"Question [N]. [Question text]. Is it A: [option1], B: [option2], C: [option3], or D: [option4]?"
+
+Example:
+"Question 1. Which animal is the king of the jungle? Is it A: Tiger, B: Lion, C: Cheetah, or D: Leopard?"
+
+**answer_audio_text** template (what Jess says revealing answer):
+"The correct answer is [Letter]: [Correct option]! [Fun fact sentence]."
+
+Example:
+"The correct answer is B: Lion! Did you know? Lions are the only cats that live in groups called prides!"
 
 ═══════════════════════════════════════════════════
-IMAGE PROMPT RULES (VERY IMPORTANT!)
+INTRO & OUTRO AUDIO
 ═══════════════════════════════════════════════════
 
-For EVERY image_prompt and fun_fact_image_prompt:
+**intro_audio_text** (Jess greets, 2-3 sentences, energetic):
+Example: "Hi friends! I'm Jess the Fox! Today we're exploring amazing animals! Can you guess them all? Let's play!"
 
-✅ DO:
-- Describe the LITERAL subject in plain language ("a vintage rotary telephone on a wooden desk")
-- Use clean studio photography style
-- Pixar 3D cartoon look
-- Mention background color/setting briefly
-
-❌ DO NOT:
-- DO NOT include any text, letters, words, signs, labels in the image
-- DO NOT include a fox character (Jess is overlaid separately, NOT in FLUX images)
-- DO NOT include any cartoon mascot, character, or person
-- DO NOT include logos, brands, watermarks, or made-up text
-- DO NOT use stylized text labels or banners
-- DO NOT use names of inventors as image subjects (Gemini-generated images can't draw Wright Brothers accurately — use the INVENTION not the inventor)
-
-📸 EXAMPLES:
-
-GOOD question_prompt for "First airplane":
-"A red wooden biplane with double wings on grass field, Pixar 3D cartoon style, daytime, clean composition, NO text, NO people, NO animals"
-
-BAD question_prompt:
-"The Wright Brothers' first airplane flight in 1903 with the inventors" 
-(causes weird humans + fake text)
-
-GOOD fun_fact_prompt for "Lightbulbs were invented in 1879":
-"A glowing vintage Edison lightbulb on a wooden table, warm yellow glow, dark background, Pixar 3D style, NO text"
-
-BAD fun_fact_prompt:
-"Thomas Edison inventing the lightbulb"
-(causes weird Edison face)
+**outro_audio_text** (Jess says goodbye, 2-3 sentences):
+Example: "Wow, you did amazing! Don't forget to subscribe and join Jess for more fun quizzes! See you next time, friends!"
 
 ═══════════════════════════════════════════════════
 QUESTION OBJECT FORMAT
 ═══════════════════════════════════════════════════
 
-Each question:
-- **question_text**: Short on-screen text (e.g., "What does this invention do?")
-- **image_prompt**: LITERAL Pixar prompt for question visual (follow IMAGE RULES above)
-- **fun_fact_image_prompt**: LITERAL Pixar prompt for fun fact reveal
-- **reveal_image_prompt** (optional): For COUNTRIES only - "Clean flag of [country], simple solid colors, NO text, plain white background"
-- **options**: Array of EXACTLY 3 short answers (1-3 words)
-- **option_flags**: Array of EXACTLY 3 flag emojis or "" empty strings
-- **correct_answer**: Index 0, 1, or 2
+Each question object MUST have ALL these fields:
+- **question_text**: Short text shown on screen (e.g., "Which animal is this?")
+- **image_prompt**: FLUX prompt for question's image (Pixar-style, kid-friendly)
+- **options**: Array of 3 short answers (1-3 words each)
+- **correct_answer**: Index 0, 1, 2, or 3
 - **difficulty**: "easy", "medium", or "hard"
-- **fun_fact**: Short sentence (used in audio and reveal)
-- **question_audio_text**: Full Jess speaks
-- **answer_audio_text**: Full Jess speaks with fun fact
+- **fun_fact**: Short fact sentence (used in answer_audio_text)
+- **question_audio_text**: Full sentence Jess SPEAKS when posing the question (includes all 3 options)
+- **answer_audio_text**: Full sentence Jess SPEAKS when revealing the answer (includes fun fact)
 
 ═══════════════════════════════════════════════════
-METADATA
+TITLE & METADATA
 ═══════════════════════════════════════════════════
 
-baslik: Long YouTube title with emoji (10-15 words)
-thumbnail_title: 2-3 WORDS UPPERCASE (e.g. "ANIMAL QUIZ")
-thumbnail_prompt: Pixar scenery only, NO characters, NO text
-aciklama: 200-word description with hashtags (#KidsQuiz #LearnForKids #JessTheFox #GeniMiniTests)
+**baslik** (YouTube title): Click-worthy with emoji
+Example: "🦁 Can YOU Guess All 25 Animals? Kids Quiz with Jess the Fox!"
+
+**aciklama** (description): 150-250 words with hashtags
+Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
+
+**thumbnail_prompt**: FLUX prompt for thumbnail background (NO CHARACTERS, just theme scenery)
+- Vibrant theme scenery only
+- NO ANIMALS, NO CHARACTERS, NO PEOPLE in the image
+- Right third should be empty for text overlay
+- 16:9, Pixar 3D style, NO TEXT
+
+**background_prompt**: FLUX prompt for VIDEO BACKGROUND (will be used behind all UI in the video)
+- Empty scenic environment related to the topic
+- HEAVY blur / soft focus / depth of field (it's a BACKGROUND, must not distract)
+- Pixar 3D cartoon style with vibrant colors
+- NO characters, NO animals, NO people, NO faces
+- NO text, NO logos
+- Center area MUST be soft/empty (UI elements go there)
+- Edges can have subtle thematic decorative elements (e.g. for food: blurred utensils on edges; for space: distant stars)
+- Kid-friendly atmosphere
+- Examples:
+  * Food topic: "Cozy blurred cartoon kitchen interior, warm orange lighting, decorative pans hanging on edges, center empty wall, NO food in view"
+  * Ocean topic: "Underwater scene with blurred coral on edges, deep teal-blue gradient, light rays from above, center open water, NO sea creatures"
+  * Space topic: "Cosmic galaxy with swirling purple nebula at edges, golden stars scattered, deep dark center, NO planets in center"
+  * Animals topic: "Stylized cartoon savanna at sunset with blurred acacia trees on edges, warm orange-purple sky, center empty grassland, NO animals"
 
 ═══════════════════════════════════════════════════
 SAFETY (Made for Kids)
 ═══════════════════════════════════════════════════
-- No scary/violent content
-- Pixar Disney 3D style
-- Ages 4-12 appropriate
+
+- NO scary content, violence, weapons
+- All Pixar/Disney 3D cartoon style, vibrant colors
+- All content appropriate for ages 4-12
 
 ═══════════════════════════════════════════════════
 TOPIC: ${konu}
 QUESTION COUNT: ${QUESTION_COUNT}
 ═══════════════════════════════════════════════════
 
-JSON OUTPUT (valid JSON, no markdown):
+JSON OUTPUT (must be valid JSON, no markdown):
 
 {
   "konu": "${konu}",
   "format": "${FORMAT}",
-  "baslik": "Title with emoji",
-  "thumbnail_title": "2-3 WORDS UPPERCASE",
-  "thumbnail_prompt": "Pixar scenery, NO characters, NO text",
-  "aciklama": "200 word desc with hashtags",
-  "intro_audio_text": "Jess intro",
-  "outro_audio_text": "Jess outro",
+  "baslik": "Long YouTube title with emoji",
+  "thumbnail_title": "2-3 WORDS MAX (uppercase, punchy)",
+  "thumbnail_prompt": "FLUX prompt - scenery only, NO CHARACTERS",
+  "background_prompt": "FLUX prompt - blurred topic-themed background, depth of field, center empty for UI",
+  "aciklama": "200 word description with hashtags",
+  "intro_audio_text": "Jess intro 2-3 sentences",
+  "outro_audio_text": "Jess outro 2-3 sentences",
   "questions": [
     {
       "question_text": "Short on-screen text",
-      "image_prompt": "LITERAL Pixar prompt - the subject only, NO text, NO fox, NO mascot",
-      "fun_fact_image_prompt": "LITERAL Pixar prompt for fun fact, NO text, NO characters",
-      "reveal_image_prompt": "",
-      "options": ["A", "B", "C"],
-      "option_flags": ["", "", ""],
+      "image_prompt": "Pixar-style image prompt for the QUESTION",
+      "fun_fact_image_prompt": "Pixar-style image prompt for the FUN FACT (different scene illustrating the fun fact - e.g. if fun_fact is 'Pizza invented in Naples 1889', show a chef in Naples 1889 cartoon style)",
+      "options": ["A_short", "B_short", "C_short"],
+      "option_flags": ["🇮🇹", "🇹🇷", "🇫🇷", "🇪🇸"],
       "correct_answer": 0,
       "difficulty": "easy",
-      "fun_fact": "Fun fact.",
-      "question_audio_text": "Question N. ...",
-      "answer_audio_text": "The correct answer is ..."
+      "fun_fact": "Fun fact sentence.",
+      "question_audio_text": "Question N. [question_text] Is it A: [opt1], B: [opt2], C: [opt3], or D: [opt4]?",
+      "answer_audio_text": "The correct answer is [Letter]: [correct option]! [fun_fact]"
     }
   ]
 }
 
-CRITICAL CHECKS:
+CRITICAL:
 - EXACTLY ${QUESTION_COUNT} questions
-- EXACTLY 3 options (not 4)
-- correct_answer ∈ {0, 1, 2}
-- option_flags is exactly 3 items
-- All English
-- All Pixar/3D cartoon
+- All in English
+- Image prompts MUST be PIXAR/3D CARTOON
+- All child-safe
 - Answers SHORT (1-3 words)
-- question_audio_text includes A/B/C options
-- answer_audio_text ends with fun_fact
-- **image_prompt MUST follow IMAGE RULES** (no text, no fox, no mascot, literal subject)
-- **fun_fact_image_prompt MUST follow IMAGE RULES** (illustrate fact concretely, NO humans/characters)
-- **reveal_image_prompt** only for country quizzes: "Clean flag of [country], solid colors, NO text, white background"`;
+- question_audio_text MUST include all 3 options spoken out loud
+- answer_audio_text MUST include fun_fact at the end
+- **fun_fact_image_prompt MUST illustrate the fun fact narrative** (different scene from question image - e.g. if fun fact is about Eiffel Tower being 330m tall, show a Pixar-style Eiffel Tower with measurement; if about pizza invented in Naples 1889, show a cartoon chef in old Naples kitchen)
+- fun_fact_image_prompt should be Pixar 3D style, NO TEXT, kid-friendly
+- **option_flags**: ALWAYS include flag emojis array (4 items). Logic:
+  * If options are COUNTRIES (e.g. "Italy", "France", "Japan", "Brazil"): use country flag emojis ["🇮🇹","🇫🇷","🇯🇵"]
+  * If options relate to COUNTRY-ORIGIN (e.g. "Pizza" → Italy, "Sushi" → Japan, "Croissant" → France): use the related country flag
+  * If options are NEUTRAL (no country relation, e.g. animals, colors, numbers): use ["","",""] (empty strings)
+  * NEVER skip this field - if uncertain, use empty strings
+- **background_prompt MUST**:
+  * Match the topic theme but be GENERIC (no specific objects in center)
+  * Have HEAVY BLUR / depth of field (it's a background, not foreground)
+  * Have empty soft center for UI overlay
+  * NO characters, NO animals, NO text
+  * Be Pixar 3D cartoon style
+- **thumbnail_title MUST be 2-3 WORDS MAX, UPPERCASE, PUNCHY** (examples: "FOOD QUIZ", "GUESS THE ANIMAL", "OCEAN QUIZ", "TRUCK CHALLENGE", "MIGHTY MACHINES")
+- thumbnail_title is for the thumbnail image (LARGE TEXT), NOT for YouTube title
+- baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title`;
 
   const maxRetries = 5;
-  const modeller = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+  // Sadece güçlü model kullan - flash-lite bozuk JSON üretiyor
+  const modeller = ["gemini-2.5-flash", "gemini-2.5-flash", "gemini-2.5-flash", "gemini-2.5-flash", "gemini-2.5-flash"];
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const modelAdi = modeller[Math.min(attempt - 1, modeller.length - 1)];
@@ -233,85 +220,78 @@ CRITICAL CHECKS:
       console.log(`Gemini denemesi ${attempt}/${maxRetries} - ${modelAdi}`);
       
       const genAI = new GoogleGenerativeAI(aktifKey);
-      const model = genAI.getGenerativeModel({ model: modelAdi });
-      
-      const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      const model = genAI.getGenerativeModel({
+        model: modelAdi,
         generationConfig: {
-          temperature: 0.85,
-          maxOutputTokens: 16000,
           responseMimeType: "application/json",
+          temperature: 0.85,
+          maxOutputTokens: 32768,
         },
       });
       
-      const text = result.response.text();
-      console.log(`Gemini response: ${text.length} char`);
+      const result = await model.generateContent(prompt);
+      const text = result.response.text().trim();
+      const json = JSON.parse(text);
       
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch (e) {
-        const m = text.match(/\{[\s\S]*\}/);
-        if (!m) throw new Error("JSON parse hatası");
-        json = JSON.parse(m[0]);
+      // ÖNCE BOZUK SORULARI FİLTRELE - eksik options veya correct_answer olanları at
+      if (json.questions && Array.isArray(json.questions)) {
+        const oncekiSayi = json.questions.length;
+        json.questions = json.questions.filter((q) => {
+          if (!q.options || !Array.isArray(q.options) || q.options.length !== 3) return false;
+          if (q.correct_answer === undefined || q.correct_answer < 0 || q.correct_answer > 2) return false;
+          if (!q.question_text) return false;
+          return true;
+        });
+        const sonrakiSayi = json.questions.length;
+        if (sonrakiSayi < oncekiSayi) {
+          console.log(`⚠ ${oncekiSayi - sonrakiSayi} bozuk soru filtrelendi, ${sonrakiSayi} geçerli`);
+        }
       }
       
-      if (!json.questions || !Array.isArray(json.questions)) {
-        throw new Error("questions array yok");
-      }
-      
-      if (json.questions.length < QUESTION_COUNT) {
-        throw new Error(`Yetersiz soru: ${json.questions.length}/${QUESTION_COUNT}`);
+      // Minimum gereken soru sayısı (tam sayı şart değil - %80 yeter)
+      const minQuestions = Math.floor(QUESTION_COUNT * 0.8);
+      if (!json.questions || json.questions.length < minQuestions) {
+        throw new Error(`Gemini ${json.questions?.length || 0} sağlam soru verdi, ${minQuestions} (min) gerekli.`);
       }
       
       if (json.questions.length > QUESTION_COUNT) {
-        console.log(`Fazla soru kırpılıyor: ${json.questions.length} → ${QUESTION_COUNT}`);
         json.questions = json.questions.slice(0, QUESTION_COUNT);
       }
       
-      // VALIDATION (3 şık)
+      // Validation
       for (let i = 0; i < json.questions.length; i++) {
         const q = json.questions[i];
         if (!q.question_text) throw new Error(`Soru ${i+1}: question_text yok`);
         if (!q.image_prompt) throw new Error(`Soru ${i+1}: image_prompt yok`);
-        
-        if (!q.options || q.options.length !== 3) {
-          throw new Error(`Soru ${i+1}: 3 option olmalı (var: ${q.options?.length})`);
-        }
+        if (!q.options || q.options.length !== 3) throw new Error(`Soru ${i+1}: 3 option olmalı (var: ${q.options?.length})`);
         if (q.correct_answer === undefined || q.correct_answer < 0 || q.correct_answer > 2) {
           throw new Error(`Soru ${i+1}: correct_answer 0-2 arası olmalı`);
         }
         if (!q.difficulty) q.difficulty = "medium";
         if (!q.fun_fact) q.fun_fact = "";
         
-        // FLUX prompt iyileştirme - "no text, no fox" otomatik ekle
-        q.image_prompt = enhanceFluxPrompt(q.image_prompt);
-        
+        // fun_fact_image_prompt fallback - Gemini vermediyse, question image prompt + fun fact birleştir
         if (!q.fun_fact_image_prompt) {
           if (q.fun_fact) {
-            q.fun_fact_image_prompt = `Literal Pixar 3D cartoon illustration of: ${q.fun_fact}, no characters, no text`;
+            q.fun_fact_image_prompt = `Pixar 3D cartoon illustration: ${q.fun_fact}, kid-friendly, vibrant colors, NO TEXT`;
           } else {
+            // Soru görselini reuse
             q.fun_fact_image_prompt = q.image_prompt;
           }
         }
-        q.fun_fact_image_prompt = enhanceFluxPrompt(q.fun_fact_image_prompt);
         
-        if (q.reveal_image_prompt === undefined || q.reveal_image_prompt === null) {
-          q.reveal_image_prompt = "";
-        }
-        if (q.reveal_image_prompt && q.reveal_image_prompt.trim().length > 0) {
-          q.reveal_image_prompt = enhanceFluxPrompt(q.reveal_image_prompt);
-        }
-        
+        // option_flags validation - 4 string array, yoksa boş
         if (!q.option_flags || !Array.isArray(q.option_flags) || q.option_flags.length !== 3) {
           q.option_flags = ["", "", ""];
         }
+        // String'e çevir (emoji unicode için emniyet)
         q.option_flags = q.option_flags.map(f => String(f || ""));
         
+        // Audio text alanları varsayılan oluştur (Gemini eksik verirse)
         if (!q.question_audio_text) {
           const letters = ["A", "B", "C"];
           q.question_audio_text = `Question ${i+1}. ${q.question_text} Is it ` +
-            q.options.map((opt, j) => `${letters[j]}: ${opt}`).join(", ").replace(/,([^,]*)$/, ", or$1") + "?";
+            q.options.map((opt, j) => `${letters[j]}: ${opt}`).join(", ") + "?";
         }
         if (!q.answer_audio_text) {
           const letter = ["A", "B", "C"][q.correct_answer];
@@ -323,11 +303,14 @@ CRITICAL CHECKS:
       if (!json.outro_audio_text) json.outro_audio_text = "Great job! Subscribe for more fun! See you next time!";
       if (!json.baslik) json.baslik = `${konu} Quiz for Kids!`;
       
+      // thumbnail_title validate - 2-3 kelime, uppercase, max 16 karakter
       if (!json.thumbnail_title) {
-        const konuTemiz = konu.replace(/[:!?].*$/g, "").trim();
+        // Konu'dan otomatik üret
+        const konuTemiz = konu.replace(/[:!?].*$/g, "").trim(); // İlk : veya ! sonrasını at
         const kelimeler = konuTemiz.split(/\s+/).slice(0, 2);
         json.thumbnail_title = kelimeler.join(" ").toUpperCase() + " QUIZ";
       } else {
+        // Çok uzun ise kısalt
         json.thumbnail_title = String(json.thumbnail_title).toUpperCase().trim();
         const kelimeler = json.thumbnail_title.split(/\s+/);
         if (kelimeler.length > 3) {
@@ -337,23 +320,30 @@ CRITICAL CHECKS:
       console.log(`Thumbnail title: "${json.thumbnail_title}"`);
       
       if (!json.thumbnail_prompt) {
-        json.thumbnail_prompt = `Vibrant ${konu} themed background scenery, Pixar 3D style, NO CHARACTERS, NO ANIMALS, NO PEOPLE, NO TEXT, kid-friendly bright colors`;
+        json.thumbnail_prompt = `Vibrant ${konu} themed background scenery, Pixar 3D style, NO CHARACTERS, NO ANIMALS, NO PEOPLE, kid-friendly, bright colors, NO TEXT`;
       }
       
-      json.background_prompt = "";
-      
+      // background_prompt validation - yoksa konu'dan üret
+      if (!json.background_prompt) {
+        json.background_prompt = `Blurred ${konu} themed empty environment, Pixar 3D cartoon style, heavy depth of field, soft empty center for UI overlay, decorative thematic elements on edges only, NO characters, NO animals, NO text, kid-friendly bright atmosphere`;
+      }
+      console.log(`Background prompt: "${json.background_prompt.substring(0, 80)}..."`);
+
+      // ai_gorsel_prompts: her soru için 2 prompt (question + fun_fact) + 1 background (en sonda)
+      // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ..., background
+      // 02-gorsel-uret bunu sıralı işler ve q01.jpg, q01-fact.jpg, ..., background.jpg
       json.ai_gorsel_prompts = [];
       for (const q of json.questions) {
         json.ai_gorsel_prompts.push(q.image_prompt);
         json.ai_gorsel_prompts.push(q.fun_fact_image_prompt);
-        if (q.reveal_image_prompt && q.reveal_image_prompt.trim().length > 0) {
-          json.ai_gorsel_prompts.push(q.reveal_image_prompt);
-        }
       }
+      // Background prompt - EN SON
+      json.ai_gorsel_prompts.push(json.background_prompt);
       
       json.ai_klip_prompts = [];
       json.pexels_anahtar_kelimeler = [];
       
+      // Senaryo: Tüm ses parçalarının birleşimi (backward compat için)
       json.senaryo = [
         json.intro_audio_text,
         ...json.questions.map(q => `${q.question_audio_text} ${q.answer_audio_text}`),
@@ -364,13 +354,12 @@ CRITICAL CHECKS:
       json.muzik_mood = "kids";
       
       console.log(`İçerik üretildi: ${json.baslik}`);
-      console.log(`${json.questions.length} soru, format: ${FORMAT}, 3 şık`);
+      console.log(`${json.questions.length} soru, format: ${FORMAT}`);
       console.log(`Zorluk: ${
         ["easy", "medium", "hard"].map(d => 
           `${d}=${json.questions.filter(q => q.difficulty === d).length}`
         ).join(", ")
       }`);
-      console.log(`Reveal image sayısı: ${json.questions.filter(q => q.reveal_image_prompt && q.reveal_image_prompt.length > 0).length}`);
       
       return json;
       
@@ -401,9 +390,9 @@ async function main() {
       CHAT_ID,
       `🦊 *GeniMini Tests new quiz!*\n\n` +
       `📚 Topic: ${konu}\n` +
-      `📺 Format: ${FORMAT === "shorts" ? "Shorts (60-90s)" : "Long (12-15 min)"}\n` +
+      `📺 Format: ${FORMAT === "shorts" ? "Shorts (60-90s)" : "Long (10-12 min)"}\n` +
       `🆔 \`${JOB_ID}\`\n\n` +
-      `⏳ Generating Quiz Blitz style quiz with Jess...`
+      `⏳ Generating quiz with Jess...`
     );
     
     const icerik = await icerikUret(konu);
@@ -424,7 +413,7 @@ async function main() {
       chat_id: CHAT_ID,
       konu: konu,
       baslik: icerik.baslik,
-      thumbnail_baslik: icerik.thumbnail_title || "",
+      thumbnail_baslik: icerik.thumbnail_title || "",  // YENİ: 2-3 kelime kısa başlık
       thumbnail_alt_baslik: "",
       thumbnail_prompt: icerik.thumbnail_prompt,
       senaryo: icerik.senaryo,
@@ -438,6 +427,7 @@ async function main() {
       muzik_mood: icerik.muzik_mood,
     });
     
+    // questions.json'a da ekle (07-video-montaj da görsel için kullanır)
     const tmpDir = "/tmp/quiz-data";
     fs.mkdirSync(tmpDir, { recursive: true });
     const questionsPath = path.join(tmpDir, "questions.json");
@@ -446,6 +436,7 @@ async function main() {
       konu: konu,
       baslik: icerik.baslik,
       thumbnail_title: icerik.thumbnail_title || "",
+      background_prompt: icerik.background_prompt || "",
       intro_audio_text: icerik.intro_audio_text,
       outro_audio_text: icerik.outro_audio_text,
       questions: icerik.questions,
@@ -453,6 +444,7 @@ async function main() {
     
     console.log(`questions.json yazıldı: ${questionsPath}`);
     
+    // 02-ses alt klasörünü bul ve oraya yükle
     const { driveAltKlasorBul } = await import("./lib/google.js");
     const sesKlasor = await driveAltKlasorBul("02-ses", anaKlasor.id);
     if (sesKlasor.length === 0) {
@@ -471,13 +463,13 @@ async function main() {
     
     await telegram(
       CHAT_ID,
-      `📝 *Quiz Blitz ready!*\n\n` +
+      `📝 *Quiz ready!*\n\n` +
       `📌 ${icerik.baslik}\n` +
       `📺 ${FORMAT}\n` +
-      `❓ ${icerik.questions.length} questions × 3 options\n` +
+      `❓ ${icerik.questions.length} questions (2 audio per question)\n` +
       `🦊 Mascot: Jess the Fox\n\n` +
       `📂 [Drive folder](${anaKlasor.link})\n\n` +
-      `⏳ Generating images, audio, thumbnail...`
+      `⏳ Generating images, audio segments, thumbnail...`
     );
     
     console.log("✅ İçerik üretimi tamam.");
