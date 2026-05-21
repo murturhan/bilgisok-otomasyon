@@ -1,7 +1,9 @@
 /**
- * Ortak Google kütüphanesi: Service Account (Sheets + Drive read) + OAuth (Drive write)
+ * Ortak Google kütüphanesi: Service Account (her şey: Sheets + Drive read/write)
+ *
+ * OAuth artık kullanılmıyor. Drive klasörleri service account ile paylaşıldığı
+ * için her şey SA üzerinden çalışır. OAuth client kod hala duruyor ama referans yok.
  */
-
 import { google } from "googleapis";
 import fs from "fs";
 
@@ -14,17 +16,19 @@ const {
   GDRIVE_FOLDER_ID,
 } = process.env;
 
+// ─── AUTH ─────────────────────────────────────────────────────
 export function getServiceAccountAuth() {
   const credentials = JSON.parse(GDRIVE_SERVICE_ACCOUNT_JSON);
   return new google.auth.GoogleAuth({
     credentials: credentials,
     scopes: [
       "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive.readonly",
+      "https://www.googleapis.com/auth/drive", // ⚠ TAM YETKİ (eski: drive.readonly)
     ],
   });
 }
 
+// OAuth eski kod - artık kullanılmıyor ama export kalsın (legacy script uyumu)
 export function getOAuthClient() {
   const oauth2Client = new google.auth.OAuth2(
     GOOGLE_OAUTH_CLIENT_ID,
@@ -36,14 +40,17 @@ export function getOAuthClient() {
   return oauth2Client;
 }
 
+// ─── CLIENTS ──────────────────────────────────────────────────
 export function getSheets() {
   return google.sheets({ version: "v4", auth: getServiceAccountAuth() });
 }
 
+// ⚠ KRİTİK DEĞİŞİKLİK: Service Account kullan, OAuth değil
 export function getDrive() {
-  return google.drive({ version: "v3", auth: getOAuthClient() });
+  return google.drive({ version: "v3", auth: getServiceAccountAuth() });
 }
 
+// ─── KONU HAVUZU ──────────────────────────────────────────────
 export async function konuHavuzundanAl(tarih, index) {
   const sheets = getSheets();
   const res = await sheets.spreadsheets.values.get({
@@ -70,13 +77,13 @@ export async function konuHavuzundanAl(tarih, index) {
   return matching[idx].konu;
 }
 
+// ─── JOB STATE ────────────────────────────────────────────────
 // job_state kolonları:
 // A=job_id, B=tarih, C=index, D=konu, E=baslik, F=thumb_baslik, G=thumb_prompt,
 // H=senaryo, I=aciklama, J=gorsel_prompts, K=klip_prompts, L=pexels_kw,
 // M=drive_folder_id, N=gorsel_status, O=ses_status, P=stok_status, Q=thumb_status,
 // R=created_at, S=updated_at, T=chat_id, U=klip_klasor_id, V=thumb_alt_baslik,
 // W=altyazi_status, X=video_status, Y=muzik_mood, Z=tts_telaffuz
-
 const JOB_STATE_RANGE = "job_state!A:Z";
 
 export async function jobOlustur(jobData) {
@@ -109,7 +116,7 @@ export async function jobOlustur(jobData) {
     "",
     "",
     jobData.muzik_mood || "epic",
-    jobData.tts_telaffuz || "",  // Z kolonu
+    jobData.tts_telaffuz || "",
   ];
   
   await sheets.spreadsheets.values.append({
@@ -205,6 +212,7 @@ export async function jobGuncelle(jobId, updates) {
   }
 }
 
+// ─── DRIVE OPERATIONS (artık SA ile) ──────────────────────────
 export async function driveKlasorAc(ad, parentId) {
   const drive = getDrive();
   const res = await drive.files.create({
