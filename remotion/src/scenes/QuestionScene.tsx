@@ -361,6 +361,8 @@ const LongLayout: React.FC<LayoutProps> = ({
             text={question.fun_fact}
             showFrame={phases.funFact}
             isVertical={false}
+            boxWidth={rightWidth}
+            boxHeight={imageHeight}
           />
         )}
       </div>
@@ -439,43 +441,46 @@ const ShortsLayout: React.FC<LayoutProps> = ({
           )}
         </>
       ) : (
-        <>
-          {/* FACT MODE: Resim üstte + FunFactPanel altta */}
-          {funFactImageSrc ? (
-            <ImageCard
-              src={funFactImageSrc}
-              width={contentWidth}
-              height={Math.floor(height * 0.30)}
-              isReveal={false}
-              revealTransition={1}
-            />
-          ) : (
-            // Fun fact resmi yoksa, soru resmini göster
-            <ImageCard
-              src={imageSrc}
-              width={contentWidth}
-              height={Math.floor(height * 0.30)}
-              isReveal={false}
-              revealTransition={1}
-            />
-          )}
+        (() => {
+          // FACT MODE: Resim üstte + fact kutusu altta (resim alanıyla AYNI boyutta)
+          // Kullanıcı: "alan sabit kalsın resimin buyuklugu kadar olsun"
+          const factBoxWidth = contentWidth;
+          const factBoxHeight = Math.floor(height * 0.30); // resim ile aynı
+          const factImageSrc = funFactImageSrc || imageSrc;
           
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "center",
-              paddingTop: 10,
-            }}
-          >
-            <FunFactPanel
-              text={question.fun_fact}
-              showFrame={phases.funFact}
-              isVertical
-            />
-          </div>
-        </>
+          return (
+            <>
+              {/* Resim üstte */}
+              <ImageCard
+                src={factImageSrc}
+                width={factBoxWidth}
+                height={factBoxHeight}
+                isReveal={false}
+                revealTransition={1}
+              />
+              
+              {/* Fact paneli ortada (resim ile aynı alan) - gözlük altta */}
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 24,
+                }}
+              >
+                <FunFactPanel
+                  text={question.fun_fact}
+                  showFrame={phases.funFact}
+                  isVertical
+                  boxWidth={factBoxWidth}
+                  boxHeight={factBoxHeight}
+                />
+              </div>
+            </>
+          );
+        })()
       )}
     </div>
   );
@@ -591,16 +596,89 @@ const ImageCard: React.FC<ImageCardProps> = ({
 };
 
 // ═══════════════════════════════════════════════════
-// FUN FACT PANEL — sadece beyaz kart + gözlük
+// FUN FACT PANEL — sabit kutu, içerde GERÇEK dinamik fit-to-fill font
 // (DID YOU KNOW + ampul + yeşil cevap pill ARTIK üst barda, TopBar component'inde)
+// Kullanıcı talebi: "alan sabit kalsın resimin buyuklugu kadar olsun, sonra bilginin
+// uzunluguna gore yazı forntunu alanı tam dolsuracak sekılde ayarlayıp ortalayıp yazdırmak"
 // ═══════════════════════════════════════════════════
 interface FunFactPanelProps {
   text: string;
   showFrame: number;
   isVertical?: boolean;
+  // Kutunun fiziksel boyutu (resimle aynı boyutta tutulur)
+  boxWidth: number;
+  boxHeight: number;
 }
 
-const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical }) => {
+/**
+ * Verilen metin için, verilen kutuya tam sığacak font size'ı hesaplar.
+ * Lilita One uppercase için karakter genişliği yaklaşık 0.55 × fontSize.
+ * Satır yüksekliği yaklaşık 1.15 × fontSize (lineHeight 1.15).
+ * 
+ * Binary search ile en büyük sığan font'u bulur.
+ */
+function calculateFitFont(
+  text: string,
+  availableWidth: number,
+  availableHeight: number,
+  minFont: number = 24,
+  maxFont: number = 120
+): number {
+  const upper = text.toUpperCase();
+  const words = upper.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return minFont;
+  
+  const lineHeight = 1.15;
+  const charWidthRatio = 0.55; // Lilita One uppercase
+  
+  // Verilen fontSize için kaç satır gerekli + sığar mı?
+  const fits = (fontSize: number): boolean => {
+    const maxCharsPerLine = Math.floor(availableWidth / (fontSize * charWidthRatio));
+    if (maxCharsPerLine < 3) return false;
+    
+    // Greedy line break (kelime kelime)
+    let lines = 1;
+    let currentLineLen = 0;
+    for (const word of words) {
+      // Eğer kelime tek başına bile satıra sığmıyorsa fit edemez
+      if (word.length > maxCharsPerLine) return false;
+      
+      const needed = currentLineLen === 0 ? word.length : currentLineLen + 1 + word.length;
+      if (needed <= maxCharsPerLine) {
+        currentLineLen = needed;
+      } else {
+        lines++;
+        currentLineLen = word.length;
+      }
+    }
+    
+    const totalHeight = lines * fontSize * lineHeight;
+    return totalHeight <= availableHeight;
+  };
+  
+  // Binary search
+  let lo = minFont;
+  let hi = maxFont;
+  let best = minFont;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (fits(mid)) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return best;
+}
+
+const FunFactPanel: React.FC<FunFactPanelProps> = ({
+  text,
+  showFrame,
+  isVertical,
+  boxWidth,
+  boxHeight,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
@@ -614,7 +692,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
   const cardY = interpolate(cardAnim, [0, 1], [60, 0]);
   const cardScale = interpolate(cardAnim, [0, 1], [0.85, 1]);
   
-  // Gözlük geç gelir
+  // Gözlük geç gelir - DAHA BÜYÜK (kullanıcı talebi: "gozluk daha da buyuk olmalı")
   const glassesAnim = spring({
     frame: frame - showFrame - 20,
     fps,
@@ -625,21 +703,24 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
   const glassesRotate = interpolate(glassesAnim, [0, 0.7, 1], [-180, 10, 0]);
   const glassesIdleBounce = Math.sin((frame - showFrame - 20) * 0.1) * 6;
   
-  // DİNAMİK FONT BOYUTU - Fact metin uzunluğuna göre küçültür
-  // Kısa fact (< 60 karakter): büyük font
-  // Orta (60-120): orta
-  // Uzun (>120): küçük
-  const len = text.length;
-  let dynamicFontSize: number;
-  if (isVertical) {
-    if (len < 60) dynamicFontSize = 56;
-    else if (len < 120) dynamicFontSize = 46;
-    else dynamicFontSize = 38;
-  } else {
-    if (len < 60) dynamicFontSize = 64;
-    else if (len < 120) dynamicFontSize = 56;
-    else dynamicFontSize = 46;
-  }
+  // KUTU BOYUTU: SABİT (resim ile aynı)
+  // İçerideki paddingleri hesaba katıp inner alanı bul
+  const paddingX = isVertical ? 36 : 50;
+  const paddingY = isVertical ? 36 : 44;
+  const innerWidth = boxWidth - paddingX * 2;
+  const innerHeight = boxHeight - paddingY * 2;
+  
+  // GERÇEK DİNAMİK FONT (binary search ile tam doldur)
+  const fittedFont = calculateFitFont(
+    text,
+    innerWidth,
+    innerHeight,
+    isVertical ? 28 : 32,   // min
+    isVertical ? 96 : 110,  // max
+  );
+  
+  // Gözlük boyutu — DAHA BÜYÜK
+  const glassesSize = isVertical ? 240 : 280;
   
   return (
     <div
@@ -647,56 +728,54 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({ text, showFrame, isVertical
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: isVertical ? 20 : 28,
-        padding: "0 16px",
-        width: "100%",
-        height: "100%",
-        justifyContent: "center",
+        gap: isVertical ? 28 : 36,
+        width: boxWidth,
       }}
     >
-      {/* Fact metin kartı - genişlik tam, içerde dinamik ortalanır */}
+      {/* Fact kutusu - SABİT boyut, içerde font dinamik */}
       <div
         style={{
           opacity: cardOpacity,
           transform: `translateY(${cardY}px) scale(${cardScale})`,
           backgroundColor: BRAND.white,
-          borderRadius: 20,
-          padding: isVertical ? "36px 36px" : "44px 50px",
+          borderRadius: 24,
+          padding: `${paddingY}px ${paddingX}px`,
           boxShadow: "0 16px 40px rgba(0,0,0,0.45)",
           borderTop: `8px solid ${BRAND.yellow}`,
           borderBottom: `8px solid ${BRAND.yellow}`,
-          width: "100%",
-          maxWidth: "100%",
+          width: boxWidth,
+          height: boxHeight,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          minHeight: isVertical ? 280 : 320,
+          boxSizing: "border-box",
         }}
       >
         <div
           style={{
-            fontSize: dynamicFontSize,
+            fontSize: fittedFont,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.black,
-            lineHeight: 1.25,
+            lineHeight: 1.15,
             textAlign: "center",
             textTransform: "uppercase",
             letterSpacing: 0.5,
+            width: "100%",
           }}
         >
-          {text}
+          {text.toUpperCase()}
         </div>
       </div>
       
-      {/* Gözlük - stagger 20f */}
+      {/* Gözlük - DAHA BÜYÜK */}
       <div
         style={{
           transform: `scale(${glassesScale}) rotate(${glassesRotate}deg) translateY(${glassesIdleBounce}px)`,
           opacity: glassesOpacity,
         }}
       >
-        <GlassesIcon size={isVertical ? 160 : 180} />
+        <GlassesIcon size={glassesSize} />
       </div>
     </div>
   );
