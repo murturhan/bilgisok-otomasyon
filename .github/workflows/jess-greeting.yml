@@ -1,0 +1,22 @@
+name: Jess Greeting Üret
+
+on:
+  workflow_dispatch:
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install googleapis
+      - name: Run
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+        run: node scripts/jess-greeting-uret.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jess-audio
+          path: jess-audio/
