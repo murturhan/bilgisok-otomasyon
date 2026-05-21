@@ -274,11 +274,15 @@ async function main() {
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
     fs.mkdirSync(TMP_DIR, { recursive: true });
     
-    fs.rmSync(REMOTION_PUBLIC, { recursive: true, force: true });
+    // remotion/public'i komple silme - brand/ klasörü (repo'dan gelen) korunmalı
+    // Sadece dinamik alt klasörleri temizle: questions, jess, audio
+    for (const sub of ["questions", "jess", "audio"]) {
+      const p = path.join(REMOTION_PUBLIC, sub);
+      fs.rmSync(p, { recursive: true, force: true });
+      fs.mkdirSync(p, { recursive: true });
+    }
+    // public'in kendisi de var olmazsa oluştur (brand olmadan ilk çalıştırmada)
     fs.mkdirSync(REMOTION_PUBLIC, { recursive: true });
-    fs.mkdirSync(path.join(REMOTION_PUBLIC, "questions"), { recursive: true });
-    fs.mkdirSync(path.join(REMOTION_PUBLIC, "jess"), { recursive: true });
-    fs.mkdirSync(path.join(REMOTION_PUBLIC, "audio"), { recursive: true });
 
     const saAuth = getServiceAccountAuth();
 
