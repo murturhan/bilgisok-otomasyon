@@ -10,48 +10,89 @@ import { BRAND, FONTS, THEME_COLORS, FPS } from "../styles/theme";
 import { JessCharacter } from "../components/JessCharacter";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
+import { GeniMiniLogo } from "../components/BrandAssets";
 import { JessPoses } from "../types/schemas";
 
-interface OutroSceneProps {
+interface IntroSceneProps {
   channelName: string;
+  topic: string;
   jessPoses: JessPoses;
   durationFrames: number;
 }
 
+function getTopicEmojis(topic: string): string[] {
+  const t = topic.toLowerCase();
+  
+  if (/invent|technolog|machine|gadget|computer|phone|comput/i.test(t))
+    return ["📞", "💡", "✈️", "📷", "🎬", "🚗"];
+  if (/animal|wild|pet|fox|dog|cat|jungle|safari|home/i.test(t))
+    return ["🦁", "🐘", "🦒", "🐯", "🐧", "🐵"];
+  if (/food|fruit|drink|cook|cuisine|snack|dish/i.test(t))
+    return ["🍕", "🍔", "🍎", "🍦", "🍩", "🥕"];
+  if (/countr|geograph|flag|world|capital|landmark|city/i.test(t))
+    return ["🗺️", "🌍", "🗽", "🏔️", "🏛️", "🚩"];
+  if (/space|planet|astronaut|star|galaxy|moon|sun/i.test(t))
+    return ["🚀", "🌙", "⭐", "🪐", "👽", "☄️"];
+  if (/plant|flower|tree|forest|nature|garden/i.test(t))
+    return ["🌳", "🌸", "🌻", "🍄", "🌵", "🌿"];
+  if (/sport|game|ball|olympic/i.test(t))
+    return ["⚽", "🏀", "🎾", "🏈", "⛹️", "🏆"];
+  if (/vehicl|car|truck|transport|plane|train|ship|machine/i.test(t))
+    return ["🚗", "✈️", "🚂", "🚢", "🚁", "🚀"];
+  if (/scien|physic|chem|biolog|experiment/i.test(t))
+    return ["🧪", "🔬", "🧬", "⚗️", "🧲", "🔭"];
+  if (/music|instrument|song|sound/i.test(t))
+    return ["🎵", "🎸", "🎹", "🥁", "🎤", "🎺"];
+  
+  return ["📚", "💡", "🎨", "🔍", "🌟", "🎯"];
+}
+
 /**
- * Outro 2 sahnede:
- * Sahne 1 (ilk %55): GREAT JOB! + 🏆🎊⭐ + Jess + (audio: greeting)
- * Sahne 2 (son %45): SUBSCRIBE + SEE YOU NEXT TIME (Jess yok, sade)
+ * INTRO - İKİ SAHNE
  * 
- * Sahnenin ortasında beyaz flash geçişi
+ * Sahne 1 (ilk %50): Jess karşılama
+ *   - GeniMini logo üstte
+ *   - Jess BÜYÜK ortada/altta + el sallıyor
+ *   - Alt yazı: "HI FRIENDS!" (greeting metni)
+ * 
+ * Geçiş: 0.4s beyaz flash (perde patlama)
+ * 
+ * Sahne 2 (son %50): Topic reveal
+ *   - Logo KÜÇÜK sol üstte
+ *   - Büyük TOPIC başlığı ortada
+ *   - Altta bouncing emoji bandı
+ *   - Jess YOK
  */
-export const OutroScene: React.FC<OutroSceneProps> = ({
+export const IntroScene: React.FC<IntroSceneProps> = ({
   channelName,
+  topic,
   jessPoses,
   durationFrames,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width, height } = useVideoConfig();
+  const { width, height } = useVideoConfig();
   const isVertical = height > width;
   
-  const theme = THEME_COLORS[2]; // teal
+  const theme = THEME_COLORS[0]; // pink
   
-  // Sahne 1 ve 2 bölünme noktası
-  const scene1End = Math.floor(durationFrames * 0.55);
-  const transitionFrames = Math.floor(FPS * 0.4); // 0.4s flash
+  // İki sahneye böl
+  const scene1End = Math.floor(durationFrames * 0.5);
   const scene2Start = scene1End;
   const inScene1 = frame < scene1End;
   const inScene2 = frame >= scene2Start;
-  const inTransition = frame >= scene1End && frame < scene1End + 5;
+  const inTransition = frame >= scene1End && frame < scene1End + 6;
   
-  // Flash arası
+  // Flash geçiş
   const flashOpacity = inTransition
-    ? interpolate(frame - scene1End, [0, 3, 5], [0, 0.85, 0], { extrapolateRight: "clamp" })
+    ? interpolate(frame - scene1End, [0, 3, 6], [0, 0.9, 0], {
+        extrapolateRight: "clamp",
+        extrapolateLeft: "clamp",
+      })
     : 0;
   
   return (
     <AbsoluteFill>
-      <AnimatedBackground theme={theme} pattern="stars" motionSpeed={1.5} />
+      <AnimatedBackground theme={theme} pattern="bolt" motionSpeed={1.5} />
       
       <VerticalBrandTag
         side="right"
@@ -61,20 +102,25 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
       />
       
       {inScene1 && (
-        <OutroScene1
+        <IntroScene1
           jessPoses={jessPoses}
           isVertical={isVertical}
+          width={width}
+          height={height}
         />
       )}
       
       {inScene2 && (
-        <OutroScene2
+        <IntroScene2
+          topic={topic}
           startFrame={scene2Start}
           isVertical={isVertical}
+          width={width}
+          height={height}
         />
       )}
       
-      {/* FLASH GEÇİŞİ - sahne 1'den 2'ye */}
+      {/* FLASH (perde patlama) */}
       {inTransition && (
         <div
           style={{
@@ -94,212 +140,282 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   );
 };
 
-// ═══ SAHNE 1: GREAT JOB + Jess ═══
-const OutroScene1: React.FC<{ jessPoses: JessPoses; isVertical: boolean }> = ({
-  jessPoses,
-  isVertical,
-}) => {
+// ═══════════════════════════════════════════════════
+// SAHNE 1 — JESS KARŞILAMA
+// ═══════════════════════════════════════════════════
+const IntroScene1: React.FC<{
+  jessPoses: JessPoses;
+  isVertical: boolean;
+  width: number;
+  height: number;
+}> = ({ jessPoses, isVertical, width, height }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
-  const titleAnim = spring({
-    frame,
-    fps,
-    config: { damping: 9, stiffness: 110 },
-  });
-  const titleScale = interpolate(titleAnim, [0, 1], [0, 1]);
+  // Logo enter
+  const logoAnim = spring({ frame, fps, config: { damping: 11, stiffness: 110 } });
+  const logoScale = interpolate(logoAnim, [0, 1], [0, 1]);
+  const logoY = interpolate(logoAnim, [0, 1], [-120, 0]);
+  const logoIdleBounce = frame > 25 ? Math.sin(frame * 0.1) * 6 : 0;
   
-  const emojiAnim = spring({
+  // Tagline (HI FRIENDS!)
+  const taglineAnim = spring({
+    frame: frame - 30,
+    fps,
+    config: { damping: 13, stiffness: 100 },
+  });
+  const taglineScale = interpolate(taglineAnim, [0, 1], [0, 1]);
+  const taglineOpacity = interpolate(taglineAnim, [0, 0.5], [0, 1]);
+  const taglinePulse = 1 + Math.sin(frame * 0.12) * 0.04;
+  
+  // Jess enter
+  const jessAnim = spring({
     frame: frame - 12,
     fps,
-    config: { damping: 10, stiffness: 100 },
+    config: { damping: 12, stiffness: 100 },
   });
-  const emojiScale = interpolate(emojiAnim, [0, 1], [0, 1]);
+  const jessScale = interpolate(jessAnim, [0, 1], [0, 1]);
   
-  const emojiBounce = Math.sin(frame * 0.1) * 8;
-  
-  const titleFontSize = isVertical ? 200 : 220;
+  const logoWidth = isVertical ? width * 0.85 : width * 0.5;
+  const taglineFontSize = isVertical ? 100 : 110;
   
   return (
     <>
+      {/* LOGO - üstte */}
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "8%" : "10%",
+          top: isVertical ? "6%" : "8%",
           left: 0,
           right: 0,
           display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: isVertical ? 40 : 50,
-          zIndex: 10,
+          justifyContent: "center",
         }}
       >
         <div
           style={{
-            transform: `scale(${titleScale})`,
-            fontSize: titleFontSize,
+            transform: `translateY(${logoY + logoIdleBounce}px) scale(${logoScale})`,
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
+          <GeniMiniLogo width={logoWidth} />
+        </div>
+      </div>
+      
+      {/* HI FRIENDS! - ortada, kocaman */}
+      <div
+        style={{
+          position: "absolute",
+          top: isVertical ? "32%" : "34%",
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+          opacity: taglineOpacity,
+        }}
+      >
+        <div
+          style={{
+            transform: `scale(${taglineScale * taglinePulse})`,
+            fontSize: taglineFontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
             color: BRAND.yellow,
             textShadow: `
-              -8px -8px 0 ${BRAND.black},
-              8px -8px 0 ${BRAND.black},
-              -8px 8px 0 ${BRAND.black},
-              8px 8px 0 ${BRAND.black},
-              14px 14px 0 #FF1493
+              -6px -6px 0 ${BRAND.black},
+              6px -6px 0 ${BRAND.black},
+              -6px 6px 0 ${BRAND.black},
+              6px 6px 0 ${BRAND.black},
+              10px 10px 0 #FF1493
             `,
             textAlign: "center",
-            lineHeight: 1,
-            letterSpacing: 4,
+            letterSpacing: 3,
             textTransform: "uppercase",
-          }}
-        >
-          GREAT JOB!
-        </div>
-        
-        <div
-          style={{
-            transform: `scale(${emojiScale}) translateY(${emojiBounce}px)`,
-            fontSize: isVertical ? 180 : 200,
-            display: "flex",
-            gap: 30,
             lineHeight: 1,
-            filter: "drop-shadow(0 10px 25px rgba(0,0,0,0.5))",
           }}
         >
-          🏆 🎊 ⭐
+          HI FRIENDS!
         </div>
       </div>
       
-      <JessCharacter
-        pose="outro"
-        poses={jessPoses}
-        position="bottom-center"
-        size={isVertical ? 700 : 580}
-        animate
-        customStyle={{
-          bottom: isVertical ? -180 : 20,
+      {/* JESS - büyük, ortada-altta, el sallıyor */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: "flex",
+          justifyContent: "center",
+          transform: `scale(${jessScale})`,
+          transformOrigin: "bottom center",
         }}
-      />
+      >
+        <JessCharacter
+          pose="intro"
+          poses={jessPoses}
+          position="bottom-center"
+          size={isVertical ? 850 : 700}
+          animate
+        />
+      </div>
     </>
   );
 };
 
-// ═══ SAHNE 2: SUBSCRIBE + SEE YOU ═══
-const OutroScene2: React.FC<{ startFrame: number; isVertical: boolean }> = ({
-  startFrame,
-  isVertical,
-}) => {
+// ═══════════════════════════════════════════════════
+// SAHNE 2 — TOPIC REVEAL
+// ═══════════════════════════════════════════════════
+const IntroScene2: React.FC<{
+  topic: string;
+  startFrame: number;
+  isVertical: boolean;
+  width: number;
+  height: number;
+}> = ({ topic, startFrame, isVertical, width, height }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const localFrame = frame - startFrame;
   
-  const subAnim = spring({
+  const topicEmojis = getTopicEmojis(topic);
+  const topicUpper = (topic || "").toUpperCase();
+  
+  // Küçük logo sol üst (slide-in)
+  const smallLogoAnim = spring({
     frame: localFrame,
     fps,
-    config: { damping: 10, stiffness: 100 },
+    config: { damping: 12, stiffness: 110 },
   });
-  const subScale = interpolate(subAnim, [0, 1], [0, 1]);
-  const subPulse = 1 + Math.sin(frame * 0.15) * 0.05;
+  const smallLogoX = interpolate(smallLogoAnim, [0, 1], [-200, 0]);
+  const smallLogoOpacity = interpolate(smallLogoAnim, [0, 0.5], [0, 1]);
   
-  const taglineAnim = spring({
-    frame: localFrame - 12,
+  // Topic — patlama gibi gelir (büyük scale + rotation)
+  const topicAnim = spring({
+    frame: localFrame - 4,
     fps,
-    config: { damping: 12, stiffness: 100 },
+    config: { damping: 9, stiffness: 130 },
   });
-  const taglineY = interpolate(taglineAnim, [0, 1], [60, 0]);
-  const taglineOpacity = interpolate(taglineAnim, [0, 1], [0, 1]);
+  const topicScale = interpolate(topicAnim, [0, 1], [0, 1]);
+  const topicOpacity = interpolate(topicAnim, [0, 0.5], [0, 1]);
+  const topicRotate = interpolate(topicAnim, [0, 0.7, 1], [-15, 5, 0]);
+  const topicPulse = 1 + Math.sin(localFrame * 0.1) * 0.025;
   
-  const arrowAnim = spring({
-    frame: localFrame - 22,
+  // Emoji band (bouncing)
+  const emojiAnim = spring({
+    frame: localFrame - 18,
     fps,
-    config: { damping: 11, stiffness: 110 },
+    config: { damping: 11, stiffness: 100 },
   });
-  const arrowY = interpolate(arrowAnim, [0, 1], [-100, 0]);
-  const arrowOpacity = interpolate(arrowAnim, [0, 0.5], [0, 1]);
-  const arrowBounce = Math.sin(localFrame * 0.18) * 15;
+  const emojiOpacity = interpolate(emojiAnim, [0, 1], [0, 1]);
+  const emojiY = interpolate(emojiAnim, [0, 1], [80, 0]);
   
-  const subFontSize = isVertical ? 100 : 110;
-  const taglineFontSize = isVertical ? 64 : 70;
+  // Dinamik font - topic uzunluğuna göre
+  const topicLen = topicUpper.length;
+  let topicFontSize: number;
+  if (isVertical) {
+    if (topicLen < 18) topicFontSize = 130;
+    else if (topicLen < 30) topicFontSize = 100;
+    else if (topicLen < 45) topicFontSize = 78;
+    else topicFontSize = 60;
+  } else {
+    if (topicLen < 18) topicFontSize = 150;
+    else if (topicLen < 30) topicFontSize = 120;
+    else if (topicLen < 45) topicFontSize = 90;
+    else topicFontSize = 72;
+  }
+  
+  const smallLogoWidth = isVertical ? width * 0.42 : width * 0.22;
   
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: isVertical ? 50 : 60,
-        zIndex: 10,
-      }}
-    >
-      {/* Üstte aşağı doğru ok (animasyon: zıplar) */}
+    <>
+      {/* KÜÇÜK LOGO - sol üst */}
       <div
         style={{
-          opacity: arrowOpacity,
-          transform: `translateY(${arrowY + arrowBounce}px)`,
-          fontSize: isVertical ? 180 : 200,
-          filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.5))",
-          lineHeight: 1,
+          position: "absolute",
+          top: isVertical ? 60 : 40,
+          left: isVertical ? 40 : 60,
+          transform: `translateX(${smallLogoX}px)`,
+          opacity: smallLogoOpacity,
+          zIndex: 5,
         }}
       >
-        👇
+        <GeniMiniLogo width={smallLogoWidth} />
       </div>
       
-      {/* SUBSCRIBE - kocaman kırmızı buton */}
+      {/* TOPIC - ortada KOCAMAN */}
       <div
         style={{
-          transform: `scale(${subScale * subPulse})`,
-          backgroundColor: "#FF0000",
-          color: BRAND.white,
-          padding: isVertical ? "48px 110px" : "60px 140px",
-          borderRadius: 80,
-          fontSize: subFontSize,
-          fontFamily: FONTS.display,
-          fontWeight: 900,
-          border: `10px solid ${BRAND.black}`,
-          boxShadow: "0 16px 50px rgba(0,0,0,0.6), 0 0 100px #FF0000",
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           display: "flex",
           alignItems: "center",
-          gap: 30,
-          letterSpacing: 3,
-          textTransform: "uppercase",
+          justifyContent: "center",
+          paddingLeft: 40,
+          paddingRight: 40,
         }}
       >
-        ▶ SUBSCRIBE
+        <div
+          style={{
+            transform: `scale(${topicScale * topicPulse}) rotate(${topicRotate}deg)`,
+            opacity: topicOpacity,
+            backgroundColor: BRAND.white,
+            color: BRAND.black,
+            padding: isVertical ? "36px 56px" : "44px 80px",
+            borderRadius: 60,
+            fontSize: topicFontSize,
+            fontFamily: FONTS.display,
+            fontWeight: 900,
+            border: `8px solid ${BRAND.yellow}`,
+            boxShadow: `0 16px 40px rgba(0,0,0,0.6), 0 0 80px ${BRAND.yellow}`,
+            maxWidth: "94%",
+            textAlign: "center",
+            letterSpacing: 1,
+            textTransform: "uppercase",
+            lineHeight: 1.05,
+          }}
+        >
+          {topicUpper}
+        </div>
       </div>
       
-      {/* SEE YOU NEXT TIME */}
+      {/* EMOJI BANDI - altta, zıplayan */}
       <div
         style={{
-          opacity: taglineOpacity,
-          transform: `translateY(${taglineY}px)`,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          padding: isVertical ? "26px 50px" : "32px 60px",
-          borderRadius: 50,
-          fontSize: taglineFontSize,
-          fontFamily: FONTS.display,
-          fontWeight: 900,
-          color: BRAND.white,
-          textShadow: `
-            -4px -4px 0 ${BRAND.black},
-            4px -4px 0 ${BRAND.black},
-            -4px 4px 0 ${BRAND.black},
-            4px 4px 0 ${BRAND.black}
-          `,
-          textAlign: "center",
-          letterSpacing: 2,
-          textTransform: "uppercase",
+          position: "absolute",
+          bottom: isVertical ? "8%" : "10%",
+          left: 0,
+          right: 0,
+          display: "flex",
+          justifyContent: "center",
+          gap: isVertical ? 30 : 50,
+          transform: `translateY(${emojiY}px)`,
+          opacity: emojiOpacity,
         }}
       >
-        SEE YOU NEXT TIME! 👋
+        {topicEmojis.slice(0, isVertical ? 3 : 5).map((emoji, i) => {
+          const swing = Math.sin(localFrame * 0.1 + i * 0.7) * 18;
+          const bounce = Math.cos(localFrame * 0.12 + i * 0.5) * 14;
+          const idleScale = 1 + Math.sin(localFrame * 0.13 + i) * 0.06;
+          
+          return (
+            <div
+              key={i}
+              style={{
+                fontSize: isVertical ? 180 : 200,
+                transform: `translateY(${bounce}px) rotate(${swing}deg) scale(${idleScale})`,
+                filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.5))",
+                lineHeight: 1,
+              }}
+            >
+              {emoji}
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </>
   );
 };
