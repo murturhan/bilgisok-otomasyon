@@ -5,9 +5,10 @@ import {
   useVideoConfig,
   interpolate,
   spring,
+  Video,
+  staticFile,
 } from "remotion";
 import { BRAND, FONTS, THEME_COLORS, FPS } from "../styles/theme";
-import { JessCharacter } from "../components/JessCharacter";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { JessPoses } from "../types/schemas";
@@ -18,18 +19,13 @@ interface OutroSceneProps {
   durationFrames: number;
 }
 
-// Outro greeting metinleri (Jess'in konuşması — sonradan Hedra mp4'iyle değişecek)
-const SHORTS_OUTRO = "Great job, friends! Thanks for watching!";
-const LONG_OUTRO = "Great job, curious minds! Thanks for watching — see you in the next Geni-Mini Test!";
-
 /**
  * Outro 2 sahnede:
- * Sahne 1 (ilk %55): GREAT JOB! + 🏆 + greeting balonu + Jess
- *   - Üst: GREAT JOB! (büyük)
- *   - Orta: 🏆 (kocaman, ortada) + yan emojiler ⭐ 🎊
- *   - Jess'in üzerinde: greeting balonu (logo formatında)
- *   - Alt: Jess (büyük, yukarı çekilmiş)
- * Sahne 2 (son %45): SUBSCRIBE + SEE YOU NEXT TIME (Jess yok, sade)
+ * Sahne 1 (ilk %55): GREAT JOB! + 🏆 + Jess greeting VIDEO (lip-sync + ses)
+ *   - Üst: GREAT JOB!
+ *   - Orta: 🏆 (büyük, ortada) + yan emojiler ⭐ 🎊
+ *   - Alt: Jess VIDEO (alpha WebM, kendi sesini taşır)
+ * Sahne 2 (son %45): SUBSCRIBE + SEE YOU NEXT TIME
  * 
  * Güçlü 0.5s flash + scale + blur geçişi
  */
@@ -43,7 +39,6 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   const isVertical = height > width;
   
   const theme = THEME_COLORS[2]; // teal
-  const outroText = isVertical ? SHORTS_OUTRO : LONG_OUTRO;
   
   // Sahne 1 ve 2 bölünme noktası
   const scene1End = Math.floor(durationFrames * 0.55);
@@ -94,11 +89,7 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
             filter: scene1Blur > 0 ? `blur(${scene1Blur}px)` : undefined,
           }}
         >
-          <OutroScene1
-            jessPoses={jessPoses}
-            isVertical={isVertical}
-            outroText={outroText}
-          />
+          <OutroScene1 isVertical={isVertical} />
         </div>
       )}
       
@@ -128,12 +119,8 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   );
 };
 
-// ═══ SAHNE 1: GREAT JOB + trofe + greeting balonu + Jess ═══
-const OutroScene1: React.FC<{
-  jessPoses: JessPoses;
-  isVertical: boolean;
-  outroText: string;
-}> = ({ jessPoses, isVertical, outroText }) => {
+// ═══ SAHNE 1: GREAT JOB + trofe + Jess greeting VIDEO ═══
+const OutroScene1: React.FC<{ isVertical: boolean }> = ({ isVertical }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
@@ -165,27 +152,8 @@ const OutroScene1: React.FC<{
   const sideEmojiOpacity = interpolate(sideEmojiAnim, [0, 1], [0, 1]);
   const sideEmojiY = interpolate(sideEmojiAnim, [0, 1], [40, 0]);
   
-  // Greeting balonu
-  const greetingAnim = spring({
-    frame: frame - 28,
-    fps,
-    config: { damping: 13, stiffness: 100 },
-  });
-  const greetingScale = interpolate(greetingAnim, [0, 1], [0, 1]);
-  const greetingOpacity = interpolate(greetingAnim, [0, 0.5], [0, 1]);
-  const greetingFloat = Math.sin(frame * 0.08) * 4;
-  
-  // Jess enter
-  const jessAnim = spring({
-    frame: frame - 8,
-    fps,
-    config: { damping: 12, stiffness: 100 },
-  });
-  const jessScale = interpolate(jessAnim, [0, 1], [0, 1]);
-  
   const titleFontSize = isVertical ? 200 : 220;
-  const greetingFontSize = isVertical ? 42 : 48;
-  const greetingMaxWidth = isVertical ? "84%" : "62%";
+  const jessVideoSize = isVertical ? 900 : 720;
   
   return (
     <>
@@ -193,7 +161,7 @@ const OutroScene1: React.FC<{
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "4%" : "7%",
+          top: isVertical ? "5%" : "8%",
           left: 0,
           right: 0,
           display: "flex",
@@ -225,11 +193,11 @@ const OutroScene1: React.FC<{
         </div>
       </div>
       
-      {/* ORTA: Trofe ortada büyük + yan emojiler */}
+      {/* ORTA: Trofe + yan emojiler */}
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "24%" : "28%",
+          top: isVertical ? "27%" : "30%",
           left: 0,
           right: 0,
           display: "flex",
@@ -239,7 +207,6 @@ const OutroScene1: React.FC<{
           zIndex: 10,
         }}
       >
-        {/* Sol: yıldız */}
         <div
           style={{
             opacity: sideEmojiOpacity,
@@ -252,7 +219,6 @@ const OutroScene1: React.FC<{
           ⭐
         </div>
         
-        {/* Orta: TROFE — kocaman */}
         <div
           style={{
             transform: `scale(${trophyScale}) rotate(${trophyRotate}deg) translateY(${trophyBounce}px)`,
@@ -264,7 +230,6 @@ const OutroScene1: React.FC<{
           🏆
         </div>
         
-        {/* Sağ: konfeti */}
         <div
           style={{
             opacity: sideEmojiOpacity,
@@ -278,42 +243,7 @@ const OutroScene1: React.FC<{
         </div>
       </div>
       
-      {/* GREETING BALONU - trofe ile Jess arasında */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: isVertical ? "30%" : "28%",
-          left: 0,
-          right: 0,
-          display: "flex",
-          justifyContent: "center",
-          opacity: greetingOpacity,
-          transform: `scale(${greetingScale}) translateY(${greetingFloat}px)`,
-          zIndex: 10,
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: BRAND.white,
-            color: BRAND.black,
-            padding: isVertical ? "20px 36px" : "24px 44px",
-            borderRadius: 36,
-            fontSize: greetingFontSize,
-            fontFamily: FONTS.display,
-            fontWeight: 900,
-            border: `5px solid ${BRAND.yellow}`,
-            boxShadow: `0 8px 22px rgba(0,0,0,0.45), 0 0 35px ${BRAND.yellow}`,
-            maxWidth: greetingMaxWidth,
-            textAlign: "center",
-            letterSpacing: 0.5,
-            lineHeight: 1.2,
-          }}
-        >
-          {outroText}
-        </div>
-      </div>
-      
-      {/* JESS - alt, BÜYÜK */}
+      {/* JESS VIDEO - alt-orta, alpha WebM, kendi sesini taşır */}
       <div
         style={{
           position: "absolute",
@@ -322,19 +252,16 @@ const OutroScene1: React.FC<{
           bottom: 0,
           display: "flex",
           justifyContent: "center",
-          transform: `scale(${jessScale})`,
-          transformOrigin: "bottom center",
         }}
       >
-        <JessCharacter
-          pose="outro"
-          poses={jessPoses}
-          position="bottom-center"
-          size={isVertical ? 720 : 600}
-          animate
-          customStyle={{
-            bottom: isVertical ? -120 : 20,
+        <Video
+          src={staticFile("jess/outro.webm")}
+          style={{
+            width: jessVideoSize,
+            height: jessVideoSize,
+            objectFit: "contain",
           }}
+          volume={1}
         />
       </div>
     </>
@@ -394,7 +321,6 @@ const OutroScene2: React.FC<{ startFrame: number; isVertical: boolean }> = ({
         zIndex: 10,
       }}
     >
-      {/* Üstte aşağı doğru ok */}
       <div
         style={{
           opacity: arrowOpacity,
@@ -407,7 +333,6 @@ const OutroScene2: React.FC<{ startFrame: number; isVertical: boolean }> = ({
         👇
       </div>
       
-      {/* SUBSCRIBE */}
       <div
         style={{
           transform: `scale(${subScale * subPulse})`,
@@ -430,7 +355,6 @@ const OutroScene2: React.FC<{ startFrame: number; isVertical: boolean }> = ({
         ▶ SUBSCRIBE
       </div>
       
-      {/* SEE YOU NEXT TIME */}
       <div
         style={{
           opacity: taglineOpacity,
