@@ -334,7 +334,7 @@ const LongLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases,
   inFunFact, isRevealed, revealImageTransition, width, height,
 }) => {
-  const bodyTop = 220;  // long header 200 + 20 padding
+  const bodyTop = 345;  // long header 293 + 52 padding (resim biraz daha aşağı)
   const bodyBottom = 200;
   
   const colGap = 50;
@@ -422,7 +422,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases, inDrumRoll, inSilentPause, inCountdown,
   inFunFact, isRevealed, revealImageTransition, width, height,
 }) => {
-  const bodyTop = 210;  // shorts header 180 + 30 padding
+  const bodyTop = 320;  // shorts header 267 + 53 padding (resim biraz daha aşağı)
   const padding = 40;
   const contentWidth = width - padding * 2;
   const imageHeight = Math.floor(height * 0.34);
