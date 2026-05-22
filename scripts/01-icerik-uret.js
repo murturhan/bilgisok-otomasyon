@@ -2,7 +2,8 @@
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
  * - Her soru için AYRI question_audio_text ve answer_audio_text üretir
- * - questions.json'da bu yapı: { intro_audio_text, outro_audio_text, questions: [{..., question_audio_text, answer_audio_text}] }
+ * - questions.json'da bu yapı: { questions: [{..., question_audio_text, answer_audio_text}] }
+ *   (intro/outro greeting metinleri kaldırıldı - Jess video kendi sesini taşıyor)
  * - Bu sayede 03-seslendirme her parçayı ayrı MP3 yapacak
  * - Video tam ses süresine göre senkron olacak
  */
@@ -88,16 +89,6 @@ Example:
 "The correct answer is B: Lion! Did you know? Lions are the only cats that live in groups called prides!"
 
 ═══════════════════════════════════════════════════
-INTRO & OUTRO AUDIO
-═══════════════════════════════════════════════════
-
-**intro_audio_text** (Jess greets, 2-3 sentences, energetic):
-Example: "Hi friends! I'm Jess the Fox! Today we're exploring amazing animals! Can you guess them all? Let's play!"
-
-**outro_audio_text** (Jess says goodbye, 2-3 sentences):
-Example: "Wow, you did amazing! Don't forget to subscribe and join Jess for more fun quizzes! See you next time, friends!"
-
-═══════════════════════════════════════════════════
 QUESTION OBJECT FORMAT
 ═══════════════════════════════════════════════════
 
@@ -165,8 +156,6 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "thumbnail_prompt": "FLUX prompt - scenery only, NO CHARACTERS",
   "background_prompt": "FLUX prompt - blurred topic-themed background, depth of field, center empty for UI",
   "aciklama": "200 word description with hashtags",
-  "intro_audio_text": "Jess intro 2-3 sentences",
-  "outro_audio_text": "Jess outro 2-3 sentences",
   "questions": [
     {
       "question_text": "Short on-screen text",
@@ -299,8 +288,6 @@ CRITICAL:
         }
       }
       
-      if (!json.intro_audio_text) json.intro_audio_text = "Hi friends! I'm Jess the Fox! Let's play a fun quiz!";
-      if (!json.outro_audio_text) json.outro_audio_text = "Great job! Subscribe for more fun! See you next time!";
       if (!json.baslik) json.baslik = `${konu} Quiz for Kids!`;
       
       // thumbnail_title validate - 2-3 kelime, uppercase, max 16 karakter
@@ -344,11 +331,10 @@ CRITICAL:
       json.pexels_anahtar_kelimeler = [];
       
       // Senaryo: Tüm ses parçalarının birleşimi (backward compat için)
-      json.senaryo = [
-        json.intro_audio_text,
-        ...json.questions.map(q => `${q.question_audio_text} ${q.answer_audio_text}`),
-        json.outro_audio_text
-      ].join("\n\n");
+      // Not: intro/outro Jess video kendi sesini taşıdığı için burada yok
+      json.senaryo = json.questions
+        .map(q => `${q.question_audio_text} ${q.answer_audio_text}`)
+        .join("\n\n");
       
       json.tts_telaffuz = json.senaryo;
       json.muzik_mood = "kids";
@@ -437,8 +423,6 @@ async function main() {
       baslik: icerik.baslik,
       thumbnail_title: icerik.thumbnail_title || "",
       background_prompt: icerik.background_prompt || "",
-      intro_audio_text: icerik.intro_audio_text,
-      outro_audio_text: icerik.outro_audio_text,
       questions: icerik.questions,
     }, null, 2));
     
