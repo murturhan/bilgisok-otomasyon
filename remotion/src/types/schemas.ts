@@ -47,10 +47,18 @@ export const quizCompositionSchema = z.object({
   topic: z.string().default(""),
   questions: z.array(questionSchema),
   
-  intro_audio_path: z.string().optional(),
-  outro_audio_path: z.string().optional(),
-  intro_audio_duration: z.number().default(5.0),
-  outro_audio_duration: z.number().default(5.0),
+  intro_audio_path: z.string().nullable().optional(),
+  outro_audio_path: z.string().nullable().optional(),
+  intro_audio_duration: z.number().default(7.0),
+  outro_audio_duration: z.number().default(8.0),
+  
+  // Jess video gerçek süresi (Sahne 1 / Sahne 2 ayrım noktası için)
+  jess_intro_video_duration: z.number().default(3.0),
+  jess_outro_video_duration: z.number().default(2.5),
+  
+  // Topic announcement - Sahne 2'de oynar
+  topic_announce_path: z.string().optional(),
+  topic_announce_duration: z.number().default(2.5),
   
   jess_poses: jessPosesSchema.default({}),
   background_music_url: z.string().optional(),
@@ -78,8 +86,11 @@ export const defaultQuizProps: QuizCompositionProps = {
   title: "GeniMini Tests",
   topic: "Animals",
   channel_name: "GeniMini Tests",
-  intro_audio_duration: 5.0,
-  outro_audio_duration: 5.0,
+  intro_audio_duration: 7.0,
+  outro_audio_duration: 8.0,
+  jess_intro_video_duration: 3.0,
+  jess_outro_video_duration: 2.5,
+  topic_announce_duration: 2.5,
   jess_poses: {},
   questions: [
     {
