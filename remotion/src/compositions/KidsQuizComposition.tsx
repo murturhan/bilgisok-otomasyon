@@ -30,6 +30,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   jess_outro_video_duration,
   topic_announce_path,
   topic_announce_duration,
+  outro_announce_path,
+  outro_announce_duration,
   jess_poses,
   background_music_url,
   sfx_tick,
@@ -191,6 +193,16 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       {outro_audio_path && (
         <Sequence from={outroStart} durationInFrames={outroFrames}>
           <Audio src={staticFile(outro_audio_path)} volume={1.4} />
+        </Sequence>
+      )}
+      
+      {/* OUTRO ANNOUNCE - Subscribe sahnesinde (Jess outro video bittikten 0.4s sonra) oynar */}
+      {outro_announce_path && (
+        <Sequence
+          from={outroStart + Math.ceil(jess_outro_video_duration * FPS) + Math.floor(FPS * 0.4)}
+          durationInFrames={Math.ceil(outro_announce_duration * FPS)}
+        >
+          <Audio src={staticFile(outro_announce_path)} volume={1.4} />
         </Sequence>
       )}
       
