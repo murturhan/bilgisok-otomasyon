@@ -276,14 +276,38 @@ CRITICAL:
         // String'e çevir (emoji unicode için emniyet)
         q.option_flags = q.option_flags.map(f => String(f || ""));
         
-        // Audio text alanları varsayılan oluştur (Gemini eksik verirse)
-        if (!q.question_audio_text) {
+        // ŞIK KARIŞTIRMA (kullanıcı talebi: Gemini hep correct_answer=0 veriyordu)
+        // options + option_flags'i rastgele permute et, correct_answer index'i ona göre güncelle
+        {
+          const correctOpt = q.options[q.correct_answer];
+          const correctFlag = q.option_flags[q.correct_answer];
+          // 3 elemanlı [option, flag, wasCorrect] dizisi yap
+          const pairs = q.options.map((opt, idx) => ({
+            option: opt,
+            flag: q.option_flags[idx] || "",
+            wasCorrect: idx === q.correct_answer,
+          }));
+          // Fisher-Yates shuffle
+          for (let k = pairs.length - 1; k > 0; k--) {
+            const r = Math.floor(Math.random() * (k + 1));
+            [pairs[k], pairs[r]] = [pairs[r], pairs[k]];
+          }
+          q.options = pairs.map(p => p.option);
+          q.option_flags = pairs.map(p => p.flag);
+          q.correct_answer = pairs.findIndex(p => p.wasCorrect);
+          // Sanity check
+          if (q.options[q.correct_answer] !== correctOpt) {
+            throw new Error(`Soru ${i+1}: shuffle bozuldu`);
+          }
+        }
+        
+        // Audio text alanları SHUFFLE SONRASI yeniden inşa et
+        // (Gemini'nin verdiği metinler eski sıraya göreydi, geçersiz artık)
+        {
           const letters = ["A", "B", "C"];
           q.question_audio_text = `Question ${i+1}. ${q.question_text} Is it ` +
             q.options.map((opt, j) => `${letters[j]}: ${opt}`).join(", ") + "?";
-        }
-        if (!q.answer_audio_text) {
-          const letter = ["A", "B", "C"][q.correct_answer];
+          const letter = letters[q.correct_answer];
           q.answer_audio_text = `The correct answer is ${letter}: ${q.options[q.correct_answer]}! ${q.fun_fact}`;
         }
       }
