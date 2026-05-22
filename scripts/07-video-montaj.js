@@ -100,26 +100,28 @@ async function formatTespit(jobFolderId, auth) {
 
 /**
  * Jess greeting videolarını Drive'dan indir, chroma key uygula, 
- * remotion/public/jess/ altına {format}-{intro|outro}.mp4 olarak yaz.
+ * remotion/public/jess/ altına {intro|outro}.webm olarak yaz.
  * 
  * Chroma key işlemi: yeşil (#00FF00) arka planı şeffaf yap.
- * Çıktı: WebM VP9 (alpha kanallı) — Remotion <Video> alfa destekler.
+ * Çıktı: WebM VP9 (alpha kanallı, yuva420p).
  * 
  * @param {string} format - "shorts" veya "long"
- * @param {object} auth - SA auth (driveIndir için)
+ * @param {object} auth - SA auth
  * @param {string} jessPublicDir - hedef klasör (remotion/public/jess)
+ * @returns {object} {introDuration, outroDuration} - WebM süreleri (saniye)
  */
 async function jessGreetingVideolariHazirla(format, auth, jessPublicDir) {
   const ihtiyac = [
-    { key: `${format}-intro`, out: "intro.webm" },
-    { key: `${format}-outro`, out: "outro.webm" },
+    { key: `${format}-intro`, out: "intro.webm", durationKey: "introDuration" },
+    { key: `${format}-outro`, out: "outro.webm", durationKey: "outroDuration" },
   ];
+  
+  const sureler = { introDuration: 0, outroDuration: 0 };
   
   for (const seg of ihtiyac) {
     const fileId = JESS_GREETING_VIDEOS[seg.key];
     if (!fileId) {
-      console.warn(`  ⚠ ${seg.key} için Drive ID yok, atlanıyor`);
-      continue;
+      throw new Error(`Jess ${seg.key} için Drive ID yok`);
     }
     
     const hamYol = path.join(TMP_DIR, `jess-${seg.key}-ham.mp4`);
@@ -127,11 +129,10 @@ async function jessGreetingVideolariHazirla(format, auth, jessPublicDir) {
     
     console.log(`  🦊 Jess ${seg.key} indiriliyor...`);
     await driveIndir(fileId, hamYol, auth);
-    
     const stats = fs.statSync(hamYol);
     console.log(`     ${(stats.size/1024/1024).toFixed(2)} MB indirildi`);
     
-    // Chroma key + WebM VP9 alfa (yuva420p YOK - VP9 alfa için yuva420p uyarısı çıkar)
+    // Chroma key + WebM VP9 alfa
     const cmd = `ffmpeg -y -hide_banner -loglevel error -i "${hamYol}" -vf "chromakey=${JESS_CHROMA_KEY.color}:${JESS_CHROMA_KEY.similarity}:${JESS_CHROMA_KEY.blend}" -c:v libvpx-vp9 -pix_fmt yuva420p -b:v 2M -c:a libopus -b:a 128k "${ciktiYol}"`;
     console.log(`  🎨 ${seg.key} chroma key uygulanıyor...`);
     await execAsync(cmd);
@@ -139,12 +140,21 @@ async function jessGreetingVideolariHazirla(format, auth, jessPublicDir) {
     if (!fs.existsSync(ciktiYol)) {
       throw new Error(`Jess ${seg.key} chroma key başarısız`);
     }
-    const outStats = fs.statSync(ciktiYol);
-    console.log(`     ✓ ${seg.out} (${(outStats.size/1024/1024).toFixed(2)} MB, alpha-channel)`);
     
-    // ham mp4 sil
+    // Süreyi ölç (ffprobe ile)
+    const { stdout } = await execAsync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${ciktiYol}"`
+    );
+    const sure = parseFloat(stdout.trim());
+    sureler[seg.durationKey] = sure;
+    
+    const outStats = fs.statSync(ciktiYol);
+    console.log(`     ✓ ${seg.out} (${(outStats.size/1024/1024).toFixed(2)} MB, ${sure.toFixed(2)}s)`);
+    
     try { fs.unlinkSync(hamYol); } catch {}
   }
+  
+  return sureler;
 }
 
 async function jsonIndir(folderId, filename, auth, hedefYol) {
@@ -358,7 +368,8 @@ async function main() {
     const jessPublicDir = path.join(REMOTION_PUBLIC, "jess");
     fs.mkdirSync(jessPublicDir, { recursive: true });
     console.log("🦊 Jess greeting videoları hazırlanıyor...");
-    await jessGreetingVideolariHazirla(format, saAuth, jessPublicDir);
+    const jessSureleri = await jessGreetingVideolariHazirla(format, saAuth, jessPublicDir);
+    console.log(`  ✓ Intro: ${jessSureleri.introDuration.toFixed(2)}s, Outro: ${jessSureleri.outroDuration.toFixed(2)}s`);
 
     // 2. questions.json indir (önce 02-ses, yoksa ana klasör)
     const questionsData = await questionsJsonOku(
@@ -527,9 +538,6 @@ async function main() {
       jessPosesForRemotion[pose] = path.relative(REMOTION_PUBLIC, absPath);
     }
     
-    const introSeg = segByKey["intro"];
-    const outroSeg = segByKey["outro"];
-    
     const inputProps = {
       title: "GeniMini Tests",
       topic: questionsData.konu || job.konu || "",
@@ -537,17 +545,18 @@ async function main() {
       questions: questions,
       jess_poses: jessPosesForRemotion,
       
-      // YENİ: intro/outro audio path + duration
-      intro_audio_path: introSeg ? `audio/${introSeg.filename}` : undefined,
-      outro_audio_path: outroSeg ? `audio/${outroSeg.filename}` : undefined,
-      intro_audio_duration: introSeg?.duration || 5.0,
-      outro_audio_duration: outroSeg?.duration || 5.0,
+      // Intro/outro: artık ayrı mp3 yok, Jess video kendi sesini taşıyor.
+      // Süre = Jess WebM video süresi (ffprobe ile ölçüldü)
+      intro_audio_path: null,
+      outro_audio_path: null,
+      intro_audio_duration: jessSureleri.introDuration,
+      outro_audio_duration: jessSureleri.outroDuration,
       
       background_music_url: fs.existsSync(bgMuzikYol)
         ? path.relative(REMOTION_PUBLIC, bgMuzikYol)
         : undefined,
       
-      // YENİ: Topic-themed background image (Gemini'nin oluşturduğu, FLUX'ın ürettiği)
+      // Topic-themed background image
       background_image_path: backgroundImagePath,
       
       // SFX path'leri
