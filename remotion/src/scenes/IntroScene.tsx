@@ -19,18 +19,24 @@ interface IntroSceneProps {
   topic: string;
   jessPoses: JessPoses;
   durationFrames: number;
+  jessVideoDurationFrames: number;
 }
 
 function getTopicEmojis(topic: string): string[] {
   const t = topic.toLowerCase();
   
-  if (/invent|technolog|machine|gadget|computer|phone|comput/i.test(t))
+  // Buildings / Landmarks / Architecture
+  if (/build|architect|monument|landmark|tower|castle|temple|palace|wonder/i.test(t))
+    return ["🏰", "🗼", "🏛️", "🗽", "🕌", "⛩️"];
+  if (/invent|technolog|machine|gadget|computer|phone/i.test(t))
     return ["📞", "💡", "✈️", "📷", "🎬", "🚗"];
   if (/animal|wild|pet|fox|dog|cat|jungle|safari|home/i.test(t))
     return ["🦁", "🐘", "🦒", "🐯", "🐧", "🐵"];
-  if (/food|fruit|drink|cook|cuisine|snack|dish/i.test(t))
-    return ["🍕", "🍔", "🍎", "🍦", "🍩", "🥕"];
-  if (/countr|geograph|flag|world|capital|landmark|city/i.test(t))
+  if (/fruit/i.test(t))
+    return ["🍎", "🍌", "🍇", "🍓", "🍑", "🍉"];
+  if (/food|drink|cook|cuisine|snack|dish/i.test(t))
+    return ["🍕", "🍔", "🌮", "🍦", "🍩", "🥕"];
+  if (/countr|geograph|flag|world|capital|city|culture/i.test(t))
     return ["🗺️", "🌍", "🗽", "🏔️", "🏛️", "🚩"];
   if (/space|planet|astronaut|star|galaxy|moon|sun/i.test(t))
     return ["🚀", "🌙", "⭐", "🪐", "👽", "☄️"];
@@ -38,14 +44,48 @@ function getTopicEmojis(topic: string): string[] {
     return ["🌳", "🌸", "🌻", "🍄", "🌵", "🌿"];
   if (/sport|game|ball|olympic/i.test(t))
     return ["⚽", "🏀", "🎾", "🏈", "⛹️", "🏆"];
-  if (/vehicl|car|truck|transport|plane|train|ship|machine/i.test(t))
+  if (/vehicl|car|truck|transport|plane|train|ship/i.test(t))
     return ["🚗", "✈️", "🚂", "🚢", "🚁", "🚀"];
-  if (/scien|physic|chem|biolog|experiment/i.test(t))
+  if (/scien|physic|chem|biolog|experiment|cross.section/i.test(t))
     return ["🧪", "🔬", "🧬", "⚗️", "🧲", "🔭"];
   if (/music|instrument|song|sound/i.test(t))
     return ["🎵", "🎸", "🎹", "🥁", "🎤", "🎺"];
+  if (/object|item|everyday|things/i.test(t))
+    return ["🔑", "📱", "⌚", "🎒", "✏️", "📦"];
+  if (/dinosaur|prehistor|fossil/i.test(t))
+    return ["🦖", "🦕", "🦴", "🌋", "🥚", "🦎"];
+  if (/ocean|sea|fish|marine|underwater/i.test(t))
+    return ["🐠", "🐳", "🦈", "🐙", "🦀", "🌊"];
+  if (/insect|bug/i.test(t))
+    return ["🐛", "🦋", "🐝", "🐞", "🕷️", "🐜"];
   
   return ["📚", "💡", "🎨", "🔍", "🌟", "🎯"];
+}
+
+/** 3D çıkıntılı topic font için text-shadow stack üretir (font boyutuna dinamik) */
+function buildTopic3DShadow(fontSize: number): string {
+  const s = Math.max(2, Math.floor(fontSize / 28));
+  const o = Math.max(2, Math.floor(fontSize / 50));
+  const layers = [
+    `-${o}px -${o}px 0 ${BRAND.black}`,
+    `${o}px -${o}px 0 ${BRAND.black}`,
+    `-${o}px ${o}px 0 ${BRAND.black}`,
+    `${o}px ${o}px 0 ${BRAND.black}`,
+  ];
+  // Siyah çıkıntı 8 katman
+  for (let i = 1; i <= 8; i++) {
+    const d = i * s;
+    layers.push(`${d}px ${d}px 0 ${BRAND.black}`);
+  }
+  // Pembe alt gölge 4 katman
+  for (let i = 9; i <= 12; i++) {
+    const d = i * s;
+    layers.push(`${d}px ${d}px 0 #B91C7A`);
+  }
+  // Yumuşak drop shadow
+  const finalD = 13 * s;
+  layers.push(`${finalD}px ${finalD}px ${s * 4}px rgba(0,0,0,0.55)`);
+  return layers.join(", ");
 }
 
 /**
@@ -68,6 +108,7 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   topic,
   jessPoses,
   durationFrames,
+  jessVideoDurationFrames,
 }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
@@ -75,8 +116,12 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
   
   const theme = THEME_COLORS[0]; // pink
   
-  // İki sahneye böl
-  const scene1End = Math.floor(durationFrames * 0.5);
+  // Sahne 1 = Jess video süresi + 0.3s buffer
+  // Bu sürede greeting konuşması bitsin, sonra Sahne 2'ye geçilir
+  const scene1End = Math.min(
+    jessVideoDurationFrames + Math.floor(FPS * 0.3),
+    durationFrames - Math.floor(FPS * 3)  // Sahne 2 için en az 3s yer kalsın
+  );
   const scene2Start = scene1End;
   const inScene1 = frame < scene1End;
   const inScene2 = frame >= scene2Start;
@@ -311,6 +356,9 @@ const IntroScene2: React.FC<{
   const topicOpacity = interpolate(topicAnim, [0, 0.5], [0, 1]);
   const topicRotate = interpolate(topicAnim, [0, 0.7, 1], [-15, 5, 0]);
   const topicPulse = 1 + Math.sin(localFrame * 0.1) * 0.025;
+  // Idle hareket - hafif salınım + yukarı/aşağı float (emojiler gibi)
+  const topicWobble = Math.sin(localFrame * 0.07) * 1.8;  // -1.8 → +1.8 derece
+  const topicFloat = Math.cos(localFrame * 0.09) * 12;    // -12 → +12 px
   
   const emojiAnim = spring({
     frame: localFrame - 18,
@@ -320,20 +368,58 @@ const IntroScene2: React.FC<{
   const emojiOpacity = interpolate(emojiAnim, [0, 1], [0, 1]);
   const emojiY = interpolate(emojiAnim, [0, 1], [80, 0]);
   
-  // Dinamik font - topic uzunluğuna göre
+  // Dinamik font - topic uzunluğuna göre 2.5x büyütülmüş, binary search ile fit
   const topicLen = topicUpper.length;
-  let topicFontSize: number;
+  
+  // Hedef max font (önceki değerlerin 2.5x'i)
+  let maxTargetFont: number;
   if (isVertical) {
-    if (topicLen < 18) topicFontSize = 130;
-    else if (topicLen < 30) topicFontSize = 100;
-    else if (topicLen < 45) topicFontSize = 78;
-    else topicFontSize = 60;
+    if (topicLen < 18) maxTargetFont = 325;
+    else if (topicLen < 30) maxTargetFont = 250;
+    else if (topicLen < 45) maxTargetFont = 195;
+    else maxTargetFont = 150;
   } else {
-    if (topicLen < 18) topicFontSize = 150;
-    else if (topicLen < 30) topicFontSize = 120;
-    else if (topicLen < 45) topicFontSize = 90;
-    else topicFontSize = 72;
+    if (topicLen < 18) maxTargetFont = 375;
+    else if (topicLen < 30) maxTargetFont = 300;
+    else if (topicLen < 45) maxTargetFont = 225;
+    else maxTargetFont = 180;
   }
+  
+  // Binary search: kutuya sığacak en büyük font
+  // Topic kutusu inner alan: maxWidth ekran %94, padding kutuda 56*2 / 80*2
+  const titleInnerWidth = isVertical
+    ? Math.floor(width * 0.94) - 112  // 56*2 padding
+    : Math.floor(width * 0.94) - 160; // 80*2 padding
+  const titleInnerHeight = Math.floor(height * 0.55); // ekran ortasında bol yer
+  
+  const fitTopicFont = (() => {
+    const words = topicUpper.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return maxTargetFont;
+    const fits = (fs: number): boolean => {
+      const maxChars = Math.floor(titleInnerWidth / (fs * 0.55));
+      if (maxChars < 3) return false;
+      let lines = 1, lineLen = 0;
+      for (const w of words) {
+        if (w.length > maxChars) return false;
+        const need = lineLen === 0 ? w.length : lineLen + 1 + w.length;
+        if (need <= maxChars) lineLen = need;
+        else { lines++; lineLen = w.length; }
+      }
+      return lines * fs * 1.05 <= titleInnerHeight;
+    };
+    let lo = 60, hi = maxTargetFont, best = 60;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (fits(mid)) { best = mid; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+    return best;
+  })();
+  
+  const topicFontSize = fitTopicFont;
+  
+  // 3D ÇIKINTI gölge stack — font boyutuna göre dinamik derinlik
+  const topicTextShadow = buildTopic3DShadow(topicFontSize);
   
   const smallLogoWidth = isVertical ? width * 0.42 : width * 0.22;
   
@@ -353,7 +439,7 @@ const IntroScene2: React.FC<{
         <GeniMiniLogo width={smallLogoWidth} />
       </div>
       
-      {/* TOPIC */}
+      {/* TOPIC - 3D çıkıntılı font, kutu yok, canlı hareket */}
       <div
         style={{
           position: "absolute",
@@ -370,20 +456,16 @@ const IntroScene2: React.FC<{
       >
         <div
           style={{
-            transform: `scale(${topicScale * topicPulse}) rotate(${topicRotate}deg)`,
+            transform: `scale(${topicScale * topicPulse}) rotate(${topicRotate + topicWobble}deg) translateY(${topicFloat}px)`,
             opacity: topicOpacity,
-            backgroundColor: BRAND.white,
-            color: BRAND.black,
-            padding: isVertical ? "36px 56px" : "44px 80px",
-            borderRadius: 60,
             fontSize: topicFontSize,
             fontFamily: FONTS.display,
             fontWeight: 900,
-            border: `8px solid ${BRAND.yellow}`,
-            boxShadow: `0 16px 40px rgba(0,0,0,0.6), 0 0 80px ${BRAND.yellow}`,
+            color: BRAND.yellow,
+            textShadow: topicTextShadow,
             maxWidth: "94%",
             textAlign: "center",
-            letterSpacing: 1,
+            letterSpacing: 2,
             textTransform: "uppercase",
             lineHeight: 1.05,
           }}
@@ -392,11 +474,11 @@ const IntroScene2: React.FC<{
         </div>
       </div>
       
-      {/* EMOJI BANDI */}
+      {/* EMOJI BANDI - yukarı çekildi (8% → 18%) */}
       <div
         style={{
           position: "absolute",
-          bottom: isVertical ? "8%" : "10%",
+          bottom: isVertical ? "18%" : "20%",
           left: 0,
           right: 0,
           display: "flex",
