@@ -75,9 +75,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   else if (inRevealCorrect) currentJessPose = "correct";
   
   // GÜÇLENDİRİLMİŞ TRANSITION (0.5s = 15 frame)
-  // Frame 0-5: flash 0→0.95 (güçlü parlama)
-  // Frame 5-15: flash 0.95→0 (yavaş sönme)
-  // Sahne: scale 1 → 1.15 (büyür) + 5° rotation + blur
+  // - Frame 0-5: flash 0→0.95 (güçlü parlama)
+  // - Frame 5-15: flash 0.95→0
+  // - SAHNE SOLA KAYAR (slide-out): translateX 0 → -width
+  // - Blur 0→8 (hareket bulanıklığı)
+  // - Hafif scale küçülmesi (uzaklaşıyor hissi)
+  // Yeni sahne otomatik sağdan slide-in eder (her sahnenin başında enter spring zaten var)
   const transitionLocalFrame = frame - phases.transition;
   const TR_LEN = FIXED_FRAMES.transition;
   
@@ -90,29 +93,30 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       )
     : 0;
   
-  const sceneScale = inTransition
-    ? interpolate(
-        transitionLocalFrame,
-        [0, 5, TR_LEN],
-        [1, 1.15, 1.08],
-        { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
-      )
-    : 1;
-  
-  const sceneRotate = inTransition
+  // SLIDE-OUT: sahne sola kayar (sağdan yeni sahne gelir)
+  const slideOutX = inTransition
     ? interpolate(
         transitionLocalFrame,
         [0, TR_LEN],
-        [0, 5],
+        [0, -120],   // %120 sola (tamamen ekrandan çıkar)
         { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
       )
     : 0;
   
+  const sceneScale = inTransition
+    ? interpolate(
+        transitionLocalFrame,
+        [0, TR_LEN],
+        [1, 0.92],   // uzaklaşma hissi
+        { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
+      )
+    : 1;
+  
   const sceneBlur = inTransition
     ? interpolate(
         transitionLocalFrame,
-        [0, 5, TR_LEN],
-        [0, 4, 8],
+        [0, TR_LEN],
+        [0, 10],
         { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
       )
     : 0;
@@ -121,9 +125,23 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
     ? interpolate(
         frame - phases.transition,
         [0, TR_LEN * 0.5, TR_LEN],
-        [1, 0.6, 0],
+        [1, 0.7, 0],
         { extrapolateRight: "clamp" }
       )
+    : 1;
+  
+  // YENİ SAHNE ENTER (her soru sahnesinin başında sağdan gelir)
+  // Sahne phase 0'da başlar, ilk 8 frame sağdan slide-in eder
+  const ENTER_LEN = 8;
+  const isEntering = frame < ENTER_LEN;
+  const enterSlideX = isEntering
+    ? interpolate(frame, [0, ENTER_LEN], [120, 0], {
+        extrapolateRight: "clamp",
+        extrapolateLeft: "clamp",
+      })
+    : 0;
+  const enterOpacity = isEntering
+    ? interpolate(frame, [0, ENTER_LEN], [0, 1], { extrapolateRight: "clamp" })
     : 1;
   
   const hasRevealImage = !!revealImageSrc && revealImageSrc !== imageSrc;
@@ -142,8 +160,8 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   
   return (
     <AbsoluteFill style={{
-      opacity: fadeOut,
-      transform: `scale(${sceneScale}) rotate(${sceneRotate}deg)`,
+      opacity: fadeOut * enterOpacity,
+      transform: `translateX(${(slideOutX + enterSlideX)}%) scale(${sceneScale})`,
       filter: sceneBlur > 0 ? `blur(${sceneBlur}px)` : undefined,
     }}>
       <AnimatedBackground theme={theme} pattern={pattern} motionSpeed={1} />
@@ -324,6 +342,8 @@ const LongLayout: React.FC<LayoutProps> = ({
   const rightWidth = width - 100 - colGap - leftWidth;
   
   const imageHeight = Math.min(height - bodyTop - bodyBottom, 600);
+  // Fact modunda alan 1/3 büyük (kullanıcı talebi)
+  const factHeight = Math.min(height - bodyTop - bodyBottom, 800);
   
   return (
     <div
@@ -358,7 +378,7 @@ const LongLayout: React.FC<LayoutProps> = ({
           <ImageCard
             src={funFactImageSrc || imageSrc}
             width={leftWidth}
-            height={imageHeight}
+            height={factHeight}
             isReveal={false}
             revealTransition={1}
           />
@@ -390,7 +410,7 @@ const LongLayout: React.FC<LayoutProps> = ({
             showFrame={phases.funFact}
             isVertical={false}
             boxWidth={rightWidth}
-            boxHeight={imageHeight}
+            boxHeight={factHeight}
           />
         )}
       </div>
@@ -472,8 +492,9 @@ const ShortsLayout: React.FC<LayoutProps> = ({
         (() => {
           // FACT MODE: Resim üstte + fact kutusu altta (resim alanıyla AYNI boyutta)
           // Kullanıcı: "alan sabit kalsın resimin buyuklugu kadar olsun"
+          // Fact bölümü 1/3 büyütüldü (0.30 → 0.40) - kullanıcı talebi
           const factBoxWidth = contentWidth;
-          const factBoxHeight = Math.floor(height * 0.30); // resim ile aynı
+          const factBoxHeight = Math.floor(height * 0.40);
           const factImageSrc = funFactImageSrc || imageSrc;
           
           return (
