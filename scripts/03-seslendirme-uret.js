@@ -1,20 +1,19 @@
 /**
- * 03 - Seslendirme v6 (Voice değişikliği: Kore → Leda, pitch +2 → +3)
+ * 03 - Seslendirme v7 (intro/outro üretimi kaldırıldı)
  *
- * Önceki v5: Kore voice + pitch +2
- * Bu v6: Leda voice (daha yumuşak/sempatik) + pitch +3 (daha sevimli/çocuksu)
+ * v6: Leda voice + pitch +3 (Kore → Leda, +2 → +3)
+ * v7: intro.mp3 ve outro.mp3 ARTIK üretilmiyor — Jess video kendi sesini taşıyor
  *
  * AYRI MP3'ler üretir:
- *   - intro.mp3
  *   - q01-question.mp3, q01-answer.mp3
+ *   - q02-question.mp3, q02-answer.mp3
  *   - ...
- *   - outro.mp3
  *
  * Her MP3'ün süresi audio-segments.json'a yazılır.
- * 07-video-montaj bu süreleri kullanıp Remotion'a verir → tam senkron video.
+ * 07-video-montaj bu süreleri + Jess video sürelerini kullanıp Remotion'a verir.
  *
  * Akış:
- * 1. questions.json'dan tüm metinleri oku
+ * 1. questions.json'dan soru/cevap metinlerini oku
  * 2. Her metin için ayrı TTS çağrısı (en-US-Chirp3-HD-Leda + pitch shift +3)
  * 3. Her MP3'ü Drive'a yükle (02-ses/ klasörüne)
  * 4. audio-segments.json yaz (süre bilgileri)
@@ -246,11 +245,7 @@ async function main() {
     
     const segmentTasks = [];
     
-    segmentTasks.push({
-      key: "intro",
-      filename: "intro.mp3",
-      text: questionsData.intro_audio_text,
-    });
+    // intro/outro mp3 üretimi kaldırıldı - Jess video kendi sesini taşıyor
     
     for (let i = 0; i < soruSayisi; i++) {
       const q = questions[i];
@@ -272,14 +267,8 @@ async function main() {
       });
     }
     
-    segmentTasks.push({
-      key: "outro",
-      filename: "outro.mp3",
-      text: questionsData.outro_audio_text,
-    });
-    
     console.log(`📊 Toplam ${segmentTasks.length} ses parçası üretilecek`);
-    console.log(`   (1 intro + ${soruSayisi*2} soru + 1 outro)`);
+    console.log(`   (${soruSayisi*2} soru/cevap parçası - intro/outro yok, Jess video taşıyor)`);
     
     const segments = [];
     for (let i = 0; i < segmentTasks.length; i++) {
