@@ -1,22 +1,20 @@
 /**
- * 03 - Seslendirme v7 (intro/outro üretimi kaldırıldı)
+ * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
  * v6: Leda voice + pitch +3 (Kore → Leda, +2 → +3)
  * v7: intro.mp3 ve outro.mp3 ARTIK üretilmiyor — Jess video kendi sesini taşıyor
+ * v8: topic-announce.mp3 + outro-announce.mp3 üretiliyor (07'deki TTS kodu kaldırıldı,
+ *     tüm TTS işi burada — temiz mimari)
  *
  * AYRI MP3'ler üretir:
+ *   - topic-announce.mp3 (Intro Sahne 2'de oynar — "Today: TOPIC! Let's play!")
+ *   - outro-announce.mp3 (Outro Sahne 2'de oynar — "Subscribe! See you next time!")
  *   - q01-question.mp3, q01-answer.mp3
  *   - q02-question.mp3, q02-answer.mp3
  *   - ...
  *
  * Her MP3'ün süresi audio-segments.json'a yazılır.
  * 07-video-montaj bu süreleri + Jess video sürelerini kullanıp Remotion'a verir.
- *
- * Akış:
- * 1. questions.json'dan soru/cevap metinlerini oku
- * 2. Her metin için ayrı TTS çağrısı (en-US-Chirp3-HD-Leda + pitch shift +3)
- * 3. Her MP3'ü Drive'a yükle (02-ses/ klasörüne)
- * 4. audio-segments.json yaz (süre bilgileri)
  */
 
 import fs from "fs";
@@ -247,6 +245,32 @@ async function main() {
     
     // intro/outro mp3 üretimi kaldırıldı - Jess video kendi sesini taşıyor
     
+    // TOPIC ANNOUNCE — Intro Sahne 2'de (topic reveal) oynar
+    // OUTRO ANNOUNCE — Outro Sahne 2 (Subscribe) sahnesinde oynar
+    // Format'a göre cümle değişir
+    const format = questionsData.format || "shorts";
+    const konu = questionsData.konu || "today's quiz";
+    
+    const topicAnnounceText = format === "shorts"
+      ? `Today: ${konu}! Let's play!`
+      : `Today's topic: ${konu}! Are you ready? Let's play!`;
+    const outroAnnounceText = format === "shorts"
+      ? "Don't forget to subscribe! See you next time!"
+      : "If you enjoyed this quiz, please subscribe and hit the bell! See you next time, friends!";
+    
+    segmentTasks.push({
+      key: "topic-announce",
+      filename: "topic-announce.mp3",
+      text: topicAnnounceText,
+      type: "announce",
+    });
+    segmentTasks.push({
+      key: "outro-announce",
+      filename: "outro-announce.mp3",
+      text: outroAnnounceText,
+      type: "announce",
+    });
+    
     for (let i = 0; i < soruSayisi; i++) {
       const q = questions[i];
       const idx = String(i + 1).padStart(2, "0");
@@ -268,7 +292,7 @@ async function main() {
     }
     
     console.log(`📊 Toplam ${segmentTasks.length} ses parçası üretilecek`);
-    console.log(`   (${soruSayisi*2} soru/cevap parçası - intro/outro yok, Jess video taşıyor)`);
+    console.log(`   (2 announce + ${soruSayisi*2} soru/cevap - Jess greeting video kendi sesini taşıyor)`);
     
     const segments = [];
     for (let i = 0; i < segmentTasks.length; i++) {
