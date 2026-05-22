@@ -74,10 +74,10 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   const pillX = interpolate(pillAnim, [0, 1], [300, 0]);
   const pillOpacity = interpolate(pillAnim, [0, 0.5], [0, 1]);
   
-  // Boyutlar - soru başlığı BÜYÜTÜLDÜ (kullanıcı talebi)
+  // Boyutlar - soru başlığı font sabit, BAR 1/3 büyütüldü (kullanıcı talebi)
   const badgeSize = isVertical ? 160 : 180;
   const fontSize = isVertical ? 78 : 90;
-  const barHeight = isVertical ? 200 : 220;
+  const barHeight = isVertical ? 267 : 293;
   const padding = isVertical ? 28 : 50;
   
   // ═══ FACT MODU: Ampul sol + DID YOU KNOW + yeşil pill sağ ═══
@@ -175,6 +175,50 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   // ═══ NORMAL MOD: BurstBadge + soru cümlesi ═══
   const questionUpper = questionText.toUpperCase();
   
+  // DİNAMİK FONT: 3 satıra sığması için font küçültme
+  // Tahmini: shorts'ta soru alanı genişliği ~ 1080 - 2*padding - badge - gap - badgePadRight ≈ 700px
+  // Lilita One uppercase ortalama karakter genişliği = 0.55 * fontSize
+  // 3 satır = 3 * fontSize * 1.1 (lineHeight)
+  // Bar yüksekliği (padding hariç) = barHeight - ~40px padding
+  
+  // Mevcut font - shorts 78, long 90
+  // Eğer metin uzunsa: küçült
+  const innerBarHeight = barHeight - 40;
+  const titleAreaWidth = isVertical ? 760 : 1100;
+  const charWidthRatio = 0.55;
+  const lineHeight = 1.1;
+  
+  // 3 satıra sığan en büyük font'u binary search ile bul
+  const calcFitFont = (maxFont: number, minFont: number = 36): number => {
+    const words = questionUpper.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return maxFont;
+    
+    const fits = (fs: number): boolean => {
+      const maxCharsPerLine = Math.floor(titleAreaWidth / (fs * charWidthRatio));
+      if (maxCharsPerLine < 3) return false;
+      let lines = 1, lineLen = 0;
+      for (const w of words) {
+        if (w.length > maxCharsPerLine) return false;
+        const need = lineLen === 0 ? w.length : lineLen + 1 + w.length;
+        if (need <= maxCharsPerLine) lineLen = need;
+        else { lines++; lineLen = w.length; }
+      }
+      // 3 satıra sığsın ve toplam yükseklik bar inner height'ı aşmasın
+      if (lines > 3) return false;
+      return lines * fs * lineHeight <= innerBarHeight;
+    };
+    
+    let lo = minFont, hi = maxFont, best = minFont;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (fits(mid)) { best = mid; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+    return best;
+  };
+  
+  const dynFontSize = calcFitFont(fontSize);
+  
   return (
     <TopBar theme={theme} height={barHeight}>
       <div
@@ -208,7 +252,7 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
         >
           <div
             style={{
-              fontSize: fontSize,
+              fontSize: dynFontSize,
               fontFamily: FONTS.display,
               fontWeight: 900,
               color: BRAND.white,
@@ -219,7 +263,7 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
                 3px 3px 0 ${BRAND.black},
                 0 6px 12px rgba(0,0,0,0.5)
               `,
-              lineHeight: 1.1,
+              lineHeight: lineHeight,
               letterSpacing: 1,
               textTransform: "uppercase",
             }}
