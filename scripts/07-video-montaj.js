@@ -45,6 +45,20 @@ const TMP_DIR = "/tmp/video-montaj";
 const REMOTION_DIR = path.resolve(process.cwd(), "remotion");
 const REMOTION_PUBLIC = path.join(REMOTION_DIR, "public");
 
+// ─── Jess greeting videoları (Drive'da 02-Jess-Karakter klasöründe) ─
+// Yeşil arka planlı, chroma key #00FF00 ile şeffaflaştırılır
+const JESS_GREETING_VIDEOS = {
+  "shorts-intro": "1aD2MoLXSEkQXo9_-4qAjq08hq-EGUFYg",
+  "long-intro":   "1qElPI2jzg839rcvv2KajlT-2lSjMCtUz",
+  "shorts-outro": "1zjxE-gtQLndMcZ27LEdVsR6qTEDP6bxA",
+  "long-outro":   "1o4o4kiRqIrqWGNGFMvnc8kVJLPwKIfw6",
+};
+const JESS_CHROMA_KEY = {
+  color: "0x00FF00",
+  similarity: 0.15,
+  blend: 0.05,
+};
+
 // ─── Drive yardımcıları ────────────────────────────────────────────
 async function driveKlasorIcerigi(klasorId, auth) {
   const drive = google.drive({ version: "v3", auth });
@@ -82,6 +96,55 @@ async function formatTespit(jobFolderId, auth) {
   const klasorAdi = res.data.name || "";
   if (klasorAdi.toLowerCase().includes("-shorts-")) return "shorts";
   return "long";
+}
+
+/**
+ * Jess greeting videolarını Drive'dan indir, chroma key uygula, 
+ * remotion/public/jess/ altına {format}-{intro|outro}.mp4 olarak yaz.
+ * 
+ * Chroma key işlemi: yeşil (#00FF00) arka planı şeffaf yap.
+ * Çıktı: WebM VP9 (alpha kanallı) — Remotion <Video> alfa destekler.
+ * 
+ * @param {string} format - "shorts" veya "long"
+ * @param {object} auth - SA auth (driveIndir için)
+ * @param {string} jessPublicDir - hedef klasör (remotion/public/jess)
+ */
+async function jessGreetingVideolariHazirla(format, auth, jessPublicDir) {
+  const ihtiyac = [
+    { key: `${format}-intro`, out: "intro.webm" },
+    { key: `${format}-outro`, out: "outro.webm" },
+  ];
+  
+  for (const seg of ihtiyac) {
+    const fileId = JESS_GREETING_VIDEOS[seg.key];
+    if (!fileId) {
+      console.warn(`  ⚠ ${seg.key} için Drive ID yok, atlanıyor`);
+      continue;
+    }
+    
+    const hamYol = path.join(TMP_DIR, `jess-${seg.key}-ham.mp4`);
+    const ciktiYol = path.join(jessPublicDir, seg.out);
+    
+    console.log(`  🦊 Jess ${seg.key} indiriliyor...`);
+    await driveIndir(fileId, hamYol, auth);
+    
+    const stats = fs.statSync(hamYol);
+    console.log(`     ${(stats.size/1024/1024).toFixed(2)} MB indirildi`);
+    
+    // Chroma key + WebM VP9 alfa (yuva420p YOK - VP9 alfa için yuva420p uyarısı çıkar)
+    const cmd = `ffmpeg -y -hide_banner -loglevel error -i "${hamYol}" -vf "chromakey=${JESS_CHROMA_KEY.color}:${JESS_CHROMA_KEY.similarity}:${JESS_CHROMA_KEY.blend}" -c:v libvpx-vp9 -pix_fmt yuva420p -b:v 2M -c:a libopus -b:a 128k "${ciktiYol}"`;
+    console.log(`  🎨 ${seg.key} chroma key uygulanıyor...`);
+    await execAsync(cmd);
+    
+    if (!fs.existsSync(ciktiYol)) {
+      throw new Error(`Jess ${seg.key} chroma key başarısız`);
+    }
+    const outStats = fs.statSync(ciktiYol);
+    console.log(`     ✓ ${seg.out} (${(outStats.size/1024/1024).toFixed(2)} MB, alpha-channel)`);
+    
+    // ham mp4 sil
+    try { fs.unlinkSync(hamYol); } catch {}
+  }
 }
 
 async function jsonIndir(folderId, filename, auth, hedefYol) {
@@ -290,6 +353,12 @@ async function main() {
     const format = await formatTespit(job.drive_folder_id, saAuth);
     const compositionId = format === "shorts" ? "KidsQuizShorts" : "KidsQuizLong";
     console.log(`📺 Format: ${format} → ${compositionId}`);
+
+    // 1.5. Jess greeting videoları (intro/outro) indir + chroma key uygula
+    const jessPublicDir = path.join(REMOTION_PUBLIC, "jess");
+    fs.mkdirSync(jessPublicDir, { recursive: true });
+    console.log("🦊 Jess greeting videoları hazırlanıyor...");
+    await jessGreetingVideolariHazirla(format, saAuth, jessPublicDir);
 
     // 2. questions.json indir (önce 02-ses, yoksa ana klasör)
     const questionsData = await questionsJsonOku(
