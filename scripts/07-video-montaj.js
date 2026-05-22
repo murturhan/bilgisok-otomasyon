@@ -157,6 +157,80 @@ async function jessGreetingVideolariHazirla(format, auth, jessPublicDir) {
   return sureler;
 }
 
+/**
+ * Topic announcement TTS — Sahne 2'de oynayacak kısa bir anons sesi üret.
+ * Format: "Today's topic: {topic}! Let's play!"
+ * Aynı TTS sistemi (Leda + pitch +3 via ffmpeg) — 03-seslendirme ile aynı.
+ * 
+ * @returns {object} {path, duration} (path remotion/public altında relative)
+ */
+async function topicAnnouncementUret(topic, format, publicAudioDir) {
+  // Topic için doğal cümle
+  const text = format === "shorts"
+    ? `Today: ${topic}! Let's play!`
+    : `Today's topic: ${topic}! Are you ready? Let's play!`;
+  
+  // Kendi cloud-platform auth'unu yarat (TTS için, SA scope drive+sheets'tir)
+  const credentials = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT_JSON);
+  const ttsAuth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
+  });
+  const ttsClient = await ttsAuth.getClient();
+  const tokenObj = await ttsClient.getAccessToken();
+  const accessToken = typeof tokenObj === "string" ? tokenObj : tokenObj.token;
+  if (!accessToken) throw new Error("Topic TTS access token alınamadı");
+  
+  // TTS çağrısı
+  const ttsRes = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      input: { text },
+      voice: { languageCode: "en-US", name: "en-US-Chirp3-HD-Leda" },
+      audioConfig: { audioEncoding: "MP3", sampleRateHertz: 24000 },
+    }),
+  });
+  if (!ttsRes.ok) {
+    const errText = await ttsRes.text();
+    throw new Error(`Topic TTS API ${ttsRes.status}: ${errText.substring(0, 200)}`);
+  }
+  const data = await ttsRes.json();
+  if (!data.audioContent) throw new Error("Topic TTS audioContent yok");
+  const hamBuf = Buffer.from(data.audioContent, "base64");
+  
+  // Pitch shift +3 (ffmpeg rubberband, fallback asetrate)
+  const hamYol = path.join(TMP_DIR, "topic-announce-ham.mp3");
+  fs.writeFileSync(hamYol, hamBuf);
+  const ciktiYol = path.join(publicAudioDir, "topic-announce.mp3");
+  const pitchRatio = Math.pow(2, 3 / 12);
+  try {
+    await execAsync(
+      `ffmpeg -y -hide_banner -loglevel error -i "${hamYol}" -af "rubberband=pitch=${pitchRatio.toFixed(6)}" -ar 24000 "${ciktiYol}"`
+    );
+  } catch {
+    await execAsync(
+      `ffmpeg -y -hide_banner -loglevel error -i "${hamYol}" -af "asetrate=24000*${pitchRatio.toFixed(6)},atempo=${(1/pitchRatio).toFixed(6)},aresample=24000" "${ciktiYol}"`
+    );
+  }
+  try { fs.unlinkSync(hamYol); } catch {}
+  
+  // Süreyi ölç
+  const { stdout } = await execAsync(
+    `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${ciktiYol}"`
+  );
+  const sure = parseFloat(stdout.trim());
+  
+  return {
+    path: path.relative(REMOTION_PUBLIC, ciktiYol),
+    duration: sure,
+    text,
+  };
+}
+
 async function jsonIndir(folderId, filename, auth, hedefYol) {
   const drive = google.drive({ version: "v3", auth });
   const res = await drive.files.list({
@@ -369,7 +443,28 @@ async function main() {
     fs.mkdirSync(jessPublicDir, { recursive: true });
     console.log("🦊 Jess greeting videoları hazırlanıyor...");
     const jessSureleri = await jessGreetingVideolariHazirla(format, saAuth, jessPublicDir);
-    console.log(`  ✓ Intro: ${jessSureleri.introDuration.toFixed(2)}s, Outro: ${jessSureleri.outroDuration.toFixed(2)}s`);
+    console.log(`  ✓ Jess intro: ${jessSureleri.introDuration.toFixed(2)}s, outro: ${jessSureleri.outroDuration.toFixed(2)}s`);
+    
+    // 1.6. Topic announcement TTS (Sahne 2'de oynar)
+    const audioPublicDir = path.join(REMOTION_PUBLIC, "audio");
+    fs.mkdirSync(audioPublicDir, { recursive: true });
+    console.log("🎤 Topic announcement TTS üretiliyor...");
+    const topicAnonsTopic = job.konu || "today's quiz"; // job konusu
+    const topicAnnounce = await topicAnnouncementUret(topicAnonsTopic, format, saAuth, audioPublicDir);
+    console.log(`  ✓ "${topicAnnounce.text}" (${topicAnnounce.duration.toFixed(2)}s)`);
+    
+    // Min süreler — Sahne 1 + Sahne 2 yer bulsun
+    // Intro: Jess + 1s buffer + topic announce + 1s buffer (en az 7s)
+    // Outro: Jess + 0.5s buffer + 4s Subscribe sahnesi (en az 8s)
+    const introMinDuration = Math.max(
+      jessSureleri.introDuration + topicAnnounce.duration + 2,
+      7
+    );
+    const outroMinDuration = Math.max(
+      jessSureleri.outroDuration + 5,  // +5s Subscribe sahnesi
+      8
+    );
+    console.log(`  ⏱ Intro toplam: ${introMinDuration.toFixed(2)}s, Outro toplam: ${outroMinDuration.toFixed(2)}s`);
 
     // 2. questions.json indir (önce 02-ses, yoksa ana klasör)
     const questionsData = await questionsJsonOku(
@@ -545,12 +640,21 @@ async function main() {
       questions: questions,
       jess_poses: jessPosesForRemotion,
       
-      // Intro/outro: artık ayrı mp3 yok, Jess video kendi sesini taşıyor.
-      // Süre = Jess WebM video süresi (ffprobe ile ölçüldü)
+      // Intro/outro: ayrı mp3 yok, Jess video kendi sesini taşıyor.
+      // Sahne 1 = Jess video süresi, Sahne 2 = kalan zaman (topic announce + buffer)
+      // Min süreler 07-video-montaj'da hesaplandı (Sahne 2'nin yer bulması için)
       intro_audio_path: null,
       outro_audio_path: null,
-      intro_audio_duration: jessSureleri.introDuration,
-      outro_audio_duration: jessSureleri.outroDuration,
+      intro_audio_duration: introMinDuration,
+      outro_audio_duration: outroMinDuration,
+      
+      // Jess video gerçek süreleri (composition Sahne 1 / Sahne 2 ayrım noktası için)
+      jess_intro_video_duration: jessSureleri.introDuration,
+      jess_outro_video_duration: jessSureleri.outroDuration,
+      
+      // Topic announcement - Sahne 2'de oynar
+      topic_announce_path: topicAnnounce.path,
+      topic_announce_duration: topicAnnounce.duration,
       
       background_music_url: fs.existsSync(bgMuzikYol)
         ? path.relative(REMOTION_PUBLIC, bgMuzikYol)
