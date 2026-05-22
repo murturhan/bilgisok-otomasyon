@@ -60,6 +60,10 @@ export const quizCompositionSchema = z.object({
   topic_announce_path: z.string().optional(),
   topic_announce_duration: z.number().default(2.5),
   
+  // Outro announcement - Outro Sahne 2 (Subscribe) sahnesinde oynar
+  outro_announce_path: z.string().optional(),
+  outro_announce_duration: z.number().default(3.5),
+  
   jess_poses: jessPosesSchema.default({}),
   background_music_url: z.string().optional(),
   
@@ -91,6 +95,7 @@ export const defaultQuizProps: QuizCompositionProps = {
   jess_intro_video_duration: 3.0,
   jess_outro_video_duration: 2.5,
   topic_announce_duration: 2.5,
+  outro_announce_duration: 3.5,
   jess_poses: {},
   questions: [
     {
