@@ -165,6 +165,10 @@ export const IntroScene: React.FC<IntroSceneProps> = ({
 // ═══════════════════════════════════════════════════
 // SAHNE 1 — Logo + Jess karşılama VIDEO (lip-sync + ses dahil)
 // ═══════════════════════════════════════════════════
+// Sabit Jess konuşma metinleri (Hedra video TTS ile aynı)
+const SHORTS_GREETING_TEXT = "Hey, curious minds! Jess the Fox here… are you ready?";
+const LONG_GREETING_TEXT = "Hey curious minds! I'm Jess the Fox, and welcome to Geni-Mini Tests! Ready for today's fun challenge?";
+
 const IntroScene1: React.FC<{
   isVertical: boolean;
   width: number;
@@ -179,21 +183,37 @@ const IntroScene1: React.FC<{
   const logoY = interpolate(logoAnim, [0, 1], [-120, 0]);
   const logoIdleBounce = frame > 25 ? Math.sin(frame * 0.1) * 6 : 0;
   
+  // Greeting altyazı balonu - logo'dan sonra spring ile gelir
+  const greetingAnim = spring({
+    frame: frame - 18,
+    fps,
+    config: { damping: 13, stiffness: 100 },
+  });
+  const greetingScale = interpolate(greetingAnim, [0, 1], [0, 1]);
+  const greetingOpacity = interpolate(greetingAnim, [0, 0.5], [0, 1]);
+  const greetingFloat = Math.sin(frame * 0.08) * 5;
+  const greetingTilt = Math.sin(frame * 0.1) * 1.5; // hafif sağa-sola sallanma
+  
   // Boyutlar
   const logoWidth = isVertical ? 900 : 800;
   const jessVideoSize = isVertical ? 900 : 720;
+  const greetingText = isVertical ? SHORTS_GREETING_TEXT : LONG_GREETING_TEXT;
+  const greetingFontSize = isVertical ? 44 : 50;
+  const greetingMaxWidth = isVertical ? "85%" : "65%";
   
   return (
     <>
-      {/* LOGO - üstte */}
+      {/* LOGO + GREETING - üstte */}
       <div
         style={{
           position: "absolute",
-          top: isVertical ? "6%" : "8%",
+          top: isVertical ? "5%" : "7%",
           left: 0,
           right: 0,
           display: "flex",
-          justifyContent: "center",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: isVertical ? 32 : 36,
         }}
       >
         <div
@@ -204,6 +224,30 @@ const IntroScene1: React.FC<{
           }}
         >
           <GeniMiniLogo width={logoWidth} />
+        </div>
+        
+        {/* GREETING BALONU - Jess'in konuşması altyazı */}
+        <div
+          style={{
+            opacity: greetingOpacity,
+            transform: `scale(${greetingScale}) translateY(${greetingFloat}px) rotate(${greetingTilt}deg)`,
+            backgroundColor: BRAND.white,
+            color: BRAND.black,
+            padding: isVertical ? "20px 36px" : "24px 44px",
+            borderRadius: 36,
+            fontSize: greetingFontSize,
+            fontFamily: FONTS.display,
+            fontWeight: 900,
+            border: `5px solid ${BRAND.yellow}`,
+            boxShadow: `0 10px 25px rgba(0,0,0,0.45), 0 0 40px ${BRAND.yellow}`,
+            maxWidth: greetingMaxWidth,
+            textAlign: "center",
+            letterSpacing: 0.5,
+            lineHeight: 1.2,
+            textTransform: "uppercase",
+          }}
+        >
+          {greetingText}
         </div>
       </div>
       
