@@ -450,7 +450,7 @@ async function main() {
     fs.mkdirSync(audioPublicDir, { recursive: true });
     console.log("🎤 Topic announcement TTS üretiliyor...");
     const topicAnonsTopic = job.konu || "today's quiz"; // job konusu
-    const topicAnnounce = await topicAnnouncementUret(topicAnonsTopic, format, saAuth, audioPublicDir);
+    const topicAnnounce = await topicAnnouncementUret(topicAnonsTopic, format, audioPublicDir);
     console.log(`  ✓ "${topicAnnounce.text}" (${topicAnnounce.duration.toFixed(2)}s)`);
     
     // Min süreler — Sahne 1 + Sahne 2 yer bulsun
