@@ -26,6 +26,10 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   outro_audio_path,
   intro_audio_duration,
   outro_audio_duration,
+  jess_intro_video_duration,
+  jess_outro_video_duration,
+  topic_announce_path,
+  topic_announce_duration,
   jess_poses,
   background_music_url,
   sfx_tick,
@@ -94,8 +98,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       }
     }
     
-    const targetVol = speaking ? 0.02 : 0.15;
-    const startVol = prevSpeaking ? 0.02 : 0.15;
+    const targetVol = speaking ? 0.06 : 0.20;
+    const startVol = prevSpeaking ? 0.06 : 0.20;
     
     if (framesSinceChange < MUSIC_DUCK_FRAMES) {
       const t = framesSinceChange / MUSIC_DUCK_FRAMES;
@@ -114,12 +118,23 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           topic={topic}
           jessPoses={resolvedJessPoses}
           durationFrames={introFrames}
+          jessVideoDurationFrames={Math.ceil(jess_intro_video_duration * FPS)}
         />
       </Sequence>
       
       {intro_audio_path && (
         <Sequence from={0} durationInFrames={introFrames}>
-          <Audio src={staticFile(intro_audio_path)} volume={1.2} />
+          <Audio src={staticFile(intro_audio_path)} volume={1.4} />
+        </Sequence>
+      )}
+      
+      {/* TOPIC ANNOUNCEMENT - Sahne 2'de oynar (Jess video bittikten sonra) */}
+      {topic_announce_path && (
+        <Sequence
+          from={Math.ceil(jess_intro_video_duration * FPS) + Math.floor(FPS * 0.4)}
+          durationInFrames={Math.ceil(topic_announce_duration * FPS)}
+        >
+          <Audio src={staticFile(topic_announce_path)} volume={1.4} />
         </Sequence>
       )}
       
@@ -169,12 +184,13 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           channelName={channel_name}
           jessPoses={resolvedJessPoses}
           durationFrames={outroFrames}
+          jessVideoDurationFrames={Math.ceil(jess_outro_video_duration * FPS)}
         />
       </Sequence>
       
       {outro_audio_path && (
         <Sequence from={outroStart} durationInFrames={outroFrames}>
-          <Audio src={staticFile(outro_audio_path)} volume={1.2} />
+          <Audio src={staticFile(outro_audio_path)} volume={1.4} />
         </Sequence>
       )}
       
