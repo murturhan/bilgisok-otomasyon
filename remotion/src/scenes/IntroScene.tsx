@@ -331,7 +331,7 @@ const IntroScene2: React.FC<{
   isVertical: boolean;
   width: number;
   height: number;
-}> = ({ topic, startFrame, isVertical, width }) => {
+}> = ({ topic, startFrame, isVertical, width, height }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const localFrame = frame - startFrame;
