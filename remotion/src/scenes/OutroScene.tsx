@@ -17,15 +17,13 @@ interface OutroSceneProps {
   channelName: string;
   jessPoses: JessPoses;
   durationFrames: number;
+  jessVideoDurationFrames: number;
 }
 
 /**
  * Outro 2 sahnede:
- * Sahne 1 (ilk %55): GREAT JOB! + 🏆 + Jess greeting VIDEO (lip-sync + ses)
- *   - Üst: GREAT JOB!
- *   - Orta: 🏆 (büyük, ortada) + yan emojiler ⭐ 🎊
- *   - Alt: Jess VIDEO (alpha WebM, kendi sesini taşır)
- * Sahne 2 (son %45): SUBSCRIBE + SEE YOU NEXT TIME
+ * Sahne 1 = Jess outro video süresi + 0.3s buffer (greeting konuşması bitsin)
+ * Sahne 2 = kalan süre (SUBSCRIBE + SEE YOU NEXT TIME için en az 4s)
  * 
  * Güçlü 0.5s flash + scale + blur geçişi
  */
@@ -33,6 +31,7 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   channelName,
   jessPoses,
   durationFrames,
+  jessVideoDurationFrames,
 }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
@@ -40,8 +39,12 @@ export const OutroScene: React.FC<OutroSceneProps> = ({
   
   const theme = THEME_COLORS[2]; // teal
   
-  // Sahne 1 ve 2 bölünme noktası
-  const scene1End = Math.floor(durationFrames * 0.55);
+  // Sahne 1 = Jess outro video süresi + 0.3s buffer
+  // Sahne 2 için en az 4s yer kalsın
+  const scene1End = Math.min(
+    jessVideoDurationFrames + Math.floor(FPS * 0.3),
+    durationFrames - Math.floor(FPS * 4)
+  );
   const scene2Start = scene1End;
   const inScene1 = frame < scene1End;
   const inScene2 = frame >= scene2Start;
