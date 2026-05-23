@@ -62,7 +62,6 @@ async function main() {
     const job = await jobOku(JOB_ID);
     
     if (!WORKER_URL) throw new Error("WORKER_URL eksik (Cloudflare Worker URL)");
-    if (!CLOUDFLARE_PAGES_URL) throw new Error("CLOUDFLARE_PAGES_URL eksik");
     if (!GITHUB_TOKEN) throw new Error("GITHUB_TOKEN eksik (Worker auth için)");
     
     // 02 tamamlandı mı?
@@ -176,8 +175,8 @@ async function main() {
       throw new Error(`Worker POST hatası ${workerRes.status}: ${errorText}`);
     }
     
-    // Onay sayfası URL'i
-    const onayUrl = `${CLOUDFLARE_PAGES_URL}/?job=${JOB_ID}`;
+    // Onay sayfası URL'i - artık Worker üzerinde servis ediliyor (Pages'a gerek yok)
+    const onayUrl = `${WORKER_URL}/?job=${JOB_ID}`;
     
     await jobGuncelle(JOB_ID, {
       onay_status: "waiting",
