@@ -1,0 +1,51 @@
+name: 02.5 - Onay Tetikle
+
+on:
+  repository_dispatch:
+    types: [onay_tetikle]
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Job ID"
+        required: true
+
+jobs:
+  onay-tetikle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      - name: Install deps
+        run: |
+          npm init -y
+          npm pkg set type=module
+          npm install --no-save googleapis axios
+      
+      - name: Job ID belirle
+        id: jobid
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "job_id=${{ github.event.client_payload.job_id }}" >> $GITHUB_OUTPUT
+          else
+            echo "job_id=${{ inputs.job_id }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Run 02.5 onay tetikle
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+          GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          CLOUDFLARE_PAGES_URL: ${{ secrets.CLOUDFLARE_PAGES_URL }}
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
+          JOB_ID: ${{ steps.jobid.outputs.job_id }}
+        run: node scripts/02.5-onay-tetikle.js
