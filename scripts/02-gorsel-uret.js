@@ -5,6 +5,8 @@
  * - Her başarılı görseli direkt Drive'a yükle (memory'de tutma)
  * - Sheets'e durum yaz
  * - Trigger: workflow_run (01 tamamlanınca)
+ * 
+ * Değişiklik: 0 görsel üretildiyse hata at (sessizce "completed:0/N" geçme)
  */
 
 import fs from "fs";
@@ -38,6 +40,7 @@ async function main() {
     await jobGuncelle(JOB_ID, { gorsel_status: "running" });
     
     let basariliSayisi = 0;
+    const toplam = job.ai_gorsel_prompts.length;
     
     // FLUX rotation ile üret + her görseli anında yükle
     const { sonuclar, hatalar } = await fluxRotationCagri(job.ai_gorsel_prompts, {
@@ -60,14 +63,25 @@ async function main() {
       },
     });
     
-    const status = sonuclar.length === job.ai_gorsel_prompts.length ? "completed" : "partial";
+    // SIFIR görsel = hata (kullanıcı talebi: 0 görselde durmalı)
+    if (basariliSayisi === 0) {
+      const sebep = hatalar.length > 0
+        ? hatalar[hatalar.length - 1].hata
+        : "tüm hesaplar kotada";
+      throw new Error(
+        `0/${toplam} görsel üretildi. Sebep: ${sebep}. ` +
+        `Tüm Cloudflare hesaplarının kotası dolmuş olabilir, UTC 00:00'ı bekleyin.`
+      );
+    }
+    
+    const status = sonuclar.length === toplam ? "completed" : "partial";
     await jobGuncelle(JOB_ID, {
-      gorsel_status: `${status}:${basariliSayisi}/${job.ai_gorsel_prompts.length}`,
+      gorsel_status: `${status}:${basariliSayisi}/${toplam}`,
     });
     
-    console.log(`✅ ${basariliSayisi}/${job.ai_gorsel_prompts.length} görsel hazır.`);
+    console.log(`✅ ${basariliSayisi}/${toplam} görsel hazır.`);
     
-    await telegram(job.chat_id, `🖼 *Görseller hazır:* ${basariliSayisi}/${job.ai_gorsel_prompts.length}`);
+    await telegram(job.chat_id, `🖼 *Görseller hazır:* ${basariliSayisi}/${toplam}`);
     
     process.exit(0);
     
