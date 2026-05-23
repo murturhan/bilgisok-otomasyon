@@ -25,11 +25,13 @@ import { telegram } from "./lib/telegram.js";
 
 const {
   JOB_ID,
-  WORKER_URL,
+  WORKER_URL: WORKER_URL_RAW,
   GITHUB_TOKEN,
   GITHUB_REPO_OWNER,
   GITHUB_REPO_NAME,
 } = process.env;
+
+const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
 
 /**
  * Drive klasöründen belirli pattern'e uyan dosyaları sil
