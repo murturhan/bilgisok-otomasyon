@@ -16,6 +16,14 @@ export const questionSchema = z.object({
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
   fun_fact: z.string().default(""),
   
+  /** 
+   * Sorunun GÖRSEL göstereceği mi? 
+   * - true: Soru sırasında soru görseli görünür (flu başlar, cevap açılınca netleşir + konfeti)
+   * - false: Süslü "?" placeholder görünür (cevabı içeren tipte sorular için)
+   * 01-icerik-uret otomatik karar verir, kullanıcı onay sayfasından değiştirir.
+   */
+  show_image: z.boolean().default(true),
+  
   // YENİ: Reveal anında bayrak veya cevabı sembolize eden görsel (opsiyonel)
   // - Coğrafya quizleri için bayrak emoji veya bayrak image_path
   // - Diğer konular için: doğru cevabın yakın çekim/etiketli görseli
