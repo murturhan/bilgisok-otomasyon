@@ -129,6 +129,9 @@ export async function fluxRotationCagri(prompts, opts = {}) {
           const is5xx = status >= 500 && status < 600;
           const retryEdilebilir = is429 || is5xx || msg.includes("timeout") || msg.includes("ECONNRESET");
           
+          // Her hatayı logla (sessiz başarısızlığı engelle)
+          console.log(`  ✗ ${i + 1} HATA (${account.name}, ${retry}/${MAX_RETRY}): ${sonHata.substring(0, 150)}`);
+          
           if (is429 && retry === MAX_RETRY) {
             console.log(`  ⚠ ${account.name} kotada, atlanıyor.`);
             hesapKotaDolu[hesapIdx] = true;
@@ -138,6 +141,7 @@ export async function fluxRotationCagri(prompts, opts = {}) {
           if (retry < MAX_RETRY && retryEdilebilir) {
             await delay(RETRY_BEKLEME_MS[retry - 1]);
           } else {
+            // Retry edilemez veya max'a ulaştı - bir sonraki hesabı dene
             break;
           }
         }
@@ -146,7 +150,12 @@ export async function fluxRotationCagri(prompts, opts = {}) {
       if (basarili) break;
     }
     
-    if (!basarili) hatalar.push({ index: i, hata: sonHata });
+    if (!basarili) {
+      hatalar.push({ index: i, hata: sonHata, prompt: prompts[i].substring(0, 100) });
+      // Tüm hesapları denedikten sonra atlanan görsel için belirgin uyarı
+      console.log(`  ⛔ ${i + 1}/${prompts.length} ATLANDI. Son hata: ${sonHata}`);
+      console.log(`     Prompt: "${prompts[i].substring(0, 120)}..."`);
+    }
     
     if (hesapKotaDolu.every(d => d)) {
       console.error("⛔ TÜM CLOUDFLARE HESAPLARI KOTADA.");
@@ -157,5 +166,12 @@ export async function fluxRotationCagri(prompts, opts = {}) {
   }
   
   console.log(`📊 Sonuç: ${sonuclar.length} başarılı, ${hatalar.length} başarısız.`);
+  if (hatalar.length > 0) {
+    console.log("⛔ Başarısız görseller:");
+    hatalar.forEach(h => {
+      console.log(`   #${h.index + 1}: ${h.hata}`);
+      console.log(`     Prompt: "${h.prompt}..."`);
+    });
+  }
   return { sonuclar, hatalar };
 }
