@@ -73,6 +73,37 @@ ${FORMAT === "shorts" ? `- Easy: 3 questions (ages 4-7)
 QUESTIONS MUST PROGRESS from easy → medium → hard.`}
 
 ═══════════════════════════════════════════════════
+QUESTION QUALITY RULES (CRITICAL!)
+═══════════════════════════════════════════════════
+
+**AVOID TRIVIAL "WHAT IS THIS?" QUESTIONS.**
+BAD: "What is this?" with an apple image. (Too obvious — kids over age 3 know what an apple is.)
+BAD: "Guess this object" with a toothbrush image. (Insulting to anyone over age 4.)
+
+**INSTEAD, ASK QUESTIONS THAT REQUIRE KNOWLEDGE OR CURIOSITY:**
+
+Easy (ages 4-7): Still recognition but with a TWIST.
+GOOD: "Which fruit grows on the tallest trees?" (with image showing options visually)
+GOOD: "Which animal is the fastest runner on land?" (with cheetah/horse/elephant visual)
+GOOD: "Which planet is closest to the Sun?" (with solar system visual)
+
+Medium (ages 7-10): Require knowledge.
+GOOD: "Which country invented pizza?"
+GOOD: "Which vitamin do oranges contain the most of?"
+GOOD: "How many continents are there in the world?"
+
+Hard (ages 10-12): Challenging facts.
+GOOD: "What was the first man-made object to orbit Earth?" (Sputnik)
+GOOD: "Which Greek mathematician is known for his theorem about right triangles?" (Pythagoras)
+
+**For "What's Inside?" or "Cross-section" topics specifically:**
+BAD: Apple cross-section → "What is this?" (everyone knows it's an apple)
+GOOD: Apple cross-section → "Which part of the apple do you NOT eat?" (Core/seeds)
+GOOD: Apple cross-section → "Apple seeds contain a small amount of which substance?" (Cyanide-related, age-appropriate phrasing)
+
+**Topic-specific guidance:** When the topic is given (e.g., "everyday objects"), ASK QUESTIONS ABOUT THE OBJECTS' HISTORY, INVENTION, FUNCTION, OR INTERESTING FACTS — not just identification.
+
+═══════════════════════════════════════════════════
 AUDIO TEXT FORMAT (CRITICAL!)
 ═══════════════════════════════════════════════════
 
