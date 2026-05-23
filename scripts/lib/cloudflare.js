@@ -1,5 +1,9 @@
 /**
  * Cloudflare Workers AI (FLUX) - Multi-account rotation
+ * 
+ * Değişiklikler:
+ * - Manuel CLOUDFLARE_HESAP_A_KOTADA flag'i KALDIRILDI (429 zaten otomatik tespit ediliyor)
+ * - Hesap-D desteği eklendi (CLOUDFLARE_API_TOKEN_4 + CLOUDFLARE_ACCOUNT_ID_4)
  */
 
 import axios from "axios";
@@ -11,21 +15,26 @@ const {
   CLOUDFLARE_ACCOUNT_ID_2,
   CLOUDFLARE_API_TOKEN_3,
   CLOUDFLARE_ACCOUNT_ID_3,
-  CLOUDFLARE_HESAP_A_KOTADA,
+  CLOUDFLARE_API_TOKEN_4,
+  CLOUDFLARE_ACCOUNT_ID_4,
+  CLOUDFLARE_API_TOKEN_5,
+  CLOUDFLARE_ACCOUNT_ID_5,
+  CLOUDFLARE_API_TOKEN_6,
+  CLOUDFLARE_ACCOUNT_ID_6,
 } = process.env;
 
 export function getCfAccounts() {
   const accounts = [];
-  const hesapAKotada = CLOUDFLARE_HESAP_A_KOTADA === "true";
-  
-  if (CLOUDFLARE_API_TOKEN && CLOUDFLARE_ACCOUNT_ID && !hesapAKotada) {
-    accounts.push({ token: CLOUDFLARE_API_TOKEN, accountId: CLOUDFLARE_ACCOUNT_ID, name: "Hesap-A" });
-  }
-  if (CLOUDFLARE_API_TOKEN_2 && CLOUDFLARE_ACCOUNT_ID_2) {
-    accounts.push({ token: CLOUDFLARE_API_TOKEN_2, accountId: CLOUDFLARE_ACCOUNT_ID_2, name: "Hesap-B" });
-  }
-  if (CLOUDFLARE_API_TOKEN_3 && CLOUDFLARE_ACCOUNT_ID_3) {
-    accounts.push({ token: CLOUDFLARE_API_TOKEN_3, accountId: CLOUDFLARE_ACCOUNT_ID_3, name: "Hesap-C" });
+  const candidates = [
+    { token: CLOUDFLARE_API_TOKEN,   accountId: CLOUDFLARE_ACCOUNT_ID,   name: "Hesap-A" },
+    { token: CLOUDFLARE_API_TOKEN_2, accountId: CLOUDFLARE_ACCOUNT_ID_2, name: "Hesap-B" },
+    { token: CLOUDFLARE_API_TOKEN_3, accountId: CLOUDFLARE_ACCOUNT_ID_3, name: "Hesap-C" },
+    { token: CLOUDFLARE_API_TOKEN_4, accountId: CLOUDFLARE_ACCOUNT_ID_4, name: "Hesap-D" },
+    { token: CLOUDFLARE_API_TOKEN_5, accountId: CLOUDFLARE_ACCOUNT_ID_5, name: "Hesap-E" },
+    { token: CLOUDFLARE_API_TOKEN_6, accountId: CLOUDFLARE_ACCOUNT_ID_6, name: "Hesap-F" },
+  ];
+  for (const c of candidates) {
+    if (c.token && c.accountId) accounts.push(c);
   }
   
   if (accounts.length === 0) {
