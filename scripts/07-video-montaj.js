@@ -341,6 +341,24 @@ async function main() {
     } catch (e) {
       throw new Error("Gereken araç yok (ffmpeg veya npx)");
     }
+    
+    // ÖN-KONTROL: Önceki aşamalar tamamlanmadan video montaj başlatılmaz.
+    // Kullanıcı talebi: "image tamamlanmadan video montaja geçmesin"
+    const gorselStatus = String(job.gorsel_status || "");
+    const sesStatus = String(job.ses_status || "");
+    if (!gorselStatus.startsWith("completed")) {
+      throw new Error(
+        `Görsel üretimi tamamlanmamış (gorsel_status: "${gorselStatus || "yok"}"). ` +
+        `Önce 02-gorsel-uret tamamlanmalı. Video montaj başlatılamaz.`
+      );
+    }
+    if (!sesStatus.startsWith("completed")) {
+      throw new Error(
+        `Seslendirme tamamlanmamış (ses_status: "${sesStatus || "yok"}"). ` +
+        `Önce 03-seslendirme-uret tamamlanmalı. Video montaj başlatılamaz.`
+      );
+    }
+    console.log(`✓ Ön-kontrol: gorsel_status=${gorselStatus}, ses_status=${sesStatus}`);
 
     await jobGuncelle(JOB_ID, { video_status: "running" });
 
