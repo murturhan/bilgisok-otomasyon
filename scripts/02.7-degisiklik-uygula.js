@@ -91,10 +91,53 @@ async function main() {
     const job = await jobOku(JOB_ID);
     await jobGuncelle(JOB_ID, { onay_status: "applying" });
     
-    // 3. questions.json edit'leri uygula
-    const questionsData = typeof job.questions_json === "string"
-      ? JSON.parse(job.questions_json)
-      : job.questions_json;
+    if (!job.drive_folder_id) throw new Error("drive_folder_id yok");
+    
+    // 3. questions.json'u Drive'dan oku
+    console.log("📂 questions.json Drive'dan okunuyor...");
+    const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
+    
+    let questionsData = null;
+    let questionsFileId = null;
+    let questionsParentId = null;
+    
+    const sesSearchRes = await drive.files.list({
+      q: `'${job.drive_folder_id}' in parents and name='02-ses' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 1,
+    });
+    if (sesSearchRes.data.files && sesSearchRes.data.files.length > 0) {
+      const sesFolderId = sesSearchRes.data.files[0].id;
+      const jsonSearchRes = await drive.files.list({
+        q: `'${sesFolderId}' in parents and name='questions.json' and trashed=false`,
+        fields: "files(id, name)",
+        pageSize: 1,
+      });
+      if (jsonSearchRes.data.files && jsonSearchRes.data.files.length > 0) {
+        questionsFileId = jsonSearchRes.data.files[0].id;
+        questionsParentId = sesFolderId;
+        const res = await drive.files.get({ fileId: questionsFileId, alt: "media" }, { responseType: "text" });
+        questionsData = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+        console.log("✓ questions.json '02-ses' klasöründen okundu");
+      }
+    }
+    
+    if (!questionsData) {
+      const anaSearchRes = await drive.files.list({
+        q: `'${job.drive_folder_id}' in parents and name='questions.json' and trashed=false`,
+        fields: "files(id, name)",
+        pageSize: 1,
+      });
+      if (anaSearchRes.data.files && anaSearchRes.data.files.length > 0) {
+        questionsFileId = anaSearchRes.data.files[0].id;
+        questionsParentId = job.drive_folder_id;
+        const res = await drive.files.get({ fileId: questionsFileId, alt: "media" }, { responseType: "text" });
+        questionsData = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+        console.log("✓ questions.json ana klasörden okundu");
+      }
+    }
+    
+    if (!questionsData) throw new Error("questions.json Drive'da bulunamadı");
     
     const regenQuestionImages = []; // [{ index, prompt }]
     const regenFactImages = [];
@@ -131,11 +174,21 @@ async function main() {
       }
     }
     
-    // 4. Güncel questions.json'ı job'a yaz
-    await jobGuncelle(JOB_ID, {
-      questions_json: JSON.stringify(questionsData),
+    // 4. Güncel questions.json'ı Drive'a geri yaz (eski dosyayı güncelle)
+    const tmpJsonPath = "/tmp/questions-updated.json";
+    fs.writeFileSync(tmpJsonPath, JSON.stringify(questionsData, null, 2));
+    
+    // Drive update (mevcut dosyayı yeni içerikle değiştir)
+    const { Readable } = await import("stream");
+    await drive.files.update({
+      fileId: questionsFileId,
+      media: {
+        mimeType: "application/json",
+        body: Readable.from(JSON.stringify(questionsData, null, 2)),
+      },
     });
-    console.log(`✓ questions.json güncellendi (${Object.keys(edits).length} edit)`);
+    try { fs.unlinkSync(tmpJsonPath); } catch (e) {}
+    console.log(`✓ questions.json Drive'da güncellendi (${Object.keys(edits).length} edit)`);
     
     // 5. Regen görselleri üret
     const altKlasorler = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
