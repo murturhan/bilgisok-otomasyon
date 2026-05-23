@@ -39,6 +39,9 @@ async function driveGorselUrlleri(klasorId, pattern) {
   const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
   const sonuc = {};
   let pageToken = undefined;
+  const dosyalar = [];
+  
+  // Önce tüm dosyaları topla
   do {
     const res = await drive.files.list({
       q: `'${klasorId}' in parents and trashed=false`,
@@ -49,13 +52,30 @@ async function driveGorselUrlleri(klasorId, pattern) {
     for (const f of res.data.files || []) {
       const match = f.name.match(pattern);
       if (match) {
-        const idx = parseInt(match[1], 10);
-        // Drive direct thumbnail URL (public okuma için)
-        sonuc[idx] = `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`;
+        dosyalar.push({ id: f.id, name: f.name, idx: parseInt(match[1], 10) });
       }
     }
     pageToken = res.data.nextPageToken;
   } while (pageToken);
+  
+  // Her dosyayı public yap (anyone with link can view)
+  // Hata olursa atla (zaten public ise sorun değil)
+  for (const f of dosyalar) {
+    try {
+      await drive.permissions.create({
+        fileId: f.id,
+        requestBody: { role: "reader", type: "anyone" },
+        fields: "id",
+      });
+    } catch (e) {
+      // Zaten public ise hata atar, görmezden gel
+      if (!String(e.message || "").includes("already exists")) {
+        console.warn(`  ⚠ Permission hata (${f.name}): ${e.message}`);
+      }
+    }
+    sonuc[f.idx] = `https://drive.google.com/thumbnail?id=${f.id}&sz=w800`;
+  }
+  
   return sonuc;
 }
 
@@ -132,9 +152,9 @@ async function main() {
     }
     const gorselKlasorId = altKlasorler[0].id;
     
-    // Görsel URL'leri (soru + fun fact ayrı)
-    const sorularUrl = await driveGorselUrlleri(gorselKlasorId, /^gorsel-(\d+)-/);
-    const factUrl = await driveGorselUrlleri(gorselKlasorId, /^fun-fact-(\d+)-/);
+    // Tek pattern: tüm görseller "gorsel-NN-" formatında
+    // Sıralama: 1=soru1, 2=fact1, 3=soru2, 4=fact2, ..., son=background
+    const tumGorseller = await driveGorselUrlleri(gorselKlasorId, /^gorsel-(\d+)-/);
     
     // Worker'a gönderilecek payload
     const payload = {
@@ -145,20 +165,27 @@ async function main() {
       topic: questionsData.topic || job.konu,
       format: job.video_format || questionsData.format,
       baslik: questionsData.baslik,
-      questions: questionsData.questions.map((q, i) => ({
-        index: i,
-        question_text: q.question_text,
-        options: q.options,
-        correct_answer: q.correct_answer,
-        option_flags: q.option_flags || ["", "", ""],
-        difficulty: q.difficulty,
-        fun_fact: q.fun_fact,
-        show_image: q.show_image !== false, // default true
-        image_prompt: q.image_prompt,
-        fun_fact_image_prompt: q.fun_fact_image_prompt,
-        question_image_url: sorularUrl[i + 1] || null,
-        fun_fact_image_url: factUrl[i + 1] || null,
-      })),
+      questions: questionsData.questions.map((q, i) => {
+        // Soru i (0-indexed) için:
+        // Question image  = gorsel-(2i+1) (1-indexed)
+        // Fun fact image  = gorsel-(2i+2) (1-indexed)
+        const questionImageIdx = 2 * i + 1;
+        const factImageIdx = 2 * i + 2;
+        return {
+          index: i,
+          question_text: q.question_text,
+          options: q.options,
+          correct_answer: q.correct_answer,
+          option_flags: q.option_flags || ["", "", ""],
+          difficulty: q.difficulty,
+          fun_fact: q.fun_fact,
+          show_image: q.show_image !== false, // default true
+          image_prompt: q.image_prompt,
+          fun_fact_image_prompt: q.fun_fact_image_prompt,
+          question_image_url: tumGorseller[questionImageIdx] || null,
+          fun_fact_image_url: tumGorseller[factImageIdx] || null,
+        };
+      }),
       created_at: new Date().toISOString(),
     };
     
