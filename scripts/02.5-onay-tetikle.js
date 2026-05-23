@@ -23,10 +23,13 @@ import { telegram } from "./lib/telegram.js";
 
 const {
   JOB_ID,
-  WORKER_URL,           // https://telegram-to-github.MURTURHAN.workers.dev
+  WORKER_URL: WORKER_URL_RAW,
   GITHUB_TOKEN,
-  CLOUDFLARE_PAGES_URL, // https://genimini-onay.pages.dev
+  CLOUDFLARE_PAGES_URL,
 } = process.env;
+
+// Trailing slash'i temizle (çift slash olmaması için)
+const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
 
 /**
  * Drive klasöründeki tüm görselleri listele, public link üret.
