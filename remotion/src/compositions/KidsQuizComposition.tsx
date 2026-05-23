@@ -8,9 +8,11 @@ import {
 } from "remotion";
 import { FPS, MUSIC_DUCK_FRAMES, getThemeForQuestion } from "../styles/theme";
 import { QuizCompositionProps } from "../types/schemas";
-import { IntroScene } from "../scenes/IntroScene";
+import { IntroSceneShorts } from "../scenes/IntroSceneShorts";
+import { IntroSceneLong } from "../scenes/IntroSceneLong";
 import { QuestionScene } from "../scenes/QuestionScene";
-import { OutroScene } from "../scenes/OutroScene";
+import { OutroSceneShorts } from "../scenes/OutroSceneShorts";
+import { OutroSceneLong } from "../scenes/OutroSceneLong";
 import { JessTransition } from "../components/JessTransition";
 import {
   computeQuestionPhases,
@@ -43,6 +45,9 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   channel_name,
 }) => {
   const { width, height } = useVideoConfig();
+  const isVertical = height > width;
+  const IntroSceneComponent = isVertical ? IntroSceneShorts : IntroSceneLong;
+  const OutroSceneComponent = isVertical ? OutroSceneShorts : OutroSceneLong;
   
   // Jess poses path resolve
   const resolvedJessPoses = Object.fromEntries(
@@ -100,8 +105,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       }
     }
     
-    const targetVol = speaking ? 0.06 : 0.20;
-    const startVol = prevSpeaking ? 0.06 : 0.20;
+    const targetVol = speaking ? 0.04 : 0.20;
+    const startVol = prevSpeaking ? 0.04 : 0.20;
     
     if (framesSinceChange < MUSIC_DUCK_FRAMES) {
       const t = framesSinceChange / MUSIC_DUCK_FRAMES;
@@ -115,7 +120,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
     <AbsoluteFill>
       {/* INTRO */}
       <Sequence from={0} durationInFrames={introFrames}>
-        <IntroScene
+        <IntroSceneComponent
           channelName={channel_name}
           topic={topic}
           jessPoses={resolvedJessPoses}
@@ -182,7 +187,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       
       {/* OUTRO */}
       <Sequence from={outroStart} durationInFrames={outroFrames}>
-        <OutroScene
+        <OutroSceneComponent
           channelName={channel_name}
           jessPoses={resolvedJessPoses}
           durationFrames={outroFrames}
