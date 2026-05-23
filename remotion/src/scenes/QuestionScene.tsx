@@ -169,12 +169,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       {/* AUDIO */}
       {question.question_audio_path && (
         <Sequence from={phases.show} durationInFrames={phases.countdown - phases.show}>
-          <Audio src={staticFile(question.question_audio_path)} volume={1.2} />
+          <Audio src={staticFile(question.question_audio_path)} volume={1.4} />
         </Sequence>
       )}
       {question.answer_audio_path && (
         <Sequence from={phases.reveal} durationInFrames={phases.transition - phases.reveal}>
-          <Audio src={staticFile(question.answer_audio_path)} volume={1.2} />
+          <Audio src={staticFile(question.answer_audio_path)} volume={1.4} />
         </Sequence>
       )}
       
@@ -247,6 +247,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           inCountdown={inCountdown}
           inDrumRoll={inDrumRoll}
           inSilentPause={inSilentPause}
+          localFrame={frame}
         />
       ) : (
         <LongLayout
@@ -260,6 +261,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           revealImageTransition={revealImageTransition}
           width={width}
           height={height}
+          localFrame={frame}
         />
       )}
       
@@ -328,11 +330,14 @@ interface LayoutProps {
   inCountdown?: boolean;
   inDrumRoll?: boolean;
   inSilentPause?: boolean;
+  /** Local frame (soru başlangıcından itibaren) - flu/fitil/burst hesabı için */
+  localFrame: number;
 }
 
 const LongLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases,
   inFunFact, isRevealed, revealImageTransition, width, height,
+  localFrame,
 }) => {
   const bodyTop = 345;  // long header 293 + 52 padding (resim biraz daha aşağı)
   const bodyBottom = 200;
@@ -344,6 +349,26 @@ const LongLayout: React.FC<LayoutProps> = ({
   const imageHeight = Math.min(height - bodyTop - bodyBottom, 600);
   // Fact modunda alan 1/3 büyük (kullanıcı talebi)
   const factHeight = Math.min(height - bodyTop - bodyBottom, 800);
+  
+  // ─── FLU + FİTİL + KONFETI hesabı ───
+  // Soru gösterilirken (countdown ve drumRoll) resim flu
+  // Reveal anında flu kalkar + konfeti patlar
+  const inActiveQuestion = localFrame >= phases.countdown && localFrame < phases.reveal;
+  const blurAmount = (question.show_image !== false && inActiveQuestion && !isRevealed) ? 24 : 0;
+  
+  // Fitil: countdown başlangıcı → drumRoll bitişi arası 0..1
+  // Süre = phases.silentPause - phases.countdown (countdown + drumRoll)
+  let fusePhase = 0;
+  if (question.show_image !== false && localFrame >= phases.countdown && localFrame < phases.silentPause) {
+    const fuseDuration = phases.silentPause - phases.countdown;
+    fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
+  } else if (localFrame >= phases.silentPause) {
+    fusePhase = 1; // Tam yandı
+  }
+  
+  // Burst: reveal anından itibaren 35 frame (1.17s)
+  const burstActive = question.show_image !== false && localFrame >= phases.reveal && localFrame < phases.reveal + 35;
+  const burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   
   return (
     <div
@@ -373,6 +398,11 @@ const LongLayout: React.FC<LayoutProps> = ({
               height={imageHeight}
               isReveal={isRevealed}
               revealTransition={revealImageTransition}
+              blurAmount={blurAmount}
+              fusePhase={fusePhase}
+              burstActive={burstActive}
+              burstLocalFrame={burstLocalFrame}
+              showAsPlaceholder={question.show_image === false}
             />
           </div>
           
@@ -397,43 +427,66 @@ const LongLayout: React.FC<LayoutProps> = ({
           </div>
         </div>
       ) : (
-        // FACT MODU: DİKEY İSTİF — resim üstte, fact paneli altta (aynı genişlikte), gözlük altta ortada
-        // Kullanıcı talebi: bilgi resimle aynı boyutta ve paralel, gözlük altta ortada
+        // FACT MODU: YAN YANA — resim SOL, panel SAĞ, GÖZLÜK altta ortada
+        // Kullanıcı talebi (jellyfish görseli): resim solda, panel sağda, gözlük altta ortada
         (() => {
-          const factColWidth = Math.floor(width * 0.7);  // ekranın %70'i
-          const factColLeft = Math.floor((width - factColWidth) / 2) - 50; // dış container 50px padding'inden
-          const halfH = Math.floor((height - bodyTop - bodyBottom) / 2) - 20; // resim ve fact arası 40px gap için 20'şer çık
+          const factGap = 30;
+          const factColWidth = Math.floor((width - 100 - factGap) / 2); // 50+50 padding - gap
+          const glassesHeight = 100; // gözlük emoji'si için altta ayrılan alan
+          const factColHeight = Math.floor(height - bodyTop - bodyBottom - glassesHeight - 20);
           
           return (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 24,
-                width: "100%",
-                height: "100%",
-              }}
-            >
-              {/* Resim üstte */}
-              <ImageCard
-                src={funFactImageSrc || imageSrc}
-                width={factColWidth}
-                height={halfH}
-                isReveal={false}
-                revealTransition={1}
-              />
+            <>
+              {/* Yan yana resim + panel */}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: factGap,
+                  width: "100%",
+                  height: factColHeight,
+                }}
+              >
+                {/* SOL: Resim */}
+                <ImageCard
+                  src={funFactImageSrc || imageSrc}
+                  width={factColWidth}
+                  height={factColHeight}
+                  isReveal={false}
+                  revealTransition={1}
+                  showAsPlaceholder={question.show_image === false && !funFactImageSrc}
+                />
+                
+                {/* SAĞ: Fact paneli */}
+                <FunFactPanel
+                  text={question.fun_fact}
+                  showFrame={phases.funFact}
+                  isVertical={false}
+                  boxWidth={factColWidth}
+                  boxHeight={factColHeight}
+                  hideGlasses={true}
+                />
+              </div>
               
-              {/* Fact paneli altta (gözlük FunFactPanel'in içinde) */}
-              <FunFactPanel
-                text={question.fun_fact}
-                showFrame={phases.funFact}
-                isVertical={false}
-                boxWidth={factColWidth}
-                boxHeight={halfH}
-              />
-            </div>
+              {/* ALT ORTA: Gözlük emoji (büyük) */}
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 10,
+                  left: 0,
+                  right: 0,
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  height: glassesHeight,
+                  pointerEvents: "none",
+                }}
+              >
+                <div style={{ fontSize: 110, lineHeight: 1 }}>👓</div>
+              </div>
+            </>
           );
         })()
       )}
@@ -443,7 +496,7 @@ const LongLayout: React.FC<LayoutProps> = ({
 
 const ShortsLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases, inDrumRoll, inSilentPause, inCountdown,
-  inFunFact, isRevealed, revealImageTransition, width, height,
+  inFunFact, isRevealed, revealImageTransition, width, height, localFrame,
 }) => {
   const bodyTop = 320;  // shorts header 267 + 53 padding (resim biraz daha aşağı)
   const padding = 40;
@@ -454,6 +507,21 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   
   // Progress bar countdown veya drumRoll/silentPause sırasında görünür
   const showProgressBar = inCountdown || inDrumRoll || inSilentPause;
+  
+  // ─── FLU + FİTİL + KONFETI hesabı (LongLayout ile aynı) ───
+  const inActiveQuestion = localFrame >= phases.countdown && localFrame < phases.reveal;
+  const blurAmount = (question.show_image !== false && inActiveQuestion && !isRevealed) ? 24 : 0;
+  
+  let fusePhase = 0;
+  if (question.show_image !== false && localFrame >= phases.countdown && localFrame < phases.silentPause) {
+    const fuseDuration = phases.silentPause - phases.countdown;
+    fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
+  } else if (localFrame >= phases.silentPause) {
+    fusePhase = 1;
+  }
+  
+  const burstActive = question.show_image !== false && localFrame >= phases.reveal && localFrame < phases.reveal + 35;
+  const burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   
   return (
     <div
@@ -478,6 +546,11 @@ const ShortsLayout: React.FC<LayoutProps> = ({
             height={imageHeight}
             isReveal={isRevealed}
             revealTransition={revealImageTransition}
+            blurAmount={blurAmount}
+            fusePhase={fusePhase}
+            burstActive={burstActive}
+            burstLocalFrame={burstLocalFrame}
+            showAsPlaceholder={question.show_image === false}
           />
           
           {/* ŞIKLAR - 3 tane, aralarında eşit boşluk */}
@@ -529,6 +602,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
                 height={factBoxHeight}
                 isReveal={false}
                 revealTransition={1}
+                showAsPlaceholder={question.show_image === false && !funFactImageSrc}
               />
               
               {/* Fact paneli ortada (resim ile aynı alan) - gözlük altta */}
@@ -627,10 +701,22 @@ interface ImageCardProps {
   height: number;
   isReveal?: boolean;
   revealTransition?: number;
+  /** Soru flu modu (cevap gelince netleşir) */
+  blurAmount?: number;     // 0 = net, 30 = çok flu
+  /** Fitil yanma ilerlemesi (0..1) - countdown'da artar */
+  fusePhase?: number;
+  /** Patlama anı (true ise konfeti burst tetiklenir) */
+  burstActive?: boolean;
+  /** Patlama frame offset (animasyon için, framesSinceBurst) */
+  burstLocalFrame?: number;
+  /** show_image false ise resim yerine süslü "?" placeholder göster */
+  showAsPlaceholder?: boolean;
 }
 
 const ImageCard: React.FC<ImageCardProps> = ({
   src, width, height, isReveal = false, revealTransition = 0,
+  blurAmount = 0, fusePhase = 0, burstActive = false, burstLocalFrame = 0,
+  showAsPlaceholder = false,
 }) => {
   const scale = isReveal
     ? interpolate(revealTransition, [0, 1], [0.95, 1])
@@ -639,15 +725,36 @@ const ImageCard: React.FC<ImageCardProps> = ({
     ? interpolate(revealTransition, [0, 0.5, 1], [0.5, 0.8, 1])
     : 1;
   
-  if (!src) return null;
+  if (!src && !showAsPlaceholder) return null;
+  
+  // Fitil için SVG path: dikdörtgen çerçeve (saat yönünde, üst-orta'dan başlar)
+  // fusePhase 0..1 → strokeDashoffset ile ilerle
+  const perim = 2 * (width + height);
+  const fuseDashOffset = perim * (1 - fusePhase);
+  
+  // Konfeti burst - 24 parça farklı yönlere
+  const confettiPieces = burstActive ? Array.from({ length: 24 }, (_, i) => {
+    const angle = (i / 24) * Math.PI * 2;
+    const dist = 60 + Math.min(burstLocalFrame * 8, 400);
+    const fade = Math.max(0, 1 - burstLocalFrame / 35);
+    const rot = burstLocalFrame * 12 + i * 30;
+    return {
+      x: Math.cos(angle) * dist,
+      y: Math.sin(angle) * dist - burstLocalFrame * 2, // hafif yukarı
+      fade,
+      rot,
+      emoji: ["🎊", "⭐", "✨", "💫", "🎉"][i % 5],
+      size: 40 + (i % 3) * 12,
+    };
+  }) : [];
   
   return (
     <div
       style={{
         width,
         height,
+        position: "relative",
         borderRadius: 28,
-        overflow: "hidden",
         backgroundColor: BRAND.white,
         border: `6px solid ${BRAND.white}`,
         boxShadow: "0 14px 32px rgba(0,0,0,0.45), 0 0 0 3px rgba(0,0,0,0.15)",
@@ -655,14 +762,138 @@ const ImageCard: React.FC<ImageCardProps> = ({
         opacity,
       }}
     >
-      <Img
-        src={src}
+      {/* RESİM - flu kalmasın diye iç container içinde overflow gizle */}
+      <div
         style={{
           width: "100%",
           height: "100%",
-          objectFit: "cover",
+          borderRadius: 22,
+          overflow: "hidden",
+          position: "relative",
         }}
-      />
+      >
+        {showAsPlaceholder ? (
+          // SÜSLÜ "?" PLACEHOLDER (görsel olmayan sorular için)
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "linear-gradient(135deg, #FFD700 0%, #FF6B9D 50%, #6B5B95 100%)",
+              position: "relative",
+            }}
+          >
+            {/* Arka plan dekor */}
+            <div style={{
+              position: "absolute", inset: 0,
+              backgroundImage: "radial-gradient(circle at 20% 30%, rgba(255,255,255,0.3) 8%, transparent 9%), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.3) 6%, transparent 7%), radial-gradient(circle at 50% 50%, rgba(255,255,255,0.2) 4%, transparent 5%)",
+              backgroundSize: "60px 60px, 80px 80px, 40px 40px",
+            }} />
+            
+            <div style={{
+              fontSize: Math.floor(Math.min(width, height) * 0.55),
+              fontFamily: FONTS.display,
+              fontWeight: 900,
+              color: BRAND.white,
+              textShadow: `
+                -6px -6px 0 ${BRAND.black},
+                6px -6px 0 ${BRAND.black},
+                -6px 6px 0 ${BRAND.black},
+                6px 6px 0 ${BRAND.black},
+                10px 10px 0 rgba(0,0,0,0.4)
+              `,
+              lineHeight: 1,
+              zIndex: 2,
+            }}>?</div>
+          </div>
+        ) : src ? (
+          <Img
+            src={src}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              filter: blurAmount > 0 ? `blur(${blurAmount}px)` : undefined,
+              transform: blurAmount > 0 ? "scale(1.1)" : undefined, // blur kenarları kapat
+              transition: "filter 0.3s ease-out",
+            }}
+          />
+        ) : null}
+      </div>
+      
+      {/* FİTİL — çerçevenin etrafında yanan kıvılcım (sadece countdown'da) */}
+      {fusePhase > 0 && fusePhase < 1 && (
+        <svg
+          style={{
+            position: "absolute",
+            top: -3, left: -3, width: width, height: height,
+            pointerEvents: "none",
+            zIndex: 3,
+          }}
+          width={width}
+          height={height}
+        >
+          {/* Karbonlaşmış iz (yanan kısım) */}
+          <rect
+            x={3} y={3}
+            width={width - 6}
+            height={height - 6}
+            rx={22}
+            fill="none"
+            stroke="#1a0500"
+            strokeWidth={6}
+            strokeDasharray={perim}
+            strokeDashoffset={fuseDashOffset}
+            strokeLinecap="round"
+          />
+          {/* Kıvılcım (parlayan baş) */}
+          <rect
+            x={3} y={3}
+            width={width - 6}
+            height={height - 6}
+            rx={22}
+            fill="none"
+            stroke="#FFD700"
+            strokeWidth={8}
+            strokeDasharray={`12 ${perim - 12}`}
+            strokeDashoffset={fuseDashOffset}
+            strokeLinecap="round"
+            style={{ filter: "drop-shadow(0 0 8px #FF6B00) drop-shadow(0 0 16px #FFD700)" }}
+          />
+        </svg>
+      )}
+      
+      {/* KONFETI BURST — patlama anı */}
+      {burstActive && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%", left: "50%",
+            width: 0, height: 0,
+            pointerEvents: "none",
+            zIndex: 4,
+          }}
+        >
+          {confettiPieces.map((p, i) => (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                left: 0, top: 0,
+                fontSize: p.size,
+                lineHeight: 1,
+                transform: `translate(${p.x - p.size/2}px, ${p.y - p.size/2}px) rotate(${p.rot}deg)`,
+                opacity: p.fade,
+                filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
+              }}
+            >
+              {p.emoji}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -680,6 +911,8 @@ interface FunFactPanelProps {
   // Kutunun fiziksel boyutu (resimle aynı boyutta tutulur)
   boxWidth: number;
   boxHeight: number;
+  /** Gözlük emoji'si gizlensin mi? (Long fact'te yan yana layout'ta dışarıda göstermek için) */
+  hideGlasses?: boolean;
 }
 
 /**
@@ -750,6 +983,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
   isVertical,
   boxWidth,
   boxHeight,
+  hideGlasses,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -840,15 +1074,17 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
         </div>
       </div>
       
-      {/* Gözlük - DAHA BÜYÜK */}
-      <div
-        style={{
-          transform: `scale(${glassesScale}) rotate(${glassesRotate}deg) translateY(${glassesIdleBounce}px)`,
-          opacity: glassesOpacity,
-        }}
-      >
-        <GlassesIcon size={glassesSize} />
-      </div>
+      {/* Gözlük - DAHA BÜYÜK (hideGlasses true ise gizle - long fact yan yana layout için) */}
+      {!hideGlasses && (
+        <div
+          style={{
+            transform: `scale(${glassesScale}) rotate(${glassesRotate}deg) translateY(${glassesIdleBounce}px)`,
+            opacity: glassesOpacity,
+          }}
+        >
+          <GlassesIcon size={glassesSize} />
+        </div>
+      )}
     </div>
   );
 };
