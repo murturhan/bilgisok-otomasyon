@@ -105,8 +105,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       }
     }
     
-    const targetVol = speaking ? 0.04 : 0.20;
-    const startVol = prevSpeaking ? 0.04 : 0.20;
+    const targetVol = speaking ? 0.02 : 0.15;
+    const startVol = prevSpeaking ? 0.02 : 0.15;
     
     if (framesSinceChange < MUSIC_DUCK_FRAMES) {
       const t = framesSinceChange / MUSIC_DUCK_FRAMES;
