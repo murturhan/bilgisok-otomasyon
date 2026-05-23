@@ -65,17 +65,59 @@ async function main() {
     if (!CLOUDFLARE_PAGES_URL) throw new Error("CLOUDFLARE_PAGES_URL eksik");
     if (!GITHUB_TOKEN) throw new Error("GITHUB_TOKEN eksik (Worker auth için)");
     
-    // 01 ve 02 tamamlandı mı?
-    if (!job.questions_json) throw new Error("questions_json yok (01 tamamlanmamış)");
+    // 02 tamamlandı mı?
     const gorselStatus = String(job.gorsel_status || "");
     if (!gorselStatus.startsWith("completed") && !gorselStatus.startsWith("partial")) {
       throw new Error(`02 tamamlanmamış (gorsel_status: ${gorselStatus})`);
     }
     
-    // questions.json oku
-    const questionsData = typeof job.questions_json === "string"
-      ? JSON.parse(job.questions_json)
-      : job.questions_json;
+    if (!job.drive_folder_id) throw new Error("drive_folder_id yok");
+    
+    // questions.json'u Drive'dan oku (02-ses klasöründe, yoksa ana klasörde)
+    console.log("📂 questions.json Drive'dan okunuyor...");
+    const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
+    
+    let questionsData = null;
+    
+    // 1. 02-ses içinde ara
+    const sesSearchRes = await drive.files.list({
+      q: `'${job.drive_folder_id}' in parents and name='02-ses' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 1,
+    });
+    if (sesSearchRes.data.files && sesSearchRes.data.files.length > 0) {
+      const sesFolderId = sesSearchRes.data.files[0].id;
+      const jsonSearchRes = await drive.files.list({
+        q: `'${sesFolderId}' in parents and name='questions.json' and trashed=false`,
+        fields: "files(id, name)",
+        pageSize: 1,
+      });
+      if (jsonSearchRes.data.files && jsonSearchRes.data.files.length > 0) {
+        const fileId = jsonSearchRes.data.files[0].id;
+        const res = await drive.files.get({ fileId, alt: "media" }, { responseType: "text" });
+        questionsData = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+        console.log("✓ questions.json '02-ses' klasöründen okundu");
+      }
+    }
+    
+    // 2. Ana klasörde ara (backward compat)
+    if (!questionsData) {
+      const anaSearchRes = await drive.files.list({
+        q: `'${job.drive_folder_id}' in parents and name='questions.json' and trashed=false`,
+        fields: "files(id, name)",
+        pageSize: 1,
+      });
+      if (anaSearchRes.data.files && anaSearchRes.data.files.length > 0) {
+        const fileId = anaSearchRes.data.files[0].id;
+        const res = await drive.files.get({ fileId, alt: "media" }, { responseType: "text" });
+        questionsData = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+        console.log("✓ questions.json ana klasörden okundu");
+      }
+    }
+    
+    if (!questionsData) {
+      throw new Error("questions.json Drive'da bulunamadı (02-ses veya ana klasörde aranır)");
+    }
     
     if (!questionsData.questions || !Array.isArray(questionsData.questions)) {
       throw new Error("questions array yok");
