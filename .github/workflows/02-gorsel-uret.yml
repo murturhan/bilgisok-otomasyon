@@ -7,7 +7,6 @@ on:
       job_id:
         description: 'Job ID (run_id)'
         required: true
-
 jobs:
   gorsel-uret:
     runs-on: ubuntu-latest
@@ -47,7 +46,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID_2: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_2 }}
           CLOUDFLARE_API_TOKEN_3: ${{ secrets.CLOUDFLARE_API_TOKEN_3 }}
           CLOUDFLARE_ACCOUNT_ID_3: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_3 }}
-          CLOUDFLARE_HESAP_A_KOTADA: ${{ vars.CLOUDFLARE_HESAP_A_KOTADA }}
+          CLOUDFLARE_API_TOKEN_4: ${{ secrets.CLOUDFLARE_API_TOKEN_4 }}
+          CLOUDFLARE_ACCOUNT_ID_4: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_4 }}
+          CLOUDFLARE_API_TOKEN_5: ${{ secrets.CLOUDFLARE_API_TOKEN_5 }}
+          CLOUDFLARE_ACCOUNT_ID_5: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_5 }}
+          CLOUDFLARE_API_TOKEN_6: ${{ secrets.CLOUDFLARE_API_TOKEN_6 }}
+          CLOUDFLARE_ACCOUNT_ID_6: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_6 }}
           GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
