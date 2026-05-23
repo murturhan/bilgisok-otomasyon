@@ -353,67 +353,90 @@ const LongLayout: React.FC<LayoutProps> = ({
         left: 50,
         right: 50,
         bottom: bodyBottom,
-        display: "flex",
-        gap: colGap,
       }}
     >
-      <div
-        style={{
-          width: leftWidth,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {!inFunFact ? (
-          <ImageCard
-            src={imageSrc}
-            width={leftWidth}
-            height={imageHeight}
-            isReveal={isRevealed}
-            revealTransition={revealImageTransition}
-          />
-        ) : (
-          <ImageCard
-            src={funFactImageSrc || imageSrc}
-            width={leftWidth}
-            height={factHeight}
-            isReveal={false}
-            revealTransition={1}
-          />
-        )}
-      </div>
-      
-      <div
-        style={{
-          width: rightWidth,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          gap: 22,
-        }}
-      >
-        {!inFunFact ? (
-          <AnswerStack
-            options={question.options}
-            flags={question.option_flags}
-            correctAnswer={question.correct_answer}
-            isRevealed={isRevealed}
-            phases={phases}
-            large
-            questionAudioDuration={question.question_audio_duration}
-          />
-        ) : (
-          <FunFactPanel
-            text={question.fun_fact}
-            showFrame={phases.funFact}
-            isVertical={false}
-            boxWidth={rightWidth}
-            boxHeight={factHeight}
-          />
-        )}
-      </div>
+      {!inFunFact ? (
+        // SORU MODU: 2 sütun (resim sol, şıklar sağ) - eski layout
+        <div style={{ display: "flex", gap: colGap, height: "100%" }}>
+          <div
+            style={{
+              width: leftWidth,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ImageCard
+              src={imageSrc}
+              width={leftWidth}
+              height={imageHeight}
+              isReveal={isRevealed}
+              revealTransition={revealImageTransition}
+            />
+          </div>
+          
+          <div
+            style={{
+              width: rightWidth,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              gap: 22,
+            }}
+          >
+            <AnswerStack
+              options={question.options}
+              flags={question.option_flags}
+              correctAnswer={question.correct_answer}
+              isRevealed={isRevealed}
+              phases={phases}
+              large
+              questionAudioDuration={question.question_audio_duration}
+            />
+          </div>
+        </div>
+      ) : (
+        // FACT MODU: DİKEY İSTİF — resim üstte, fact paneli altta (aynı genişlikte), gözlük altta ortada
+        // Kullanıcı talebi: bilgi resimle aynı boyutta ve paralel, gözlük altta ortada
+        (() => {
+          const factColWidth = Math.floor(width * 0.7);  // ekranın %70'i
+          const factColLeft = Math.floor((width - factColWidth) / 2) - 50; // dış container 50px padding'inden
+          const halfH = Math.floor((height - bodyTop - bodyBottom) / 2) - 20; // resim ve fact arası 40px gap için 20'şer çık
+          
+          return (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 24,
+                width: "100%",
+                height: "100%",
+              }}
+            >
+              {/* Resim üstte */}
+              <ImageCard
+                src={funFactImageSrc || imageSrc}
+                width={factColWidth}
+                height={halfH}
+                isReveal={false}
+                revealTransition={1}
+              />
+              
+              {/* Fact paneli altta (gözlük FunFactPanel'in içinde) */}
+              <FunFactPanel
+                text={question.fun_fact}
+                showFrame={phases.funFact}
+                isVertical={false}
+                boxWidth={factColWidth}
+                boxHeight={halfH}
+              />
+            </div>
+          );
+        })()
+      )}
     </div>
   );
 };
