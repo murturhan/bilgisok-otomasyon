@@ -226,7 +226,7 @@ const Scene2Long: React.FC<{ topic: string; startFrame: number }> = ({ topic, st
       
       {/* TOPIC üst yarıda */}
       <div style={{
-        position: "absolute", top: 0, left: 0, right: 0, bottom: "45%",
+        position: "absolute", top: "8%", left: 0, right: 0, bottom: "40%",
         display: "flex", alignItems: "center", justifyContent: "center",
         paddingLeft: 40, paddingRight: 40,
       }}>
