@@ -513,8 +513,44 @@ async function main() {
       `❓ ${icerik.questions.length} questions (2 audio per question)\n` +
       `🦊 Mascot: Jess the Fox\n\n` +
       `📂 [Drive folder](${anaKlasor.link})\n\n` +
-      `⏳ Generating images, audio segments, thumbnail...`
+      `⏳ Görsel üretim otomatik başlatılıyor...`
     );
+    
+    // 02-gorsel-uret'i otomatik tetikle
+    try {
+      const repoOwner = process.env.GITHUB_REPO_OWNER || "murturhan";
+      const repoName = process.env.GITHUB_REPO_NAME || "bilgisok-otomasyon";
+      const token = process.env.WORKFLOW_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
+      if (token) {
+        const dispatchRes = await fetch(
+          `https://api.github.com/repos/${repoOwner}/${repoName}/dispatches`,
+          {
+            method: "POST",
+            headers: {
+              "Accept": "application/vnd.github+json",
+              "Authorization": `Bearer ${token}`,
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "geniminitests-icerik-uret",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              event_type: "gorsel_uret",
+              client_payload: { job_id: JOB_ID, chat_id: CHAT_ID },
+            }),
+          }
+        );
+        if (dispatchRes.ok) {
+          console.log("✅ 02-gorsel-uret tetiklendi");
+        } else {
+          const txt = await dispatchRes.text();
+          console.warn(`⚠ 02 dispatch hatası: ${dispatchRes.status} ${txt.substring(0, 200)}`);
+        }
+      } else {
+        console.warn("⚠ WORKFLOW_DISPATCH_TOKEN yok, 02 manuel tetiklenmeli");
+      }
+    } catch (e) {
+      console.warn(`⚠ 02 dispatch hatası (devam): ${e.message}`);
+    }
     
     console.log("✅ İçerik üretimi tamam.");
     process.exit(0);
