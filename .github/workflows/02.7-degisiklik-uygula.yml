@@ -47,4 +47,5 @@ jobs:
           GITHUB_REPO_OWNER: ${{ github.repository_owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}
           JOB_ID: ${{ github.event.client_payload.job_id }}
+          APPROVAL_LEVEL: ${{ github.event.client_payload.approval_level }}
         run: node scripts/02.7-degisiklik-uygula.js
