@@ -18,6 +18,7 @@ import {
   driveAltKlasorBul,
   driveDosyaYukle,
   getServiceAccountAuth,
+  getOAuthClient,
 } from "./lib/google.js";
 import { fluxRotationCagri } from "./lib/cloudflare.js";
 import { telegram } from "./lib/telegram.js";
@@ -35,9 +36,11 @@ const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
 const APPROVAL = APPROVAL_LEVEL || "full"; // default
 
 /**
- * Drive klasöründen belirli pattern'e uyan dosyaları sil
+ * Drive klasöründen belirli pattern'e uyan dosyaları sil.
+ * OAuth ile yapılır çünkü dosyaların sahibi OAuth kullanıcısı (driveDosyaYukle OAuth kullanır).
  */
-async function driveDosyaSil(klasorId, pattern, drive) {
+async function driveDosyaSil(klasorId, pattern) {
+  const drive = google.drive({ version: "v3", auth: getOAuthClient() });
   let pageToken = undefined;
   const silinen = [];
   do {
@@ -99,6 +102,7 @@ async function main() {
     // 3. questions.json'u Drive'dan oku
     console.log("questions.json Drive'dan okunuyor...");
     const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
+    const driveWrite = google.drive({ version: "v3", auth: getOAuthClient() });
     
     let questionsData = null;
     let questionsFileId = null;
@@ -179,7 +183,7 @@ async function main() {
           const slot = slotForQuestion(idx, "question");
           // Eski dosyayı sil
           const slotStr = String(slot).padStart(2, "0");
-          await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`), drive);
+          await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
           // Yeni dosyayı yükle
           const filename = `gorsel-${slotStr}-${Date.now()}.${decoded.ext}`;
           const filepath = `/tmp/${filename}`;
@@ -202,7 +206,7 @@ async function main() {
         if (decoded) {
           const slot = slotForQuestion(idx, "fact");
           const slotStr = String(slot).padStart(2, "0");
-          await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`), drive);
+          await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
           const filename = `gorsel-${slotStr}-${Date.now()}.${decoded.ext}`;
           const filepath = `/tmp/${filename}`;
           fs.writeFileSync(filepath, decoded.buffer);
@@ -220,7 +224,8 @@ async function main() {
     }
     
     // 6. questions.json'u Drive'a geri yaz
-    await drive.files.update({
+    // questions.json'u Drive'a geri yaz (OAuth ile çünkü dosya sahibi OAuth)
+    await driveWrite.files.update({
       fileId: questionsFileId,
       media: {
         mimeType: "application/json",
@@ -237,7 +242,7 @@ async function main() {
       for (const r of regenQuestionImages) {
         const slot = slotForQuestion(r.index, "question");
         const slotStr = String(slot).padStart(2, "0");
-        await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`), drive);
+        await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
       }
       const prompts = regenQuestionImages.map(r => r.prompt);
       const res = await fluxRotationCagri(prompts, {
@@ -266,7 +271,7 @@ async function main() {
       for (const r of regenFactImages) {
         const slot = slotForQuestion(r.index, "fact");
         const slotStr = String(slot).padStart(2, "0");
-        await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`), drive);
+        await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
       }
       const prompts = regenFactImages.map(r => r.prompt);
       const res = await fluxRotationCagri(prompts, {
