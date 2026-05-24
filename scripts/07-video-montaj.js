@@ -696,6 +696,12 @@ async function main() {
       video_status: `completed:${(finalStats.size / 1024 / 1024).toFixed(1)}MB`,
     });
 
+    // Onay sayfası linki (render sonrası değişiklik için)
+    const workerUrl = (process.env.WORKER_URL || "").replace(/\/+$/, "");
+    const onayLinkLine = workerUrl
+      ? `\n👉 [Edit & re-render](${workerUrl}/?job=${JOB_ID})\n`
+      : "";
+
     await telegram(
       job.chat_id,
       `🎬 *Kids Quiz video ready!* 🦊\n\n` +
@@ -705,13 +711,47 @@ async function main() {
         `📦 ${(finalStats.size / 1024 / 1024).toFixed(1)} MB\n` +
         `⏱ ~${videoSureDk}:${String(videoSureSn).padStart(2, "0")}\n` +
         `⚡ Render: ${renderSure}s (Toplam: ${toplamSureSec}s)\n\n` +
-        `📂 [Watch on Drive](${yuklenen.link})\n\n` +
+        `📂 [Watch on Drive](${yuklenen.link})\n` +
+        onayLinkLine +
         `━━━━━━━━━━━━━━━\n\n` +
         `▶️ *Upload to YouTube:*\n\n` +
         `\`/yukle ${JOB_ID}\` _(private)_\n` +
         `\`/yukle ${JOB_ID} unlisted\` _(unlisted)_\n` +
         `\`/yukle ${JOB_ID} public\` _(public)_`
     );
+
+    // 02.5'i tetikle ki KV'deki onay sayfası verisi taze olsun (yeni değişiklik turu için)
+    try {
+      const repoOwner = process.env.GITHUB_REPO_OWNER || "murturhan";
+      const repoName = process.env.GITHUB_REPO_NAME || "bilgisok-otomasyon";
+      const token = process.env.WORKFLOW_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
+      if (token) {
+        const dispatchRes = await fetch(
+          `https://api.github.com/repos/${repoOwner}/${repoName}/dispatches`,
+          {
+            method: "POST",
+            headers: {
+              "Accept": "application/vnd.github+json",
+              "Authorization": `Bearer ${token}`,
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "geniminitests-video-montaj",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              event_type: "onay_tetikle",
+              client_payload: { job_id: JOB_ID, chat_id: job.chat_id },
+            }),
+          }
+        );
+        if (dispatchRes.ok) {
+          console.log("02.5-onay-tetikle dispatch edildi (post-render)");
+        } else {
+          console.warn(`02.5 dispatch warn: ${dispatchRes.status}`);
+        }
+      }
+    } catch (e) {
+      console.warn(`02.5 dispatch error (devam): ${e.message}`);
+    }
 
     console.log(`✅ TOPLAM: ${toplamSureSec}s`);
     process.exit(0);
