@@ -368,8 +368,45 @@ async function main() {
       `🦊 *Jess voice ready!*\n` +
       `🎙 Voice: ${VOICE_NAME} (pitch +${PITCH_SHIFT_SEMITONES})\n` +
       `📊 ${segments.length} segments (${voiceTotal}s total)\n` +
-      `⏱ Generation: ${toplamSure}s`
+      `⏱ Generation: ${toplamSure}s\n\n` +
+      `⏳ Video render başlatılıyor...`
     );
+    
+    // 07-video-montaj'ı otomatik tetikle
+    try {
+      const repoOwner = process.env.GITHUB_REPO_OWNER || "murturhan";
+      const repoName = process.env.GITHUB_REPO_NAME || "bilgisok-otomasyon";
+      const token = process.env.WORKFLOW_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
+      if (token) {
+        const dispatchRes = await fetch(
+          `https://api.github.com/repos/${repoOwner}/${repoName}/dispatches`,
+          {
+            method: "POST",
+            headers: {
+              "Accept": "application/vnd.github+json",
+              "Authorization": `Bearer ${token}`,
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "geniminitests-seslendirme",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              event_type: "video_montaj",
+              client_payload: { job_id: JOB_ID, chat_id: job.chat_id },
+            }),
+          }
+        );
+        if (dispatchRes.ok) {
+          console.log("✅ 07-video-montaj tetiklendi");
+        } else {
+          const txt = await dispatchRes.text();
+          console.warn(`⚠ 07 dispatch hatası: ${dispatchRes.status} ${txt.substring(0, 200)}`);
+        }
+      } else {
+        console.warn("⚠ WORKFLOW_DISPATCH_TOKEN yok, 07 manuel tetiklenmeli");
+      }
+    } catch (e) {
+      console.warn(`⚠ 07 dispatch hatası (devam): ${e.message}`);
+    }
     
     console.log(`✅ Seslendirme tamam (${toplamSure}s)`);
     process.exit(0);
