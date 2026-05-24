@@ -141,7 +141,47 @@ async function main() {
       }
       await telegram(job.chat_id, `⚠️ *Görseller eksik:* ${toplamBasarili}/${toplam}. 02-gorsel-uret'i tekrar tetikle (resume modu eksikleri üretir).`);
     } else {
-      await telegram(job.chat_id, `🖼 *Görseller hazır:* ${toplamBasarili}/${toplam}`);
+      await telegram(job.chat_id, `🖼 *Görseller hazır:* ${toplamBasarili}/${toplam}\n\n⏳ Onay sayfası hazırlanıyor...`);
+      
+      // 02.5-onay-tetikle workflow'unu çalıştır (GitHub Action repository_dispatch)
+      try {
+        const repoOwner = process.env.GITHUB_REPO_OWNER || "murturhan";
+        const repoName = process.env.GITHUB_REPO_NAME || "bilgisok-otomasyon";
+        const token = process.env.WORKFLOW_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
+        
+        if (token) {
+          const dispatchRes = await fetch(
+            `https://api.github.com/repos/${repoOwner}/${repoName}/dispatches`,
+            {
+              method: "POST",
+              headers: {
+                "Accept": "application/vnd.github+json",
+                "Authorization": `Bearer ${token}`,
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "geniminitests-gorsel-uret",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                event_type: "onay_tetikle",
+                client_payload: {
+                  job_id: JOB_ID,
+                  chat_id: job.chat_id,
+                },
+              }),
+            }
+          );
+          if (dispatchRes.ok) {
+            console.log("✅ 02.5-onay-tetikle dispatch edildi");
+          } else {
+            const txt = await dispatchRes.text();
+            console.warn(`⚠ 02.5 dispatch hatası: ${dispatchRes.status} ${txt.substring(0, 200)}`);
+          }
+        } else {
+          console.warn("⚠ WORKFLOW_DISPATCH_TOKEN yok, 02.5 manuel tetiklenmeli");
+        }
+      } catch (e) {
+        console.warn(`⚠ 02.5 dispatch hatası (devam): ${e.message}`);
+      }
     }
     
     process.exit(0);
