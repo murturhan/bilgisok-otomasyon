@@ -1,4 +1,4 @@
-// REV 000/25MAY26 - Render sonrasi onay linki + 02.5 otomatik dispatch
+// REV 001/25MAY26 - Telegram markdown kaldirildi (400 hatasi), drive+tg log eklendi
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -680,6 +680,8 @@ async function main() {
 
     const yuklenen = await driveDosyaYukle({ filename, filepath }, videoKlasorId, "video/mp4");
 
+    console.log(`📂 Drive'a yüklendi: ${yuklenen.link}`);
+
     // Temizlik
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
     fs.rmSync(REMOTION_PUBLIC, { recursive: true, force: true });
@@ -699,27 +701,36 @@ async function main() {
 
     // Onay sayfası linki (render sonrası değişiklik için)
     const workerUrl = (process.env.WORKER_URL || "").replace(/\/+$/, "");
-    const onayLinkLine = workerUrl
-      ? `\n👉 [Edit & re-render](${workerUrl}/?job=${JOB_ID})\n`
-      : "";
+    const onayLink = workerUrl ? `${workerUrl}/?job=${JOB_ID}` : "";
 
-    await telegram(
-      job.chat_id,
-      `🎬 *Kids Quiz video ready!* 🦊\n\n` +
-        `📌 ${job.baslik}\n` +
-        `📺 ${format}\n` +
-        `❓ ${soruSayisi} questions\n` +
-        `📦 ${(finalStats.size / 1024 / 1024).toFixed(1)} MB\n` +
-        `⏱ ~${videoSureDk}:${String(videoSureSn).padStart(2, "0")}\n` +
-        `⚡ Render: ${renderSure}s (Toplam: ${toplamSureSec}s)\n\n` +
-        `📂 [Watch on Drive](${yuklenen.link})\n` +
-        onayLinkLine +
-        `━━━━━━━━━━━━━━━\n\n` +
-        `▶️ *Upload to YouTube:*\n\n` +
-        `\`/yukle ${JOB_ID}\` _(private)_\n` +
-        `\`/yukle ${JOB_ID} unlisted\` _(unlisted)_\n` +
-        `\`/yukle ${JOB_ID} public\` _(public)_`
-    );
+    // Markdown'sız düz mesaj (Telegram 400 hatasını önlemek için)
+    const msgParts = [
+      `🎬 Kids Quiz video ready! 🦊`,
+      ``,
+      `📌 ${job.baslik}`,
+      `📺 ${format}`,
+      `❓ ${soruSayisi} questions`,
+      `📦 ${(finalStats.size / 1024 / 1024).toFixed(1)} MB`,
+      `⏱ ~${videoSureDk}:${String(videoSureSn).padStart(2, "0")}`,
+      `⚡ Render: ${renderSure}s (Total: ${toplamSureSec}s)`,
+      ``,
+      `📂 Drive: ${yuklenen.link}`,
+    ];
+    if (onayLink) msgParts.push(`👉 Edit & re-render: ${onayLink}`);
+    msgParts.push(``);
+    msgParts.push(`━━━━━━━━━━━━━━━`);
+    msgParts.push(``);
+    msgParts.push(`▶️ Upload to YouTube:`);
+    msgParts.push(`/yukle ${JOB_ID}  (private)`);
+    msgParts.push(`/yukle ${JOB_ID} unlisted  (unlisted)`);
+    msgParts.push(`/yukle ${JOB_ID} public  (public)`);
+
+    try {
+      await telegram(job.chat_id, msgParts.join("\n"));
+      console.log("📨 Telegram'a gönderildi");
+    } catch (tgErr) {
+      console.error(`❌ Telegram gönderilemedi: ${tgErr.message}`);
+    }
 
     // 02.5'i tetikle ki KV'deki onay sayfası verisi taze olsun (yeni değişiklik turu için)
     try {
