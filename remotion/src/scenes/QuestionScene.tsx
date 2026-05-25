@@ -352,9 +352,9 @@ const LongLayout: React.FC<LayoutProps> = ({
   
   // ─── FLU + FİTİL + KONFETI hesabı ───
   // Soru gösterilirken (countdown ve drumRoll) resim flu
-  // Reveal anında flu kalkar + konfeti patlar
+  // Foto açıksa net kalır (blur yok), reveal anında konfeti patlar
   const inActiveQuestion = localFrame >= phases.countdown && localFrame < phases.reveal;
-  const blurAmount = (question.show_image !== false && inActiveQuestion && !isRevealed) ? 24 : 0;
+  const blurAmount = 0;
   
   // Fitil: countdown başlangıcı → drumRoll bitişi arası 0..1
   // Süre = phases.silentPause - phases.countdown (countdown + drumRoll)
@@ -484,7 +484,7 @@ const LongLayout: React.FC<LayoutProps> = ({
                   pointerEvents: "none",
                 }}
               >
-                <div style={{ fontSize: 110, lineHeight: 1 }}>👓</div>
+                <AnimatedGlasses width={glassesHeight * 2.6} height={glassesHeight} frame={localFrame} />
               </div>
             </>
           );
@@ -508,9 +508,9 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   // Progress bar countdown veya drumRoll/silentPause sırasında görünür
   const showProgressBar = inCountdown || inDrumRoll || inSilentPause;
   
-  // ─── FLU + FİTİL + KONFETI hesabı (LongLayout ile aynı) ───
+  // ─── FİTİL + KONFETI hesabı (foto açıksa blur YOK) ───
   const inActiveQuestion = localFrame >= phases.countdown && localFrame < phases.reveal;
-  const blurAmount = (question.show_image !== false && inActiveQuestion && !isRevealed) ? 24 : 0;
+  const blurAmount = 0;
   
   let fusePhase = 0;
   if (question.show_image !== false && localFrame >= phases.countdown && localFrame < phases.silentPause) {
@@ -1074,7 +1074,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
         </div>
       </div>
       
-      {/* Gözlük - DAHA BÜYÜK (hideGlasses true ise gizle - long fact yan yana layout için) */}
+      {/* Gözlük - PNG, animasyonlu göz bebekleri (hideGlasses true ise gizle - long fact yan yana layout için) */}
       {!hideGlasses && (
         <div
           style={{
@@ -1082,9 +1082,111 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
             opacity: glassesOpacity,
           }}
         >
-          <GlassesIcon size={glassesSize} />
+          <AnimatedGlasses width={glassesSize} height={glassesSize * 0.375} frame={frame} />
         </div>
       )}
+    </div>
+  );
+};
+
+// ─── Animasyonlu Gözlük (PNG + dönen göz bebekleri) ────────────────────
+// Gözlük PNG'si arkaplan, üstüne 2 adet kahverengi göz bebeği çizilir.
+// Bebekler dairesel/meraklı hareket yapar (frame'e bağlı sinüs).
+const AnimatedGlasses: React.FC<{ width: number; height: number; frame: number }> = ({
+  width, height, frame,
+}) => {
+  // Glasses PNG boyutu 800x300 → aspect 2.667
+  // İçindeki göz bebeklerinin konumu (PNG analizi):
+  // - Sol göz merkezi: x ≈ 32%, y ≈ 50%
+  // - Sağ göz merkezi: x ≈ 68%, y ≈ 50%
+  // - Göz beyazı yarıçapı: ≈ 15% genişlik
+  // - Göz bebeği yarıçapı: ≈ 5% genişlik
+  // - Hareket alanı (göz beyazı içinde): ±6% genişlik
+  
+  // Dairesel hareket (slow, meraklı)
+  const phase = frame * 0.04; // hız (yavaş)
+  const moveRadius = width * 0.025; // hareket yarıçapı
+  
+  // Her göz hafif farklı faz (asenkron daha doğal)
+  const leftX = Math.cos(phase) * moveRadius;
+  const leftY = Math.sin(phase) * moveRadius * 0.6; // y'de daha az hareket
+  const rightX = Math.cos(phase + 0.3) * moveRadius;
+  const rightY = Math.sin(phase + 0.3) * moveRadius * 0.6;
+  
+  // Göz bebek çapı
+  const pupilSize = width * 0.07;
+  
+  return (
+    <div style={{ position: "relative", width, height }}>
+      {/* PNG gözlük */}
+      <Img
+        src={staticFile("glasses.png")}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          position: "absolute",
+          left: 0,
+          top: 0,
+        }}
+      />
+      {/* Sol göz bebeği */}
+      <div
+        style={{
+          position: "absolute",
+          left: `${32 - 100 * (pupilSize / 2 / width)}%`,
+          top: `${50 - 100 * (pupilSize / 2 / height)}%`,
+          width: pupilSize,
+          height: pupilSize,
+          borderRadius: "50%",
+          background: "radial-gradient(circle at 30% 30%, #5a3a1a 0%, #2a1a08 70%, #000 100%)",
+          transform: `translate(${leftX}px, ${leftY}px)`,
+          boxShadow: "inset 2px 2px 4px rgba(255,255,255,0.4)",
+          pointerEvents: "none",
+        }}
+      >
+        {/* Parlak nokta */}
+        <div
+          style={{
+            position: "absolute",
+            left: "25%",
+            top: "20%",
+            width: "25%",
+            height: "25%",
+            background: "white",
+            borderRadius: "50%",
+            opacity: 0.95,
+          }}
+        />
+      </div>
+      {/* Sağ göz bebeği */}
+      <div
+        style={{
+          position: "absolute",
+          left: `${68 - 100 * (pupilSize / 2 / width)}%`,
+          top: `${50 - 100 * (pupilSize / 2 / height)}%`,
+          width: pupilSize,
+          height: pupilSize,
+          borderRadius: "50%",
+          background: "radial-gradient(circle at 30% 30%, #5a3a1a 0%, #2a1a08 70%, #000 100%)",
+          transform: `translate(${rightX}px, ${rightY}px)`,
+          boxShadow: "inset 2px 2px 4px rgba(255,255,255,0.4)",
+          pointerEvents: "none",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: "25%",
+            top: "20%",
+            width: "25%",
+            height: "25%",
+            background: "white",
+            borderRadius: "50%",
+            opacity: 0.95,
+          }}
+        />
+      </div>
     </div>
   );
 };
