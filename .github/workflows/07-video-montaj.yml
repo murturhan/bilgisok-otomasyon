@@ -1,9 +1,5 @@
-# REV 000/25MAY26 - video_montaj event tipi + WORKFLOW_DISPATCH_TOKEN
+# REV 001/25MAY26 - GDRIVE_JESS/MUZIK/SFX env'leri geri eklendi
 name: 07 - Video Montaj
-# REVISION: video_montaj event tipi + WORKFLOW_DISPATCH_TOKEN 2026-05-25
-# NOT: Bu dosyayı reponda olanın üstüne YAZMA - sadece şu eksikleri EKLE:
-#   1) on.repository_dispatch.types listesinde "video_montaj" olmalı
-#   2) env bloğunda WORKFLOW_DISPATCH_TOKEN, WORKER_URL, GITHUB_REPO_OWNER, GITHUB_REPO_NAME olmalı
 
 on:
   repository_dispatch:
@@ -60,6 +56,9 @@ jobs:
           GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
           GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          GDRIVE_JESS_FOLDER_ID: ${{ secrets.GDRIVE_JESS_FOLDER_ID }}
+          GDRIVE_MUZIK_FOLDER_ID: ${{ secrets.GDRIVE_MUZIK_FOLDER_ID }}
+          GDRIVE_SFX_FOLDER_ID: ${{ secrets.GDRIVE_SFX_FOLDER_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
           WORKFLOW_DISPATCH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
