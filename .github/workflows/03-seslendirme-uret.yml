@@ -1,4 +1,7 @@
+# REV 000/25MAY26 - WORKFLOW_DISPATCH_TOKEN eklendi
 name: 03 - Seslendirme Üret
+# REVISION: WORKFLOW_DISPATCH_TOKEN eklendi (03 bitince 07 tetikleyebilsin) 2026-05-25
+
 on:
   repository_dispatch:
     types: [seslendirme_uret]
@@ -7,7 +10,6 @@ on:
       job_id:
         description: 'Job ID (run_id)'
         required: true
-
 jobs:
   seslendirme-uret:
     runs-on: ubuntu-latest
@@ -53,5 +55,8 @@ jobs:
           GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WORKFLOW_DISPATCH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
+          GITHUB_REPO_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO_NAME: ${{ github.event.repository.name }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
         run: node scripts/03-seslendirme-uret.js
