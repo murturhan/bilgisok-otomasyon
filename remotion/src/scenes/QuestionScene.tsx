@@ -1,4 +1,4 @@
-// REV 000/25MAY26 - Foto acikken blur yok + AnimatedGlasses PNG + goz bebegi animasyonu
+// REV 002/25MAY26 - glasses.png yolu brand/ altina cekildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -1121,7 +1121,7 @@ const AnimatedGlasses: React.FC<{ width: number; height: number; frame: number }
     <div style={{ position: "relative", width, height }}>
       {/* PNG gözlük */}
       <Img
-        src={staticFile("glasses.png")}
+        src={staticFile("brand/glasses.png")}
         style={{
           width: "100%",
           height: "100%",
