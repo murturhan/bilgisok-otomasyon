@@ -1,7 +1,7 @@
 {
   "name": "genimini-remotion",
   "version": "1.0.0",
-  "description": "GeniMini Tests Kids Quiz video renderer (Remotion)",
+  "description": "REV 001/25MAY26 - @remotion/gif eklendi (saydam animasyonlu gozluk icin) | GeniMini Tests Kids Quiz video renderer (Remotion)",
   "scripts": {
     "start": "remotion studio",
     "build": "remotion bundle",
@@ -13,6 +13,7 @@
     "@remotion/renderer": "4.0.300",
     "@remotion/google-fonts": "4.0.300",
     "@remotion/media-utils": "4.0.300",
+    "@remotion/gif": "4.0.300",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "remotion": "4.0.300",
