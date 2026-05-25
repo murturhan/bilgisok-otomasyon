@@ -1,3 +1,4 @@
+// REV 000/25MAY26 - Drive public gorsel + tek pattern 2i+1, 2i+2
 /**
  * 02.5-onay-tetikle.js
  * 
