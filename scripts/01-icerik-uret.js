@@ -1,3 +1,4 @@
+// REV 000/25MAY26 - 01 sonrasi 02-gorsel-uret otomatik dispatch
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
