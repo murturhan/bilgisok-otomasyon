@@ -1,3 +1,4 @@
+// REV 000/25MAY26 - 02 sonrasi 02.5-onay-tetikle otomatik dispatch
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
