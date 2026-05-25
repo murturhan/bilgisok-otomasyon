@@ -1,4 +1,4 @@
-// REV 004/25MAY26 - WebM gozluk loop (kullanicinin GIF i 60KB WebM e cevrildi)
+// REV 005/25MAY26 - WebM kaldirildi, GlassesIcon (saydam animasyonlu GIF) kullanildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -10,7 +10,6 @@ import {
   staticFile,
   Sequence,
   Img,
-  OffthreadVideo,
 } from "remotion";
 import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor } from "../styles/theme";
 import { Question, JessPoses } from "../types/schemas";
@@ -1091,23 +1090,23 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
   );
 };
 
-// ─── Animasyonlu Gözlük (WebM loop) ────────────────────────────────────
-// 5 saniyelik loop video. Frame'i kullanarak hangi saniye olduğunu hesapla.
+// ─── Animasyonlu Gözlük (saydam GIF) ────────────────────────────────────
+// 5 saniyelik loop GIF. Remotion'da @remotion/gif ile render edilir.
+// GlassesIcon BrandAssets'te tanımlı, doğrudan onu kullanıyoruz.
 const AnimatedGlasses: React.FC<{ width: number; height: number; frame: number }> = ({
   width, height,
 }) => {
   return (
-    <div style={{ position: "relative", width, height, overflow: "hidden" }}>
-      <OffthreadVideo
-        src={staticFile("brand/glasses.webm")}
-        muted
-        loop
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-        }}
-      />
+    <div style={{
+      position: "relative",
+      width,
+      height,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+    }}>
+      <GlassesIcon size={width / 1.4} />
     </div>
   );
 };
