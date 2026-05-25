@@ -1,4 +1,7 @@
+# REV 000/25MAY26 - WORKFLOW_DISPATCH_TOKEN eklendi
 name: 02 - Görsel Üret
+# REVISION: WORKFLOW_DISPATCH_TOKEN eklendi (02 bitince 02.5 tetikleyebilsin diye) 2026-05-25
+
 on:
   repository_dispatch:
     types: [gorsel_uret]
@@ -59,5 +62,8 @@ jobs:
           GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WORKFLOW_DISPATCH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
+          GITHUB_REPO_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO_NAME: ${{ github.event.repository.name }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
         run: node scripts/02-gorsel-uret.js
