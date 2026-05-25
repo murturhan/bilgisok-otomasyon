@@ -1,5 +1,7 @@
+// REV 002/25MAY26 - GlassesIcon animasyonlu GIF (saydam, chroma key uygulandi)
 import React from "react";
 import { Img, staticFile } from "remotion";
+import { Gif } from "@remotion/gif";
 
 /**
  * Merkezi brand asset path'leri.
@@ -8,7 +10,7 @@ import { Img, staticFile } from "remotion";
 export const BRAND_ASSETS = {
   logo: "brand/geniminilogo.png",
   tail: "brand/jess-tail.svg",
-  glasses: "brand/gozluk.png",
+  glasses: "brand/glasses.gif",
 };
 
 /**
@@ -59,8 +61,9 @@ export const GeniMiniLogo: React.FC<GeniMiniLogoProps> = ({ width = 600, style }
 };
 
 /**
- * Gözlük ikonu - PNG dosyasını yükler.
+ * Gözlük ikonu - SAYDAM ANIMASYONLU GIF.
  * Fun fact ekranında Jess yerine kullanılır.
+ * Chroma key ile yeşil arkaplan saydamlaştırılmış, gözlük canlandırılır.
  */
 interface GlassesIconProps {
   size?: number;
@@ -68,13 +71,17 @@ interface GlassesIconProps {
 }
 
 export const GlassesIcon: React.FC<GlassesIconProps> = ({ size = 100, style }) => {
+  // GIF orijinal aspect ratio: 458x223 (yaklaşık 2.05:1)
+  const aspectRatio = 458 / 223;
+  const gifWidth = size * 1.4; // gözlüğü biraz daha geniş göstermek için
+  const gifHeight = gifWidth / aspectRatio;
   return (
-    <Img
+    <Gif
       src={staticFile(BRAND_ASSETS.glasses)}
+      width={gifWidth}
+      height={gifHeight}
+      fit="contain"
       style={{
-        width: size,
-        height: "auto",
-        objectFit: "contain",
         filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
         ...style,
       }}
