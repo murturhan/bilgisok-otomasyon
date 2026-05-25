@@ -1,3 +1,4 @@
+// REV 000/25MAY26 - Foto acikken blur yok + AnimatedGlasses PNG + goz bebegi animasyonu
 import React from "react";
 import {
   AbsoluteFill,
