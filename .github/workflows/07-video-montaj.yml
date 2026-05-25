@@ -1,56 +1,47 @@
-name: 07 - Video Montaj (Remotion)
+# REV 000/25MAY26 - video_montaj event tipi + WORKFLOW_DISPATCH_TOKEN
+name: 07 - Video Montaj
+# REVISION: video_montaj event tipi + WORKFLOW_DISPATCH_TOKEN 2026-05-25
+# NOT: Bu dosyayı reponda olanın üstüne YAZMA - sadece şu eksikleri EKLE:
+#   1) on.repository_dispatch.types listesinde "video_montaj" olmalı
+#   2) env bloğunda WORKFLOW_DISPATCH_TOKEN, WORKER_URL, GITHUB_REPO_OWNER, GITHUB_REPO_NAME olmalı
+
 on:
   repository_dispatch:
     types: [video_montaj]
   workflow_dispatch:
     inputs:
       job_id:
-        description: 'Job ID (run_id)'
+        description: 'Job ID'
         required: true
 
 jobs:
   video-montaj:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: FFmpeg ve sistem bağımlılıkları
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            ffmpeg \
-            libnss3 \
-            libatk-bridge2.0-0 \
-            libdrm2 \
-            libxkbcommon0 \
-            libxcomposite1 \
-            libxdamage1 \
-            libxfixes3 \
-            libxrandr2 \
-            libgbm1 \
-            libpango-1.0-0 \
-            libcairo2 \
-            libasound2t64
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
       
-      - name: NPM dependencies (scripts için)
+      - name: System dependencies (ffmpeg + chromium)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg chromium-browser
+      
+      - name: Remotion deps
+        working-directory: remotion
+        run: npm install
+      
+      - name: Script deps
         run: |
           npm init -y
           npm pkg set type=module
-          npm install --no-save \
-            googleapis \
-            axios
-      
-      - name: Remotion bağımlılıkları (pre-install)
-        working-directory: ./remotion
-        run: |
-          npm install --no-audit --no-fund
+          npm install --no-save googleapis axios
       
       - name: Job ID belirle
         id: params
@@ -61,7 +52,7 @@ jobs:
             echo "job_id=${{ github.event.inputs.job_id }}" >> $GITHUB_OUTPUT
           fi
       
-      - name: Video montaj (Remotion render)
+      - name: Video montaj
         env:
           GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
@@ -69,9 +60,10 @@ jobs:
           GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
           GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
-          GDRIVE_MUZIK_FOLDER_ID: ${{ secrets.GDRIVE_MUZIK_FOLDER_ID }}
-          GDRIVE_JESS_FOLDER_ID: ${{ secrets.GDRIVE_JESS_FOLDER_ID }}
-          GDRIVE_SFX_FOLDER_ID: ${{ secrets.GDRIVE_SFX_FOLDER_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          WORKFLOW_DISPATCH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
+          GITHUB_REPO_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO_NAME: ${{ github.event.repository.name }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
         run: node scripts/07-video-montaj.js
