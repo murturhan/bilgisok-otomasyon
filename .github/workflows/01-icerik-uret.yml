@@ -1,4 +1,7 @@
+# REV 000/25MAY26 - paralel dispatch kaldirildi, akis sirali
 name: 01 - İçerik Üret
+# REVISION: paralel dispatch'ler kaldırıldı, akış sıralı (01→02 kod tetikler) 2026-05-25
+
 on:
   repository_dispatch:
     types: [icerik_uret]
@@ -79,51 +82,18 @@ jobs:
           CHAT_ID: ${{ steps.params.outputs.chat_id }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
           VIDEO_FORMAT: ${{ steps.params.outputs.video_format }}
+          WORKFLOW_DISPATCH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
+          GITHUB_REPO_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO_NAME: ${{ github.event.repository.name }}
         run: node scripts/01-icerik-uret.js
       
-      # Alt workflow'ları tetikle (görsel, ses, thumbnail)
-      - name: 02-Görsel tetikle
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
-            -d "{\"event_type\":\"gorsel_uret\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
-      
-      - name: 03-Seslendirme tetikle
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
-        run: |
-          curl -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
-            -d "{\"event_type\":\"seslendirme_uret\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
-      
+      # 05-Thumbnail tetikle (paralel - 01 sonrası, 02 ile aynı zamanda)
       - name: 05-Thumbnail tetikle
         env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
+          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
         run: |
           curl -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/dispatches" \
             -d "{\"event_type\":\"thumbnail_uret\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
-      
-      # 07-Video Montaj: 4 dakika bekle (görsel + ses bitmiş olsun), sonra tetikle
-      - name: 07-Video Montaj tetikle
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_PAT }}
-        run: |
-          echo "4 dakika bekleniyor (görsel ve ses üretiminin bitmesi için)..."
-          sleep 240
-          
-          curl -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
-            -d "{\"event_type\":\"video_montaj\",\"client_payload\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\"}}"
-          
-          echo "✅ 07-Video Montaj tetiklendi"
