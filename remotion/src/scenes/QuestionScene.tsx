@@ -1,4 +1,4 @@
-// REV 002/25MAY26 - glasses.png yolu brand/ altina cekildi
+// REV 004/25MAY26 - WebM gozluk loop (kullanicinin GIF i 60KB WebM e cevrildi)
 import React from "react";
 import {
   AbsoluteFill,
@@ -10,6 +10,7 @@ import {
   staticFile,
   Sequence,
   Img,
+  OffthreadVideo,
 } from "remotion";
 import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor } from "../styles/theme";
 import { Question, JessPoses } from "../types/schemas";
@@ -1090,104 +1091,23 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
   );
 };
 
-// ─── Animasyonlu Gözlük (PNG + dönen göz bebekleri) ────────────────────
-// Gözlük PNG'si arkaplan, üstüne 2 adet kahverengi göz bebeği çizilir.
-// Bebekler dairesel/meraklı hareket yapar (frame'e bağlı sinüs).
+// ─── Animasyonlu Gözlük (WebM loop) ────────────────────────────────────
+// 5 saniyelik loop video. Frame'i kullanarak hangi saniye olduğunu hesapla.
 const AnimatedGlasses: React.FC<{ width: number; height: number; frame: number }> = ({
-  width, height, frame,
+  width, height,
 }) => {
-  // Glasses PNG boyutu 800x300 → aspect 2.667
-  // İçindeki göz bebeklerinin konumu (PNG analizi):
-  // - Sol göz merkezi: x ≈ 32%, y ≈ 50%
-  // - Sağ göz merkezi: x ≈ 68%, y ≈ 50%
-  // - Göz beyazı yarıçapı: ≈ 15% genişlik
-  // - Göz bebeği yarıçapı: ≈ 5% genişlik
-  // - Hareket alanı (göz beyazı içinde): ±6% genişlik
-  
-  // Dairesel hareket (slow, meraklı)
-  const phase = frame * 0.04; // hız (yavaş)
-  const moveRadius = width * 0.025; // hareket yarıçapı
-  
-  // Her göz hafif farklı faz (asenkron daha doğal)
-  const leftX = Math.cos(phase) * moveRadius;
-  const leftY = Math.sin(phase) * moveRadius * 0.6; // y'de daha az hareket
-  const rightX = Math.cos(phase + 0.3) * moveRadius;
-  const rightY = Math.sin(phase + 0.3) * moveRadius * 0.6;
-  
-  // Göz bebek çapı
-  const pupilSize = width * 0.07;
-  
   return (
-    <div style={{ position: "relative", width, height }}>
-      {/* PNG gözlük */}
-      <Img
-        src={staticFile("brand/glasses.png")}
+    <div style={{ position: "relative", width, height, overflow: "hidden" }}>
+      <OffthreadVideo
+        src={staticFile("brand/glasses.webm")}
+        muted
+        loop
         style={{
           width: "100%",
           height: "100%",
           objectFit: "contain",
-          position: "absolute",
-          left: 0,
-          top: 0,
         }}
       />
-      {/* Sol göz bebeği */}
-      <div
-        style={{
-          position: "absolute",
-          left: `${32 - 100 * (pupilSize / 2 / width)}%`,
-          top: `${50 - 100 * (pupilSize / 2 / height)}%`,
-          width: pupilSize,
-          height: pupilSize,
-          borderRadius: "50%",
-          background: "radial-gradient(circle at 30% 30%, #5a3a1a 0%, #2a1a08 70%, #000 100%)",
-          transform: `translate(${leftX}px, ${leftY}px)`,
-          boxShadow: "inset 2px 2px 4px rgba(255,255,255,0.4)",
-          pointerEvents: "none",
-        }}
-      >
-        {/* Parlak nokta */}
-        <div
-          style={{
-            position: "absolute",
-            left: "25%",
-            top: "20%",
-            width: "25%",
-            height: "25%",
-            background: "white",
-            borderRadius: "50%",
-            opacity: 0.95,
-          }}
-        />
-      </div>
-      {/* Sağ göz bebeği */}
-      <div
-        style={{
-          position: "absolute",
-          left: `${68 - 100 * (pupilSize / 2 / width)}%`,
-          top: `${50 - 100 * (pupilSize / 2 / height)}%`,
-          width: pupilSize,
-          height: pupilSize,
-          borderRadius: "50%",
-          background: "radial-gradient(circle at 30% 30%, #5a3a1a 0%, #2a1a08 70%, #000 100%)",
-          transform: `translate(${rightX}px, ${rightY}px)`,
-          boxShadow: "inset 2px 2px 4px rgba(255,255,255,0.4)",
-          pointerEvents: "none",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            left: "25%",
-            top: "20%",
-            width: "25%",
-            height: "25%",
-            background: "white",
-            borderRadius: "50%",
-            opacity: 0.95,
-          }}
-        />
-      </div>
     </div>
   );
 };
