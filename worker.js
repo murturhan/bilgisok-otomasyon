@@ -204,10 +204,13 @@ button:hover{opacity:.88}
 .img-box img{height:110px;width:100%;object-fit:cover;display:block;border-radius:8px;transition:.2s}
 .img-box:hover img{opacity:.85}
 .img-box .no-img{color:#6b7280;font-size:.75em;text-align:center;padding:12px}
-.emoji-row{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap;align-items:flex-end}
-.emoji-inp{width:54px;height:54px;text-align:center;font-size:2em;padding:0;background:#1f2937;border:2px solid #4b5563;border-radius:12px;color:#fff;cursor:pointer;line-height:54px;transition:border-color .15s}
-.emoji-inp:focus{border-color:#3b82f6;outline:none;background:#111827}
-.emoji-hint{font-size:.68em;color:#6b7280;display:block;text-align:center;margin-top:3px}
+.emoji-row{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap;align-items:flex-start}
+.emoji-cell{display:flex;flex-direction:column;align-items:center;position:relative}
+.emoji-pick-btn{width:56px;height:56px;font-size:2em;background:#1f2937;border:2px solid #4b5563;border-radius:12px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:border-color .15s,background .15s}
+.emoji-pick-btn:hover,.emoji-pick-btn:active{border-color:#3b82f6;background:#111827}
+.emoji-edit-inp{width:56px;height:56px;text-align:center;font-size:2em;padding:0;background:#111827;border:2px solid #3b82f6;border-radius:12px;color:#fff;display:none}
+.emoji-edit-inp:focus{outline:none}
+.emoji-hint{font-size:.68em;color:#6b7280;display:block;text-align:center;margin-top:3px;pointer-events:none}
 .img-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .btn-sm{padding:5px 10px;border:1px solid #4b5563;background:#374151;color:#d1d5db;border-radius:5px;font-size:.78em;cursor:pointer}
 .btn-sm:hover{background:#4b5563}
@@ -242,7 +245,7 @@ textarea{min-height:56px}
 <form id="frm" onsubmit="return false" class="cards">
 ${topic_emojis.length ? `<div class="card" style="padding:10px 14px">
   <span style="font-size:.75em;color:#9ca3af">🎨 Intro Emojileri (videoda başlık altında görünür)</span>
-  <div class="emoji-row" style="margin-top:8px">${topic_emojis.map((e,i)=>`<div style="display:flex;flex-direction:column;align-items:center"><input class="emoji-inp" id="te_${i}" value="${esc(e)}" maxlength="4" title="Emoji ${i+1}"><span class="emoji-hint">Değiştir</span></div>`).join("")}</div>
+  <div class="emoji-row" style="margin-top:8px">${topic_emojis.map((e,i)=>`<div class="emoji-cell"><button type="button" class="emoji-pick-btn" id="te_${i}_btn" onclick="editEmoji('te_${i}')">${esc(e)||"❓"}</button><input type="text" class="emoji-edit-inp" id="te_${i}" value="${esc(e)}" maxlength="8"><span class="emoji-hint">Değiştir</span></div>`).join("")}</div>
 </div>` : ""}
 ${qCards}
 </form>
@@ -278,6 +281,24 @@ function toggleRegen(checkId, btnId, key){
   btn.style.background=cb.checked?'#78350f':'';
   btn.style.color=cb.checked?'#fef3c7':'';
   if(cb.checked) delete customImages[key];
+}
+
+function editEmoji(inputId){
+  const inp=document.getElementById(inputId);
+  const btn=document.getElementById(inputId+"_btn");
+  if(!inp||!btn) return;
+  btn.style.display="none";
+  inp.style.display="block";
+  inp.focus();
+  inp.select();
+  function save(){
+    const v=inp.value.trim();
+    btn.textContent=v||"❓";
+    inp.style.display="none";
+    btn.style.display="flex";
+  }
+  inp.onblur=save;
+  inp.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();inp.blur();}};
 }
 
 async function submit_(level, applyEdits){
@@ -352,7 +373,7 @@ function buildQuestionCard(q, i) {
     `<input type="text" id="q${i}_o${j}" value="${esc(o)}" placeholder="${["A","B","C"][j]}">`
   ).join("");
   const flagInputs = (q.option_flags || ["","",""]).map((f, j) =>
-    `<div style="display:flex;flex-direction:column;align-items:center"><input class="emoji-inp" id="q${i}_f${j}" value="${esc(f)}" maxlength="4" title="Şık ${["A","B","C"][j]} emoji"><span class="emoji-hint">${["A","B","C"][j]}</span></div>`
+    `<div class="emoji-cell"><button type="button" class="emoji-pick-btn" id="q${i}_f${j}_btn" onclick="editEmoji('q${i}_f${j}')">${esc(f)||"❓"}</button><input type="text" class="emoji-edit-inp" id="q${i}_f${j}" value="${esc(f)}" maxlength="8"><span class="emoji-hint">${["A","B","C"][j]}</span></div>`
   ).join("");
   const caOpts = options.map((o, j) =>
     `<option value="${j}" ${correct_answer === j ? "selected" : ""}>${["A","B","C"][j]}: ${esc(o)}</option>`
