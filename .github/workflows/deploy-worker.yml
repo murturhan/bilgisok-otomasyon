@@ -19,47 +19,6 @@ jobs:
         with:
           node-version: '20'
 
-      - name: KV namespace oluştur veya bul
-        id: kv
-        env:
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          # Mevcut namespace'leri listele
-          LIST=$(curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/storage/kv/namespaces?per_page=100" \
-            -H "Authorization: Bearer $CF_TOKEN")
-
-          KV_ID=$(echo "$LIST" | node -e "
-            let d='';
-            process.stdin.on('data',c=>d+=c);
-            process.stdin.on('end',()=>{
-              const r=JSON.parse(d).result||[];
-              const f=r.find(n=>n.title==='JOB_DATA');
-              if(f) process.stdout.write(f.id);
-            });
-          ")
-
-          if [ -z "$KV_ID" ]; then
-            echo "JOB_DATA namespace bulunamadı, oluşturuluyor..."
-            CREATE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/storage/kv/namespaces" \
-              -H "Authorization: Bearer $CF_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d '{"title":"JOB_DATA"}')
-            KV_ID=$(echo "$CREATE" | node -e "
-              let d='';
-              process.stdin.on('data',c=>d+=c);
-              process.stdin.on('end',()=>{
-                const r=JSON.parse(d);
-                if(r.result?.id) process.stdout.write(r.result.id);
-                else { console.error(JSON.stringify(r)); process.exit(1); }
-              });
-            ")
-          fi
-
-          echo "KV ID: $KV_ID"
-          sed -i "s/PLACEHOLDER_KV_ID/$KV_ID/" wrangler.toml
-          echo "kv_id=$KV_ID" >> $GITHUB_OUTPUT
-
       - name: Deploy Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

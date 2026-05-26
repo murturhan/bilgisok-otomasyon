@@ -1,20 +1,21 @@
-// REV 002/27MAY26 - Full worker: Telegram webhook + onay sayfası (KV) + API endpoints
+// REV 003/27MAY26 - GitHub Issues storage (KV yerine), tam onay sayfası
 /**
  * Cloudflare Worker — telegram-to-github
  *
- * Rotalar:
- *   POST /                  → Telegram webhook (callback_query → GitHub dispatch)
- *   POST /api/job/:id       → Job verisini KV'ye yaz (02.5-onay-tetikle.js)
- *   GET  /?job=ID           → Onay sayfası HTML
- *   POST /api/submit/:id    → Form submit → KV'ye edits yaz + GitHub dispatch
- *   GET  /api/edits/:id     → Editleri dön (02.7-degisiklik-uygula.js)
+ * Storage: GitHub Issues (GITHUB_TOKEN kullanır, KV gerekmez)
  *
- * KV binding: JOB_DATA (wrangler.toml'da id tanımlanmalı)
+ * Rotalar:
+ *   POST /                  → Telegram webhook
+ *   POST /api/job/:id       → Job verisini GitHub Issue'ya yaz
+ *   GET  /?job=ID           → Onay sayfası HTML
+ *   POST /api/submit/:id    → Form submit → edits yaz + GitHub dispatch
+ *   GET  /api/edits/:id     → Editleri dön (02.7 için)
+ *
  * Secrets: GITHUB_TOKEN, TELEGRAM_BOT_TOKEN
  */
 
-const GITHUB_REPO_OWNER = "murturhan";
-const GITHUB_REPO_NAME  = "bilgisok-otomasyon";
+const REPO_OWNER = "murturhan";
+const REPO_NAME  = "bilgisok-otomasyon";
 
 export default {
   async fetch(request, env, ctx) {
@@ -41,6 +42,70 @@ export default {
   },
 };
 
+// ─── GitHub Issues storage ────────────────────────────────────
+
+const GH_API = "https://api.github.com";
+
+function ghHeaders(env) {
+  return {
+    "Authorization": `Bearer ${env.GITHUB_TOKEN}`,
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "Content-Type": "application/json",
+    "User-Agent": "geniminitests-worker",
+  };
+}
+
+async function issueBul(jobId, env) {
+  const r = await fetch(
+    `${GH_API}/search/issues?q=repo:${REPO_OWNER}/${REPO_NAME}+is:issue+in:title+worker-job:${jobId}&per_page=1`,
+    { headers: ghHeaders(env) }
+  );
+  if (!r.ok) return null;
+  const d = await r.json();
+  return d.items?.[0] || null;
+}
+
+async function issueOlustur(jobId, icerik, env) {
+  const r = await fetch(
+    `${GH_API}/repos/${REPO_OWNER}/${REPO_NAME}/issues`,
+    {
+      method: "POST",
+      headers: ghHeaders(env),
+      body: JSON.stringify({
+        title: `worker-job:${jobId}`,
+        body: JSON.stringify(icerik),
+      }),
+    }
+  );
+  return await r.json();
+}
+
+async function issueGuncelle(number, icerik, env) {
+  await fetch(
+    `${GH_API}/repos/${REPO_OWNER}/${REPO_NAME}/issues/${number}`,
+    {
+      method: "PATCH",
+      headers: ghHeaders(env),
+      body: JSON.stringify({ body: JSON.stringify(icerik) }),
+    }
+  );
+}
+
+async function issueVeriOku(jobId, env) {
+  const issue = await issueBul(jobId, env);
+  if (!issue) return null;
+  // GitHub search API body truncates — tam içeriği çek
+  const r = await fetch(
+    `${GH_API}/repos/${REPO_OWNER}/${REPO_NAME}/issues/${issue.number}`,
+    { headers: ghHeaders(env) }
+  );
+  if (!r.ok) return null;
+  const full = await r.json();
+  try { return { number: full.number, data: JSON.parse(full.body) }; }
+  catch { return null; }
+}
+
 // ─── POST /api/job/:id ─────────────────────────────────────────
 async function handleStoreJob(request, env, url) {
   const auth = request.headers.get("Authorization") || "";
@@ -50,16 +115,23 @@ async function handleStoreJob(request, env, url) {
   const jobId = url.pathname.split("/").pop();
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
-  await env.JOB_DATA.put(`job:${jobId}`, JSON.stringify(data), { expirationTtl: 86400 });
+
+  const mevcut = await issueVeriOku(jobId, env);
+  const icerik = { job: data, edits: mevcut?.data?.edits || {} };
+
+  if (mevcut) {
+    await issueGuncelle(mevcut.number, icerik, env);
+  } else {
+    await issueOlustur(jobId, icerik, env);
+  }
   return json({ ok: true });
 }
 
 // ─── GET /api/edits/:id ────────────────────────────────────────
 async function handleGetEdits(request, env, url) {
   const jobId = url.pathname.split("/").pop();
-  const raw = await env.JOB_DATA.get(`edits:${jobId}`);
-  const edits = raw ? JSON.parse(raw) : {};
-  return json(edits);
+  const mevcut = await issueVeriOku(jobId, env);
+  return json(mevcut?.data?.edits || {});
 }
 
 // ─── POST /api/submit/:id ──────────────────────────────────────
@@ -67,10 +139,13 @@ async function handleSubmit(request, env, url, ctx) {
   const jobId = url.pathname.split("/").pop();
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
-
   const { edits = {}, approval_level = "full", chat_id = "" } = body;
 
-  await env.JOB_DATA.put(`edits:${jobId}`, JSON.stringify(edits), { expirationTtl: 86400 });
+  const mevcut = await issueVeriOku(jobId, env);
+  if (mevcut) {
+    const yeni = { job: mevcut.data?.job || {}, edits };
+    await issueGuncelle(mevcut.number, yeni, env);
+  }
 
   ctx.waitUntil(githubDispatch("degisiklik_uygula", {
     job_id: jobId,
@@ -86,20 +161,19 @@ async function handleApprovalPage(request, env, url) {
   const jobId = url.searchParams.get("job") || "";
   if (!jobId) return new Response("job parametresi eksik", { status: 400 });
 
-  const raw = await env.JOB_DATA.get(`job:${jobId}`);
-  if (!raw) {
+  const mevcut = await issueVeriOku(jobId, env);
+  if (!mevcut || !mevcut.data?.job) {
     return new Response(
       `<!DOCTYPE html><html><body style="font-family:system-ui;background:#1a1a2e;color:#eee;padding:32px">
       <h2>❌ Job bulunamadı</h2><p>Job ID: <code>${esc(jobId)}</code></p>
-      <p>02.5-onay-tetikle henüz çalışmadı veya 24 saat geçti.</p>
+      <p>02.5-onay-tetikle henüz çalışmadı veya veri yok.</p>
       </body></html>`,
       { headers: { "Content-Type": "text/html;charset=utf-8" } }
     );
   }
 
-  const job = JSON.parse(raw);
+  const job = mevcut.data.job;
   const { topic = "", format = "", baslik = "", questions = [], chat_id = "" } = job;
-
   const qCards = questions.map((q, i) => buildQuestionCard(q, i)).join("\n");
 
   const html = `<!DOCTYPE html>
@@ -142,10 +216,8 @@ code{background:#222;padding:2px 6px;border-radius:4px;font-size:.85em}
   <div style="font-weight:600;color:#fff">${esc(topic)}</div>
   ${baslik ? `<div style="color:#aaa;font-size:.9em;margin-top:4px">${esc(baslik)}</div>` : ""}
 </div>
-
 <form id="frm" onsubmit="return false">
 ${qCards}
-
 <div class="btns">
   <button type="button" class="b-full" onclick="submit_('full')">✅ Onayla → Ses Üret</button>
   <button type="button" class="b-regen" onclick="submit_('regen_only')">🔄 Değiştir → Tekrar İncele</button>
@@ -153,51 +225,38 @@ ${qCards}
 </div>
 <div id="status"></div>
 </form>
-
 <script>
 const JOB_ID = ${JSON.stringify(jobId)};
 const CHAT_ID = ${JSON.stringify(String(chat_id))};
 const N = ${questions.length};
-
-function val(name) { const el = document.getElementById(name); return el ? el.value : ""; }
-function chk(name) { const el = document.getElementById(name); return el ? el.checked : false; }
-
-async function submit_(level) {
-  const edits = {};
-  for (let i = 0; i < N; i++) {
-    edits[String(i)] = {
-      question_text: val("q"+i+"_qt"),
-      options: [val("q"+i+"_o0"), val("q"+i+"_o1"), val("q"+i+"_o2")],
-      correct_answer: parseInt(val("q"+i+"_ca")) || 0,
-      fun_fact: val("q"+i+"_ff"),
-      image_prompt: val("q"+i+"_ip"),
-      fun_fact_image_prompt: val("q"+i+"_fp"),
-      regen_question_image: chk("q"+i+"_rq"),
-      regen_fact_image: chk("q"+i+"_rf"),
+function val(id){const e=document.getElementById(id);return e?e.value:"";}
+function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
+async function submit_(level){
+  const edits={};
+  for(let i=0;i<N;i++){
+    edits[String(i)]={
+      question_text:val("q"+i+"_qt"),
+      options:[val("q"+i+"_o0"),val("q"+i+"_o1"),val("q"+i+"_o2")],
+      correct_answer:parseInt(val("q"+i+"_ca"))||0,
+      fun_fact:val("q"+i+"_ff"),
+      image_prompt:val("q"+i+"_ip"),
+      fun_fact_image_prompt:val("q"+i+"_fp"),
+      regen_question_image:chk("q"+i+"_rq"),
+      regen_fact_image:chk("q"+i+"_rf"),
     };
   }
-  const st = document.getElementById("status");
-  st.style.display = "block";
-  st.className = "";
-  st.textContent = "⏳ Gönderiliyor...";
-  try {
-    const r = await fetch("/api/submit/" + JOB_ID, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ edits, approval_level: level, chat_id: CHAT_ID }),
+  const st=document.getElementById("status");
+  st.style.display="block";st.className="";st.textContent="⏳ Gönderiliyor...";
+  try{
+    const r=await fetch("/api/submit/"+JOB_ID,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID}),
     });
-    const d = await r.json();
-    if (d.ok) {
-      st.className = "ok";
-      st.textContent = "✅ Gönderildi! Telegram'da bildirim alacaksın.";
-    } else {
-      st.className = "err";
-      st.textContent = "❌ Hata: " + JSON.stringify(d);
-    }
-  } catch(e) {
-    st.className = "err";
-    st.textContent = "❌ " + e.message;
-  }
+    const d=await r.json();
+    if(d.ok){st.className="ok";st.textContent="✅ Gönderildi! Telegram'da bildirim alacaksın.";}
+    else{st.className="err";st.textContent="❌ Hata: "+JSON.stringify(d);}
+  }catch(e){st.className="err";st.textContent="❌ "+e.message;}
 }
 </script>
 </body>
@@ -212,18 +271,15 @@ function buildQuestionCard(q, i) {
     fun_fact = "", image_prompt = "", fun_fact_image_prompt = "",
     question_image_url = null, fun_fact_image_url = null,
   } = q;
-
   const optInputs = options.map((o, j) =>
     `<input type="text" id="q${i}_o${j}" value="${esc(o)}">`
   ).join("");
-
   const caOpts = options.map((o, j) =>
     `<option value="${j}" ${correct_answer === j ? "selected" : ""}>${["A","B","C"][j]}: ${esc(o)}</option>`
   ).join("");
-
   return `<div class="card">
   <div class="ch">Soru ${i + 1}</div>
-  ${question_image_url ? `<img src="${esc(question_image_url)}" alt="Q${i+1} görsel">` : ""}
+  ${question_image_url ? `<img src="${esc(question_image_url)}" alt="Q${i+1}">` : ""}
   <label>Soru metni</label>
   <textarea id="q${i}_qt">${esc(question_text)}</textarea>
   <label>Şıklar (A / B / C)</label>
@@ -232,19 +288,13 @@ function buildQuestionCard(q, i) {
   <select id="q${i}_ca">${caOpts}</select>
   <label>Fun Fact</label>
   <textarea id="q${i}_ff">${esc(fun_fact)}</textarea>
-  ${fun_fact_image_url ? `<img src="${esc(fun_fact_image_url)}" alt="Fact${i+1} görsel">` : ""}
+  ${fun_fact_image_url ? `<img src="${esc(fun_fact_image_url)}" alt="Fact${i+1}">` : ""}
   <label>Soru görseli prompt</label>
   <textarea id="q${i}_ip">${esc(image_prompt)}</textarea>
-  <div class="rrow">
-    <input type="checkbox" id="q${i}_rq">
-    <label for="q${i}_rq">Soru görselini yeniden üret (FLUX)</label>
-  </div>
+  <div class="rrow"><input type="checkbox" id="q${i}_rq"><label for="q${i}_rq">Soru görselini yeniden üret</label></div>
   <label>Fact görseli prompt</label>
   <textarea id="q${i}_fp">${esc(fun_fact_image_prompt)}</textarea>
-  <div class="rrow">
-    <input type="checkbox" id="q${i}_rf">
-    <label for="q${i}_rf">Fact görselini yeniden üret (FLUX)</label>
-  </div>
+  <div class="rrow"><input type="checkbox" id="q${i}_rf"><label for="q${i}_rf">Fact görselini yeniden üret</label></div>
 </div>`;
 }
 
@@ -261,17 +311,16 @@ async function handleTelegram(request, env, ctx) {
 
     ctx.waitUntil(telegramCevapla(cbId, env));
 
-    // quiz:format:tarih:idx[:mode]
     const parts = data.split(":");
     if (parts[0] === "quiz" && parts.length >= 4) {
-      const format      = parts[1];
-      const tarih       = parts[2];
-      const idx         = parts[3];
-      const mode        = parts[4] || "full";
-      const isTest      = mode === "test";
-      const tarihKisa   = tarih.replace(/\./g, "").slice(0, 6);
+      const format       = parts[1];
+      const tarih        = parts[2];
+      const idx          = parts[3];
+      const mode         = parts[4] || "full";
+      const isTest       = mode === "test";
+      const tarihKisa    = tarih.replace(/\./g, "").slice(0, 6);
       const formatSuffix = format === "shorts" ? "S" : "L";
-      const jobId       = `${tarihKisa}${idx}${formatSuffix}`;
+      const jobId        = `${tarihKisa}${idx}${formatSuffix}`;
 
       ctx.waitUntil(
         githubDispatch("icerik_uret", {
@@ -288,7 +337,6 @@ async function handleTelegram(request, env, ctx) {
   return new Response("OK", { status: 200 });
 }
 
-// ─── Telegram callback onayı ──────────────────────────────────
 async function telegramCevapla(callbackId, env) {
   try {
     await fetch(
@@ -299,15 +347,12 @@ async function telegramCevapla(callbackId, env) {
         body: JSON.stringify({ callback_query_id: callbackId }),
       }
     );
-  } catch (e) {
-    console.error("answerCallbackQuery hatası:", e.message);
-  }
+  } catch (e) { console.error("answerCallbackQuery hatası:", e.message); }
 }
 
-// ─── GitHub Actions dispatch ──────────────────────────────────
 async function githubDispatch(eventType, payload, env) {
   const res = await fetch(
-    `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/dispatches`,
+    `${GH_API}/repos/${REPO_OWNER}/${REPO_NAME}/dispatches`,
     {
       method: "POST",
       headers: {
@@ -328,7 +373,6 @@ async function githubDispatch(eventType, payload, env) {
   }
 }
 
-// ─── Yardımcı ─────────────────────────────────────────────────
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -338,8 +382,6 @@ function json(data, status = 200) {
 
 function esc(str) {
   return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
