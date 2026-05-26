@@ -1,3 +1,7 @@
-name = "geniminitests-worker"
+name = "telegram-to-github"
 main = "worker.js"
 compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "JOB_DATA"
+id = "PLACEHOLDER_KV_ID"
