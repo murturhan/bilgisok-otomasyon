@@ -1,7 +1,6 @@
-// REV 002/25MAY26 - GlassesIcon animasyonlu GIF (saydam, chroma key uygulandi)
+// REV 003/26MAY26 - GlassesIcon OffthreadVideo ile (canvas sorunu cozuldu)
 import React from "react";
-import { Img, staticFile } from "remotion";
-import { Gif } from "@remotion/gif";
+import { Img, OffthreadVideo, staticFile } from "remotion";
 
 /**
  * Merkezi brand asset path'leri.
@@ -76,15 +75,14 @@ export const GlassesIcon: React.FC<GlassesIconProps> = ({ size = 100, style }) =
   const gifWidth = size * 1.4; // gözlüğü biraz daha geniş göstermek için
   const gifHeight = gifWidth / aspectRatio;
   return (
-    <Gif
+    <OffthreadVideo
       src={staticFile(BRAND_ASSETS.glasses)}
-      width={gifWidth}
-      height={gifHeight}
-      fit="contain"
       style={{
-        filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
+        width: gifWidth,
+        height: gifHeight,
         ...style,
       }}
+      loop
     />
   );
 };
