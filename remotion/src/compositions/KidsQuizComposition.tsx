@@ -1,3 +1,4 @@
+// REV 001/25MAY26 - Muzik ses seviyeleri: konusurken 0.08, konusmazken 0.13
 import React from "react";
 import {
   AbsoluteFill,
@@ -105,8 +106,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       }
     }
     
-    const targetVol = speaking ? 0.02 : 0.15;
-    const startVol = prevSpeaking ? 0.02 : 0.15;
+    const targetVol = speaking ? 0.08 : 0.13;
+    const startVol = prevSpeaking ? 0.08 : 0.13;
     
     if (framesSinceChange < MUSIC_DUCK_FRAMES) {
       const t = framesSinceChange / MUSIC_DUCK_FRAMES;
