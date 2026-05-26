@@ -1,8 +1,10 @@
+// REV 001/26MAY26 - HighlightedText + idle bounce
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { BRAND, FONTS, ThemeColor, THEME_COLORS } from "../styles/theme";
 import { BurstBadge } from "./BurstBadge";
 import { TopBar } from "./TopBar";
+import { HighlightedText } from "./HighlightedText";
 
 interface QuizHeaderProps {
   questionNumber: number;
@@ -74,12 +76,14 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   const pillX = interpolate(pillAnim, [0, 1], [300, 0]);
   const pillOpacity = interpolate(pillAnim, [0, 0.5], [0, 1]);
   
+  const idleBounce = Math.sin(frame * 0.08) * 4;
+
   // Boyutlar - soru başlığı font sabit, BAR 1/3 büyütüldü (kullanıcı talebi)
   const badgeSize = isVertical ? 160 : 180;
   const fontSize = isVertical ? 78 : 90;
   const barHeight = isVertical ? 267 : 293;
   const padding = isVertical ? 28 : 50;
-  
+
   // ═══ FACT MODU: Ampul sol + DID YOU KNOW + yeşil pill sağ ═══
   if (isFactMode) {
     const bulbSize = isVertical ? 110 : 140;
@@ -87,6 +91,7 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
     const pillFontSize = isVertical ? 62 : 76;
     
     return (
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: barHeight, transform: `translateY(${idleBounce}px)` }}>
       <TopBar theme={theme} height={barHeight}>
         <div
           style={{
@@ -169,11 +174,12 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
           </div>
         </div>
       </TopBar>
+      </div>
     );
   }
-  
+
   // ═══ NORMAL MOD: BurstBadge + soru cümlesi ═══
-  const questionUpper = questionText.toUpperCase();
+  const questionUpper = questionText.replace(/\*\*/g, "").toUpperCase();
   
   // DİNAMİK FONT: 3 satıra sığması için font küçültme
   // Tahmini: shorts'ta soru alanı genişliği ~ 1080 - 2*padding - badge - gap - badgePadRight ≈ 700px
@@ -220,6 +226,7 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
   const dynFontSize = calcFitFont(fontSize);
   
   return (
+    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: barHeight, transform: `translateY(${idleBounce}px)` }}>
     <TopBar theme={theme} height={barHeight}>
       <div
         style={{
@@ -255,7 +262,6 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
               fontSize: dynFontSize,
               fontFamily: FONTS.display,
               fontWeight: 900,
-              color: BRAND.white,
               textShadow: `
                 -3px -3px 0 ${BRAND.black},
                 3px -3px 0 ${BRAND.black},
@@ -268,11 +274,12 @@ export const QuizHeader: React.FC<QuizHeaderProps> = ({
               textTransform: "uppercase",
             }}
           >
-            {questionUpper}
+            <HighlightedText text={questionText} baseColor={BRAND.white} />
           </div>
         </div>
       </div>
     </TopBar>
+    </div>
   );
 };
 

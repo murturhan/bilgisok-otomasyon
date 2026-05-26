@@ -1,6 +1,7 @@
-// REV 003/26MAY26 - GlassesIcon OffthreadVideo ile (canvas sorunu cozuldu)
+// REV 004/26MAY26 - GlassesIcon emoji'ye donustu (glasses.gif kaldirildi)
 import React from "react";
-import { Img, OffthreadVideo, staticFile } from "remotion";
+import { Img, staticFile } from "remotion";
+import { TwemojiText } from "./TwemojiText";
 
 /**
  * Merkezi brand asset path'leri.
@@ -9,7 +10,6 @@ import { Img, OffthreadVideo, staticFile } from "remotion";
 export const BRAND_ASSETS = {
   logo: "brand/geniminilogo.png",
   tail: "brand/jess-tail.svg",
-  glasses: "brand/glasses.gif",
 };
 
 /**
@@ -60,9 +60,8 @@ export const GeniMiniLogo: React.FC<GeniMiniLogoProps> = ({ width = 600, style }
 };
 
 /**
- * Gözlük ikonu - SAYDAM ANIMASYONLU GIF.
+ * Gözlük ikonu - 🤓 emoji (Twemoji SVG).
  * Fun fact ekranında Jess yerine kullanılır.
- * Chroma key ile yeşil arkaplan saydamlaştırılmış, gözlük canlandırılır.
  */
 interface GlassesIconProps {
   size?: number;
@@ -70,19 +69,9 @@ interface GlassesIconProps {
 }
 
 export const GlassesIcon: React.FC<GlassesIconProps> = ({ size = 100, style }) => {
-  // GIF orijinal aspect ratio: 458x223 (yaklaşık 2.05:1)
-  const aspectRatio = 458 / 223;
-  const gifWidth = size * 1.4; // gözlüğü biraz daha geniş göstermek için
-  const gifHeight = gifWidth / aspectRatio;
   return (
-    <OffthreadVideo
-      src={staticFile(BRAND_ASSETS.glasses)}
-      style={{
-        width: gifWidth,
-        height: gifHeight,
-        ...style,
-      }}
-      loop
-    />
+    <span style={{ fontSize: size, lineHeight: 1, display: "inline-block", ...style }}>
+      <TwemojiText text="🤓" />
+    </span>
   );
 };

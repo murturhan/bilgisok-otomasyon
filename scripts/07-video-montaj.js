@@ -1,4 +1,4 @@
-// REV 001/25MAY26 - Telegram markdown kaldirildi (400 hatasi), drive+tg log eklendi
+// REV 002/26MAY26 - sfx pop_single + pop_double + progress + applause eklendi
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -273,6 +273,10 @@ async function sfxIndir(auth, hedefKlasor) {
     else if (ad.includes("drum")) sfxKey = "drum";
     else if (ad.includes("correct") || ad.includes("ding")) sfxKey = "correct";
     else if (ad.includes("whoosh") || ad.includes("transition")) sfxKey = "whoosh";
+    else if (ad.includes("pop-single") || ad.includes("pop_single") || (ad.includes("pop") && ad.includes("single"))) sfxKey = "pop_single";
+    else if (ad.includes("pop-double") || ad.includes("pop_double") || (ad.includes("pop") && ad.includes("double"))) sfxKey = "pop_double";
+    else if (ad.includes("progress") || ad.includes("fill")) sfxKey = "progress";
+    else if (ad.includes("applause") || ad.includes("clap")) sfxKey = "applause";
     
     if (sfxKey && !sfxMap[sfxKey]) {
       // SFX dosyasını .wav uzantılı olsun bizimkilerle uyumlu
@@ -618,6 +622,10 @@ async function main() {
       sfx_drum: sfxMap.drum,
       sfx_correct: sfxMap.correct,
       sfx_whoosh: sfxMap.whoosh,
+      sfx_pop_single: sfxMap.pop_single,
+      sfx_pop_double: sfxMap.pop_double,
+      sfx_progress: sfxMap.progress,
+      sfx_applause: sfxMap.applause,
     };
 
     const propsJsonPath = path.join(TMP_DIR, "input-props.json");

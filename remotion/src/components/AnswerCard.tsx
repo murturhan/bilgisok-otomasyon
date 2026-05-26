@@ -1,6 +1,8 @@
+// REV 001/26MAY26 - TwemojiText + idle bounce
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { BRAND, FONTS, ANSWER_BADGE_COLORS } from "../styles/theme";
+import { TwemojiText } from "./TwemojiText";
 
 export type AnswerState = "idle" | "revealedCorrect" | "revealedDim";
 
@@ -113,11 +115,14 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
     readingGlow = `, 0 0 28px rgba(255, 200, 50, 0.55), 0 0 50px rgba(255, 215, 100, 0.35)`;
   }
   
+  const BOUNCE_PHASE = letter === "A" ? 15 : letter === "B" ? 30 : 45;
+  const idleBounce = state === "idle" ? Math.sin((frame + BOUNCE_PHASE) * 0.08) * 4 : 0;
+
   const cardPadding = large ? "28px 42px" : "24px 34px";
   const badgeSize = large ? 86 : 74;
   const textSize = large ? 52 : 44;
   const letterSize = large ? 42 : 38;
-  
+
   return (
     <div
       style={{
@@ -129,7 +134,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
         borderRadius: 50,
         border: borderWidth > 0 ? `${borderWidth}px solid ${BRAND.correctGreen}` : "none",
         opacity: enterOpacity * currentOpacity,
-        transform: `translateX(${enterTranslateX}px) translateY(${enterTranslateY}px) scale(${currentScale * correctPulse * readingScale}) rotate(${readingWobble}deg)`,
+        transform: `translateX(${enterTranslateX}px) translateY(${enterTranslateY + idleBounce}px) scale(${currentScale * correctPulse * readingScale}) rotate(${readingWobble}deg)`,
         boxShadow: `0 8px 24px rgba(0,0,0,0.35)${extraShadow}${readingGlow}`,
         width: "100%",
         filter: dimFilter,
@@ -180,7 +185,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
           textTransform: "uppercase",
         }}
       >
-        {text}
+        <TwemojiText text={text} />
       </div>
     </div>
   );

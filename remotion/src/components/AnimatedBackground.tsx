@@ -1,3 +1,4 @@
+// REV 002/26MAY26 - motionSpeed default 2, sunburst 0.1->0.18
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate } from "remotion";
 import { ThemeColor } from "../styles/theme";
@@ -33,7 +34,7 @@ interface AnimatedBackgroundProps {
 export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
   theme,
   pattern = "bolt",
-  motionSpeed = 1,
+  motionSpeed = 2,
 }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
@@ -99,7 +100,7 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
           top: 0,
           left: 0,
           opacity: 0.18,
-          transform: `rotate(${frame * 0.1}deg)`,
+          transform: `rotate(${frame * 0.18}deg)`,
           transformOrigin: "center center",
         }}
       >

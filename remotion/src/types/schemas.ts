@@ -84,6 +84,8 @@ export const quizCompositionSchema = z.object({
   sfx_drum: z.string().optional(),
   sfx_correct: z.string().optional(),
   sfx_whoosh: z.string().optional(),
+  sfx_pop_single: z.string().optional(),
+  sfx_pop_double: z.string().optional(),
   // Sıvı progress bar dolan sesi (Quiz Blitz tarzı)
   sfx_progress: z.string().optional(),
   // Outro alkış sesi - "GREAT JOB!" göründüğünde çalar

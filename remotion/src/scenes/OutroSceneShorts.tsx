@@ -1,3 +1,4 @@
+// REV 001/26MAY26 - motionSpeed 1.5->2.5
 import React from "react";
 import {
   AbsoluteFill,
@@ -47,7 +48,7 @@ export const OutroSceneShorts: React.FC<Props> = ({
   
   return (
     <AbsoluteFill>
-      <AnimatedBackground theme={theme} pattern="stars" motionSpeed={1.5} />
+      <AnimatedBackground theme={theme} pattern="stars" motionSpeed={2.5} />
       <VerticalBrandTag side="right" topOffset={200} bottomOffset={200} fontSize={28} />
       
       {(inScene1 || inTransition) && (

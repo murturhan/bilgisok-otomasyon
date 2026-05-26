@@ -7,8 +7,12 @@
  * - Brand mor (#5B2C8C) header ve "GENIMINI TESTS" için sabit
  */
 
+// REV 001/26MAY26 - highlightPalette eklendi (renkli kelime vurgusu)
+
 // ─── SABITLER ─────────────────────────────────────────
 export const FPS = 30;
+
+export const highlightPalette = ["#FFE600", "#FF5BA7", "#5BE0FF", "#7FFF7F", "#FFB347"];
 
 // Yumuşak music ducking için frame sayısı
 export const MUSIC_DUCK_FRAMES = 15;

@@ -1,4 +1,6 @@
+// REV 001/26MAY26 - idle bounce eklendi
 import React from "react";
+import { useCurrentFrame } from "remotion";
 import { BRAND, FONTS } from "../styles/theme";
 
 interface VerticalBrandTagProps {
@@ -21,6 +23,9 @@ export const VerticalBrandTag: React.FC<VerticalBrandTagProps> = ({
   bottomOffset = 200,
   fontSize = 28,
 }) => {
+  const frame = useCurrentFrame();
+  const BOUNCE_PHASE = 60;
+  const idleBounce = Math.sin((frame + BOUNCE_PHASE) * 0.08) * 4;
   return (
     <div
       style={{
@@ -34,6 +39,7 @@ export const VerticalBrandTag: React.FC<VerticalBrandTagProps> = ({
         alignItems: "center",
         justifyContent: "center",
         pointerEvents: "none",
+        transform: `translateY(${idleBounce}px)`,
       }}
     >
       <div

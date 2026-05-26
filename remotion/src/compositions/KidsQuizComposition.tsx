@@ -1,4 +1,4 @@
-// REV 002/25MAY26 - Jess ses 1.2->1.5
+// REV 003/26MAY26 - sfx_pop_single + sfx_pop_double QuestionScene'e eklendi
 import React from "react";
 import {
   AbsoluteFill,
@@ -41,6 +41,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   sfx_drum,
   sfx_correct,
   sfx_whoosh,
+  sfx_pop_single,
+  sfx_pop_double,
   sfx_progress,
   sfx_applause,
   channel_name,
@@ -179,6 +181,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
                 sfx_drum={sfx_drum}
                 sfx_correct={sfx_correct}
                 sfx_whoosh={sfx_whoosh}
+                sfx_pop_single={sfx_pop_single}
+                sfx_pop_double={sfx_pop_double}
                 sfx_progress={sfx_progress}
               />
             </Sequence>

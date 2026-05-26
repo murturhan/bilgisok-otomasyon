@@ -1,4 +1,4 @@
-// REV 006/25MAY26 - Jess soru/cevap ses 1.4->1.7
+// REV 007/26MAY26 - pop SFX, HighlightedText fun fact, FunFactPanel idle bounce
 import React from "react";
 import {
   AbsoluteFill,
@@ -20,6 +20,7 @@ import { LiquidProgressBar } from "../components/LiquidProgressBar";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { AnimatedBackground, getPatternForQuestion } from "../components/AnimatedBackground";
 import { GlassesIcon } from "../components/BrandAssets";
+import { HighlightedText } from "../components/HighlightedText";
 import { computeQuestionPhases } from "../utils/timing";
 
 interface QuestionSceneProps {
@@ -36,6 +37,8 @@ interface QuestionSceneProps {
   sfx_drum?: string;
   sfx_correct?: string;
   sfx_whoosh?: string;
+  sfx_pop_single?: string;
+  sfx_pop_double?: string;
   sfx_progress?: string;
 }
 
@@ -53,6 +56,8 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   sfx_drum,
   sfx_correct,
   sfx_whoosh,
+  sfx_pop_single,
+  sfx_pop_double,
   sfx_progress,
 }) => {
   const frame = useCurrentFrame();
@@ -209,6 +214,28 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           durationInFrames={FIXED_FRAMES.transition + 6}
         >
           <Audio src={staticFile(sfx_whoosh)} volume={0.85} />
+        </Sequence>
+      )}
+      {/* POP - şıklar çıkarken (show fazı) */}
+      {sfx_pop_single && (
+        <Sequence from={phases.show} durationInFrames={30}>
+          <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
+        </Sequence>
+      )}
+      {sfx_pop_single && (
+        <Sequence from={phases.show + 8} durationInFrames={30}>
+          <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
+        </Sequence>
+      )}
+      {sfx_pop_double && (
+        <Sequence from={phases.show + 44} durationInFrames={30}>
+          <Audio src={staticFile(sfx_pop_double)} volume={0.7} />
+        </Sequence>
+      )}
+      {/* POP - fun fact ekranı açılınca */}
+      {sfx_pop_single && (
+        <Sequence from={phases.funFact} durationInFrames={30}>
+          <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
         </Sequence>
       )}
       
@@ -1011,16 +1038,20 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
   const glassesRotate = interpolate(glassesAnim, [0, 0.7, 1], [-180, 10, 0]);
   const glassesIdleBounce = Math.sin((frame - showFrame - 20) * 0.1) * 6;
   
+  const BOUNCE_PHASE = 20;
+  const cardIdleBounce = Math.sin((frame + BOUNCE_PHASE) * 0.08) * 4;
+
   // KUTU BOYUTU: SABİT (resim ile aynı)
   // İçerideki paddingleri hesaba katıp inner alanı bul
   const paddingX = isVertical ? 36 : 50;
   const paddingY = isVertical ? 36 : 44;
   const innerWidth = boxWidth - paddingX * 2;
   const innerHeight = boxHeight - paddingY * 2;
-  
-  // GERÇEK DİNAMİK FONT (binary search ile tam doldur)
+
+  // GERÇEK DİNAMİK FONT (binary search ile tam doldur - **marker'ları sayma)
+  const textForFit = text.replace(/\*\*/g, "");
   const fittedFont = calculateFitFont(
-    text,
+    textForFit,
     innerWidth,
     innerHeight,
     isVertical ? 28 : 32,   // min
@@ -1044,7 +1075,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
       <div
         style={{
           opacity: cardOpacity,
-          transform: `translateY(${cardY}px) scale(${cardScale})`,
+          transform: `translateY(${cardY + cardIdleBounce}px) scale(${cardScale})`,
           backgroundColor: BRAND.white,
           borderRadius: 24,
           padding: `${paddingY}px ${paddingX}px`,
@@ -1064,7 +1095,6 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
             fontSize: fittedFont,
             fontFamily: FONTS.display,
             fontWeight: 900,
-            color: BRAND.black,
             lineHeight: 1.15,
             textAlign: "center",
             textTransform: "uppercase",
@@ -1072,7 +1102,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
             width: "100%",
           }}
         >
-          {text.toUpperCase()}
+          <HighlightedText text={text} baseColor={BRAND.black} />
         </div>
       </div>
       

@@ -232,7 +232,19 @@ CRITICAL:
 - **show_image** (boolean, per question): Decide if showing the image during question helps or spoils.
   * TRUE — image is a visual *clue* (blurred during guess, revealed with confetti). Examples: cross-sections, silhouettes, partial views, mood scenes.
   * FALSE — image would obviously reveal the answer ("What is this?" with clear apple photo → false). Shows fancy "?" placeholder instead.
-  * Default to FALSE when uncertain. Better hidden than spoiled.`;
+  * Default to FALSE when uncertain. Better hidden than spoiled.
+
+═══════════════════════════════════════════════════
+HIGHLIGHTED WORDS (for animated text on screen)
+═══════════════════════════════════════════════════
+
+In **question_text** and **fun_fact**, mark 1-3 key words with **bold** markers using \`**word**\` syntax:
+- Highlight the most important or interesting concept words
+- Example fun_fact: "**Lions** are the only cats that live in groups called **prides**!"
+- Example question_text: "Which animal can hold its breath for **22 minutes**?"
+- Keep it natural — only highlight words that deserve emphasis
+- DO NOT highlight more than 3 words per sentence
+- Plain text without markers is fine if nothing stands out`;
 
   const maxRetries = 5;
   // Sadece güçlü model kullan - flash-lite bozuk JSON üretiyor
