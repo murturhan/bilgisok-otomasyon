@@ -87,7 +87,8 @@ async function driveIndir(fileId, hedefYol, auth) {
   );
   return new Promise((resolve, reject) => {
     const writeStream = fs.createWriteStream(hedefYol);
-    res.data.on("end", () => resolve()).on("error", reject).pipe(writeStream);
+    res.data.on("error", reject).pipe(writeStream);
+    writeStream.on("finish", resolve).on("error", reject);
   });
 }
 
