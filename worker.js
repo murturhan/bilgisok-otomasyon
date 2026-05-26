@@ -89,7 +89,7 @@ async function workflowDispatch({ jobId, tarih, idx, chatId, format, isTest }, e
       method: "POST",
       headers: {
         "Accept":               "application/vnd.github+json",
-        "Authorization":        `Bearer ${env.WORKFLOW_DISPATCH_TOKEN}`,
+        "Authorization":        `Bearer ${env.GITHUB_TOKEN}`,
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent":           "geniminitests-worker",
         "Content-Type":         "application/json",
