@@ -1,4 +1,4 @@
-// REV 001/25MAY26 - Muzik ses seviyeleri: konusurken 0.08, konusmazken 0.13
+// REV 002/25MAY26 - Jess ses 1.2->1.5
 import React from "react";
 import {
   AbsoluteFill,
@@ -132,7 +132,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       
       {intro_audio_path && (
         <Sequence from={0} durationInFrames={introFrames}>
-          <Audio src={staticFile(intro_audio_path)} volume={1.4} />
+          <Audio src={staticFile(intro_audio_path)} volume={1.5} />
         </Sequence>
       )}
       
@@ -198,7 +198,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       
       {outro_audio_path && (
         <Sequence from={outroStart} durationInFrames={outroFrames}>
-          <Audio src={staticFile(outro_audio_path)} volume={1.4} />
+          <Audio src={staticFile(outro_audio_path)} volume={1.5} />
         </Sequence>
       )}
       

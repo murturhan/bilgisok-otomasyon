@@ -1,4 +1,4 @@
-// REV 005/25MAY26 - WebM kaldirildi, GlassesIcon (saydam animasyonlu GIF) kullanildi
+// REV 006/25MAY26 - Jess soru/cevap ses 1.4->1.7
 import React from "react";
 import {
   AbsoluteFill,
@@ -170,12 +170,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       {/* AUDIO */}
       {question.question_audio_path && (
         <Sequence from={phases.show} durationInFrames={phases.countdown - phases.show}>
-          <Audio src={staticFile(question.question_audio_path)} volume={1.4} />
+          <Audio src={staticFile(question.question_audio_path)} volume={1.7} />
         </Sequence>
       )}
       {question.answer_audio_path && (
         <Sequence from={phases.reveal} durationInFrames={phases.transition - phases.reveal}>
-          <Audio src={staticFile(question.answer_audio_path)} volume={1.4} />
+          <Audio src={staticFile(question.answer_audio_path)} volume={1.7} />
         </Sequence>
       )}
       
