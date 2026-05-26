@@ -1,4 +1,4 @@
-// REV 004/27MAY26 - Onay sayfası: fotoğraf yükleme + pratik layout
+// REV 005/27MAY26 - Onay sayfası: 5 seçenek buton
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -188,11 +188,13 @@ body{font-family:system-ui,sans-serif;background:#111827;color:#f3f4f6;padding:0
 .topbar{background:#1f2937;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #374151}
 .topbar h1{font-size:1em;font-weight:700;color:#fff}
 .topbar .meta{font-size:.75em;color:#9ca3af}
-.sticky-btns{display:flex;gap:8px}
-.sticky-btns button{padding:8px 14px;border:none;border-radius:6px;font-weight:700;font-size:.85em;cursor:pointer}
-.b-full{background:#10b981;color:#fff}
-.b-regen{background:#f59e0b;color:#000}
-.b-render{background:#8b5cf6;color:#fff}
+.sticky-btns{display:flex;gap:6px;flex-wrap:wrap}
+.sticky-btns button{padding:7px 11px;border:none;border-radius:6px;font-weight:700;font-size:.78em;cursor:pointer;line-height:1.3;text-align:left}
+.b1{background:#10b981;color:#fff}
+.b2{background:#0ea5e9;color:#fff}
+.b3{background:#6b7280;color:#fff}
+.b4{background:#4b5563;color:#fff}
+.b5{background:#f59e0b;color:#000}
 button:hover{opacity:.88}
 .cards{padding:12px 16px}
 .card{background:#1f2937;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #374151}
@@ -224,9 +226,11 @@ textarea{min-height:56px}
     <div class="topbar meta">${esc(jobId)} · ${esc(format)} · ${questions.length} soru · ${esc(topic)}</div>
   </div>
   <div class="sticky-btns">
-    <button class="b-full" onclick="submit_('full')">✅ Onayla</button>
-    <button class="b-regen" onclick="submit_('regen_only')">🔄 Tekrar</button>
-    <button class="b-render" onclick="submit_('render_only')">🎬 Render</button>
+    <button class="b1" onclick="submit_('full',true)">✅ Değiştir<br>+ Ses + Render</button>
+    <button class="b2" onclick="submit_('render_only',true)">🎬 Değiştir<br>+ Sadece Render</button>
+    <button class="b3" onclick="submit_('full',false)">▶ Ses + Render<br>(değişiklik yok)</button>
+    <button class="b4" onclick="submit_('render_only',false)">⚡ Sadece Render<br>(değişiklik yok)</button>
+    <button class="b5" onclick="submit_('regen_only',true)">🔄 Değiştir<br>+ Tekrar Göster</button>
   </div>
 </div>
 <div id="status"></div>
@@ -267,25 +271,34 @@ function toggleRegen(checkId, btnId, key){
   if(cb.checked) delete customImages[key];
 }
 
-async function submit_(level){
+async function submit_(level, applyEdits){
   const edits={};
-  const reads=[];
-  for(let i=0;i<N;i++){
-    edits[String(i)]={
-      question_text:val("q"+i+"_qt"),
-      options:[val("q"+i+"_o0"),val("q"+i+"_o1"),val("q"+i+"_o2")],
-      correct_answer:parseInt(val("q"+i+"_ca"))||0,
-      fun_fact:val("q"+i+"_ff"),
-      image_prompt:val("q"+i+"_ip"),
-      fun_fact_image_prompt:val("q"+i+"_fp"),
-      regen_question_image:chk("q"+i+"_rq"),
-      regen_fact_image:chk("q"+i+"_rf"),
-      custom_question_image:customImages["cq"+i]||null,
-      custom_fact_image:customImages["cf"+i]||null,
-    };
+  if(applyEdits){
+    for(let i=0;i<N;i++){
+      edits[String(i)]={
+        question_text:val("q"+i+"_qt"),
+        options:[val("q"+i+"_o0"),val("q"+i+"_o1"),val("q"+i+"_o2")],
+        correct_answer:parseInt(val("q"+i+"_ca"))||0,
+        fun_fact:val("q"+i+"_ff"),
+        image_prompt:val("q"+i+"_ip"),
+        fun_fact_image_prompt:val("q"+i+"_fp"),
+        regen_question_image:chk("q"+i+"_rq"),
+        regen_fact_image:chk("q"+i+"_rf"),
+        custom_question_image:customImages["cq"+i]||null,
+        custom_fact_image:customImages["cf"+i]||null,
+      };
+    }
   }
+  const msgs={
+    "full+true":"Değişiklikler uygulanıyor, ses üretimi başlıyor...",
+    "render_only+true":"Değişiklikler uygulanıyor, video render başlıyor...",
+    "full+false":"Ses üretimi başlıyor (değişiklik uygulanmadı)...",
+    "render_only+false":"Video render başlıyor (değişiklik uygulanmadı)...",
+    "regen_only+true":"Değişiklikler uygulanıyor, form yeniden gönderilecek...",
+  };
   const st=document.getElementById("status");
-  st.style.display="block";st.className="";st.textContent="⏳ Gönderiliyor...";
+  st.style.display="block";st.className="";
+  st.textContent="⏳ "+(msgs[level+"+"+applyEdits]||"Gönderiliyor...");
   try{
     const r=await fetch("/api/submit/"+JOB_ID,{
       method:"POST",
@@ -295,7 +308,7 @@ async function submit_(level){
     const d=await r.json();
     if(d.ok){
       st.className="ok";
-      st.textContent="✅ Gönderildi! "+({full:"Ses üretimi başlıyor.",regen_only:"Değişiklikler uygulanıyor, yeni onay linki gelecek.",render_only:"Video render başlıyor."}[level]||"");
+      st.textContent="✅ Gönderildi! Telegram'da bildirim alacaksın.";
       document.querySelectorAll(".sticky-btns button").forEach(b=>b.disabled=true);
     } else {
       st.className="err";st.textContent="❌ Hata: "+JSON.stringify(d);
