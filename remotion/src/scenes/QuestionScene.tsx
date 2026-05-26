@@ -433,7 +433,8 @@ const LongLayout: React.FC<LayoutProps> = ({
         (() => {
           const factGap = 30;
           const factColWidth = Math.floor((width - 100 - factGap) / 2); // 50+50 padding - gap
-          const glassesHeight = 100; // gözlük emoji'si için altta ayrılan alan
+          const glassesWidth = 320;
+          const glassesHeight = Math.floor(glassesWidth / (458 / 223)); // ~155px
           const factColHeight = Math.floor(height - bodyTop - bodyBottom - glassesHeight - 20);
           
           return (
@@ -485,7 +486,7 @@ const LongLayout: React.FC<LayoutProps> = ({
                   pointerEvents: "none",
                 }}
               >
-                <AnimatedGlasses width={glassesHeight * 2.6} height={glassesHeight} frame={localFrame} />
+                <AnimatedGlasses width={glassesWidth} height={glassesHeight} frame={localFrame} />
               </div>
             </>
           );
@@ -1083,7 +1084,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
             opacity: glassesOpacity,
           }}
         >
-          <AnimatedGlasses width={glassesSize} height={glassesSize * 0.375} frame={frame} />
+          <AnimatedGlasses width={glassesSize} height={Math.floor(glassesSize / (458 / 223))} frame={frame} />
         </div>
       )}
     </div>
@@ -1094,17 +1095,19 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
 // 5 saniyelik loop GIF. Remotion'da @remotion/gif ile render edilir.
 // GlassesIcon BrandAssets'te tanımlı, doğrudan onu kullanıyoruz.
 const AnimatedGlasses: React.FC<{ width: number; height: number; frame: number }> = ({
-  width, height,
+  width,
 }) => {
+  const aspectRatio = 458 / 223;
+  const gifWidth = width;
+  const gifHeight = gifWidth / aspectRatio;
   return (
     <div style={{
       position: "relative",
-      width,
-      height,
+      width: gifWidth,
+      height: gifHeight,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      overflow: "hidden",
     }}>
       <GlassesIcon size={width / 1.4} />
     </div>
