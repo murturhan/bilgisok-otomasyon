@@ -1,4 +1,4 @@
-// REV 006/27MAY26 - Onay sayfası: küçük görseller + emoji düzenleme
+// REV 007/27MAY26 - Onay sayfası: emoji büyük dokunmatik kutular
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -204,8 +204,10 @@ button:hover{opacity:.88}
 .img-box img{height:110px;width:100%;object-fit:cover;display:block;border-radius:8px;transition:.2s}
 .img-box:hover img{opacity:.85}
 .img-box .no-img{color:#6b7280;font-size:.75em;text-align:center;padding:12px}
-.emoji-row{display:flex;gap:6px;margin:4px 0;flex-wrap:wrap}
-.emoji-inp{width:44px;text-align:center;font-size:1.3em;padding:4px 2px;background:#111827;border:1px solid #374151;border-radius:6px;color:#fff}
+.emoji-row{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap;align-items:flex-end}
+.emoji-inp{width:54px;height:54px;text-align:center;font-size:2em;padding:0;background:#1f2937;border:2px solid #4b5563;border-radius:12px;color:#fff;cursor:pointer;line-height:54px;transition:border-color .15s}
+.emoji-inp:focus{border-color:#3b82f6;outline:none;background:#111827}
+.emoji-hint{font-size:.68em;color:#6b7280;display:block;text-align:center;margin-top:3px}
 .img-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .btn-sm{padding:5px 10px;border:1px solid #4b5563;background:#374151;color:#d1d5db;border-radius:5px;font-size:.78em;cursor:pointer}
 .btn-sm:hover{background:#4b5563}
@@ -240,7 +242,7 @@ textarea{min-height:56px}
 <form id="frm" onsubmit="return false" class="cards">
 ${topic_emojis.length ? `<div class="card" style="padding:10px 14px">
   <span style="font-size:.75em;color:#9ca3af">🎨 Intro Emojileri (videoda başlık altında görünür)</span>
-  <div class="emoji-row" style="margin-top:6px">${topic_emojis.map((e,i)=>`<input class="emoji-inp" id="te_${i}" value="${esc(e)}" maxlength="4" title="Emoji ${i+1}">`).join("")}</div>
+  <div class="emoji-row" style="margin-top:8px">${topic_emojis.map((e,i)=>`<div style="display:flex;flex-direction:column;align-items:center"><input class="emoji-inp" id="te_${i}" value="${esc(e)}" maxlength="4" title="Emoji ${i+1}"><span class="emoji-hint">Değiştir</span></div>`).join("")}</div>
 </div>` : ""}
 ${qCards}
 </form>
@@ -350,7 +352,7 @@ function buildQuestionCard(q, i) {
     `<input type="text" id="q${i}_o${j}" value="${esc(o)}" placeholder="${["A","B","C"][j]}">`
   ).join("");
   const flagInputs = (q.option_flags || ["","",""]).map((f, j) =>
-    `<input class="emoji-inp" id="q${i}_f${j}" value="${esc(f)}" maxlength="4" title="Şık ${["A","B","C"][j]} emoji">`
+    `<div style="display:flex;flex-direction:column;align-items:center"><input class="emoji-inp" id="q${i}_f${j}" value="${esc(f)}" maxlength="4" title="Şık ${["A","B","C"][j]} emoji"><span class="emoji-hint">${["A","B","C"][j]}</span></div>`
   ).join("");
   const caOpts = options.map((o, j) =>
     `<option value="${j}" ${correct_answer === j ? "selected" : ""}>${["A","B","C"][j]}: ${esc(o)}</option>`
@@ -389,9 +391,10 @@ function buildQuestionCard(q, i) {
   </div>
   <label class="lbl">Soru metni</label>
   <textarea id="q${i}_qt">${esc(question_text)}</textarea>
-  <label class="lbl">Şıklar (A / B / C) &nbsp;<span style="color:#6b7280;font-size:.9em">→ Emoji</span></label>
+  <label class="lbl">Şıklar (A / B / C)</label>
   <div class="opts">${optInputs}</div>
-  <div class="emoji-row" style="margin-top:4px">${flagInputs}</div>
+  <label class="lbl" style="margin-top:8px">Şık Emojileri <span style="color:#6b7280">(dokunarak değiştir)</span></label>
+  <div class="emoji-row">${flagInputs}</div>
   <label class="lbl">Doğru cevap</label>
   <select id="q${i}_ca">${caOpts}</select>
   <label class="lbl">Fun Fact</label>
