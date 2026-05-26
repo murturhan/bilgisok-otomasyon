@@ -169,6 +169,7 @@ async function main() {
       if (typeof edit.show_image === "boolean") q.show_image = edit.show_image;
       if (typeof edit.image_prompt === "string") q.image_prompt = edit.image_prompt;
       if (typeof edit.fun_fact_image_prompt === "string") q.fun_fact_image_prompt = edit.fun_fact_image_prompt;
+      if (Array.isArray(edit.option_flags) && edit.option_flags.length === 3) q.option_flags = edit.option_flags;
       
       // Audio text yeniden hesapla (cevap/şıklar değişmiş olabilir)
       const letters = ["A", "B", "C"];
@@ -224,6 +225,12 @@ async function main() {
       }
     }
     
+    // 5b. topic_emojis güncelle (edits içinde "topic_emojis" anahtarı varsa)
+    if (Array.isArray(edits.topic_emojis) && edits.topic_emojis.length > 0) {
+      questionsData.topic_emojis = edits.topic_emojis;
+      console.log(`topic_emojis güncellendi: ${edits.topic_emojis.join(" ")}`);
+    }
+
     // 6. questions.json'u Drive'a geri yaz
     // questions.json'u Drive'a geri yaz (OAuth ile çünkü dosya sahibi OAuth)
     await driveWrite.files.update({

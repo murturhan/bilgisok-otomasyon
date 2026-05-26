@@ -1,4 +1,4 @@
-// REV 005/27MAY26 - Onay sayfası: 5 seçenek buton
+// REV 006/27MAY26 - Onay sayfası: küçük görseller + emoji düzenleme
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -173,7 +173,7 @@ async function handleApprovalPage(request, env, url) {
   }
 
   const job = mevcut.data.job;
-  const { topic = "", format = "", baslik = "", questions = [], chat_id = "" } = job;
+  const { topic = "", format = "", baslik = "", questions = [], chat_id = "", topic_emojis = [] } = job;
   const qCards = questions.map((q, i) => buildQuestionCard(q, i)).join("\n");
 
   const html = `<!DOCTYPE html>
@@ -200,9 +200,12 @@ button:hover{opacity:.88}
 .card{background:#1f2937;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #374151}
 .card-num{display:inline-block;background:#e94560;color:#fff;border-radius:6px;padding:2px 10px;font-size:.8em;font-weight:700;margin-bottom:10px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
-.img-box{position:relative;background:#111827;border-radius:8px;overflow:hidden;min-height:120px;display:flex;align-items:center;justify-content:center}
-.img-box img{width:100%;display:block;border-radius:8px}
-.img-box .no-img{color:#6b7280;font-size:.8em;text-align:center;padding:20px}
+.img-box{position:relative;background:#111827;border-radius:8px;overflow:hidden;height:110px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.img-box img{height:110px;width:100%;object-fit:cover;display:block;border-radius:8px;transition:.2s}
+.img-box:hover img{opacity:.85}
+.img-box .no-img{color:#6b7280;font-size:.75em;text-align:center;padding:12px}
+.emoji-row{display:flex;gap:6px;margin:4px 0;flex-wrap:wrap}
+.emoji-inp{width:44px;text-align:center;font-size:1.3em;padding:4px 2px;background:#111827;border:1px solid #374151;border-radius:6px;color:#fff}
 .img-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .btn-sm{padding:5px 10px;border:1px solid #4b5563;background:#374151;color:#d1d5db;border-radius:5px;font-size:.78em;cursor:pointer}
 .btn-sm:hover{background:#4b5563}
@@ -235,6 +238,10 @@ textarea{min-height:56px}
 </div>
 <div id="status"></div>
 <form id="frm" onsubmit="return false" class="cards">
+${topic_emojis.length ? `<div class="card" style="padding:10px 14px">
+  <span style="font-size:.75em;color:#9ca3af">🎨 Intro Emojileri (videoda başlık altında görünür)</span>
+  <div class="emoji-row" style="margin-top:6px">${topic_emojis.map((e,i)=>`<input class="emoji-inp" id="te_${i}" value="${esc(e)}" maxlength="4" title="Emoji ${i+1}">`).join("")}</div>
+</div>` : ""}
 ${qCards}
 </form>
 <script>
@@ -282,12 +289,17 @@ async function submit_(level, applyEdits){
         fun_fact:val("q"+i+"_ff"),
         image_prompt:val("q"+i+"_ip"),
         fun_fact_image_prompt:val("q"+i+"_fp"),
+        option_flags:[val("q"+i+"_f0"),val("q"+i+"_f1"),val("q"+i+"_f2")],
         regen_question_image:chk("q"+i+"_rq"),
         regen_fact_image:chk("q"+i+"_rf"),
         custom_question_image:customImages["cq"+i]||null,
         custom_fact_image:customImages["cf"+i]||null,
       };
     }
+    // Topic emojileri
+    const te=[];
+    for(let i=0;i<5;i++){const e=val("te_"+i);if(e)te.push(e);}
+    if(te.length) edits.topic_emojis=te;
   }
   const msgs={
     "full+true":"Değişiklikler uygulanıyor, ses üretimi başlıyor...",
@@ -337,6 +349,9 @@ function buildQuestionCard(q, i) {
   const optInputs = options.map((o, j) =>
     `<input type="text" id="q${i}_o${j}" value="${esc(o)}" placeholder="${["A","B","C"][j]}">`
   ).join("");
+  const flagInputs = (q.option_flags || ["","",""]).map((f, j) =>
+    `<input class="emoji-inp" id="q${i}_f${j}" value="${esc(f)}" maxlength="4" title="Şık ${["A","B","C"][j]} emoji">`
+  ).join("");
   const caOpts = options.map((o, j) =>
     `<option value="${j}" ${correct_answer === j ? "selected" : ""}>${["A","B","C"][j]}: ${esc(o)}</option>`
   ).join("");
@@ -374,8 +389,9 @@ function buildQuestionCard(q, i) {
   </div>
   <label class="lbl">Soru metni</label>
   <textarea id="q${i}_qt">${esc(question_text)}</textarea>
-  <label class="lbl">Şıklar (A / B / C)</label>
+  <label class="lbl">Şıklar (A / B / C) &nbsp;<span style="color:#6b7280;font-size:.9em">→ Emoji</span></label>
   <div class="opts">${optInputs}</div>
+  <div class="emoji-row" style="margin-top:4px">${flagInputs}</div>
   <label class="lbl">Doğru cevap</label>
   <select id="q${i}_ca">${caOpts}</select>
   <label class="lbl">Fun Fact</label>

@@ -166,6 +166,7 @@ async function main() {
       topic: questionsData.topic || job.konu,
       format: job.video_format || questionsData.format,
       baslik: questionsData.baslik,
+      topic_emojis: questionsData.topic_emojis || [],
       questions: questionsData.questions.map((q, i) => {
         // Soru i (0-indexed) için:
         // Question image  = gorsel-(2i+1) (1-indexed)
