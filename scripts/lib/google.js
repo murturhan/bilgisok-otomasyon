@@ -137,9 +137,10 @@ export async function jobOku(jobId) {
   });
   
   const rows = res.data.values || [];
+  let found = null;
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === jobId) {
-      return {
+      found = {
         rowIndex: i + 1,
         job_id: rows[i][0],
         tarih: rows[i][1],
@@ -170,7 +171,8 @@ export async function jobOku(jobId) {
       };
     }
   }
-  
+
+  if (found) return found;
   throw new Error(`Job bulunamadı: ${jobId}`);
 }
 
