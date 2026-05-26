@@ -200,8 +200,8 @@ button:hover{opacity:.88}
 .card{background:#1f2937;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #374151}
 .card-num{display:inline-block;background:#e94560;color:#fff;border-radius:6px;padding:2px 10px;font-size:.8em;font-weight:700;margin-bottom:10px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
-.img-box{position:relative;background:#111827;border-radius:8px;overflow:hidden;height:110px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.img-box img{height:110px;width:100%;object-fit:cover;display:block;border-radius:8px;transition:.2s}
+.img-box{position:relative;background:#111827;border-radius:8px;overflow:hidden;height:75px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.img-box img{max-height:75px;max-width:100%;width:auto;object-fit:contain;display:block;border-radius:8px;transition:.2s}
 .img-box:hover img{opacity:.85}
 .img-box .no-img{color:#6b7280;font-size:.75em;text-align:center;padding:12px}
 .emoji-row{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap;align-items:flex-start}
@@ -287,13 +287,15 @@ function editEmoji(inputId){
   const inp=document.getElementById(inputId);
   const btn=document.getElementById(inputId+"_btn");
   if(!inp||!btn) return;
+  const prev=inp.value;
   btn.style.display="none";
+  inp.value="";
   inp.style.display="block";
   inp.focus();
-  inp.select();
   function save(){
     const v=inp.value.trim();
-    btn.textContent=v||"❓";
+    if(!v) inp.value=prev;
+    btn.textContent=inp.value||"❓";
     inp.style.display="none";
     btn.style.display="flex";
   }
