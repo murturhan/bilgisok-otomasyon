@@ -13,7 +13,6 @@
  */
 
 import { google } from "googleapis";
-import { jobOlustur } from "./lib/google.js";
 
 // ─── ENV ──────────────────────────────────────────────────────
 const {
@@ -192,38 +191,13 @@ async function telegramButonGonder(konular, tarih, jobIds) {
   return result.result.message_id;
 }
 
-// ─── PLACEHOLDER JOB'LAR ──────────────────────────────────────
-async function placeholderJoblariOlustur(konular, tarih) {
-  // tarih "26.05.2026" → "260526"
+// ─── JOB ID HESAPLA (spreadsheet'e yazma, sadece ID türet) ────
+function jobIdleriniHesapla(konular, tarih) {
   const tarihKisa = tarih.replace(/\./g, "").slice(0, 6);
-  const jobIds = [];
-
-  for (let idx = 0; idx < konular.length; idx++) {
-    const konu = konular[idx];
-    const shortsId = `${tarihKisa}${idx}S`;
-    const longId   = `${tarihKisa}${idx}L`;
-
-    for (const [jobId, format] of [[shortsId, "shorts"], [longId, "long"]]) {
-      try {
-        await jobOlustur({
-          job_id: jobId,
-          tarih,
-          index: idx,
-          chat_id: TELEGRAM_CHAT_ID,
-          konu,
-          format,
-          durum: "konu_secimi_bekleniyor",
-        });
-        console.log(`✓ Placeholder job: ${jobId} (${konu} / ${format})`);
-      } catch (e) {
-        console.warn(`⚠ Placeholder job hatası ${jobId}: ${e.message}`);
-      }
-    }
-
-    jobIds.push({ shorts: shortsId, long: longId });
-  }
-
-  return jobIds;
+  return konular.map((_, idx) => ({
+    shorts: `${tarihKisa}${idx}S`,
+    long:   `${tarihKisa}${idx}L`,
+  }));
 }
 
 // ─── TARİH (Türkiye saati) ───────────────────────────────────
@@ -255,13 +229,7 @@ async function main() {
     console.log("📊 Sheets'e yazılıyor...");
     await sheetsYaz(konular, tarih);
 
-    console.log("📋 Placeholder job'lar oluşturuluyor...");
-    let jobIds = null;
-    try {
-      jobIds = await placeholderJoblariOlustur(konular, tarih);
-    } catch (e) {
-      console.warn(`⚠ Placeholder job hatası (devam): ${e.message}`);
-    }
+    const jobIds = jobIdleriniHesapla(konular, tarih);
 
     console.log("📱 Telegram mesajı gönderiliyor...");
     await telegramButonGonder(konular, tarih, jobIds);
