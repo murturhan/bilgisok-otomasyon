@@ -1,4 +1,4 @@
-# REV 000/25MAY26 - paralel dispatch kaldirildi, akis sirali
+# REV 001/26MAY26 - test_mode input eklendi
 name: 01 - İçerik Üret
 # REVISION: paralel dispatch'ler kaldırıldı, akış sıralı (01→02 kod tetikler) 2026-05-25
 
@@ -22,6 +22,11 @@ on:
         description: 'Format: shorts veya long'
         required: false
         default: 'long'
+      test_mode:
+        description: 'Test modu (true = 1 soru üret)'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   actions: write
@@ -58,13 +63,16 @@ jobs:
             echo "index=${{ github.event.client_payload.index }}" >> $GITHUB_OUTPUT
             echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
             echo "video_format=${{ github.event.client_payload.video_format || 'long' }}" >> $GITHUB_OUTPUT
+            echo "test_mode=${{ github.event.client_payload.test_mode || 'false' }}" >> $GITHUB_OUTPUT
+            echo "job_id=${{ github.event.client_payload.job_id || github.run_id }}" >> $GITHUB_OUTPUT
           else
             echo "tarih=${{ github.event.inputs.tarih }}" >> $GITHUB_OUTPUT
             echo "index=${{ github.event.inputs.index }}" >> $GITHUB_OUTPUT
             echo "chat_id=${{ github.event.inputs.chat_id }}" >> $GITHUB_OUTPUT
             echo "video_format=${{ github.event.inputs.video_format || 'long' }}" >> $GITHUB_OUTPUT
+            echo "test_mode=${{ github.event.inputs.test_mode || 'false' }}" >> $GITHUB_OUTPUT
+            echo "job_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
           fi
-          echo "job_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
       
       - name: İçerik üret
         env:
@@ -82,6 +90,7 @@ jobs:
           CHAT_ID: ${{ steps.params.outputs.chat_id }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
           VIDEO_FORMAT: ${{ steps.params.outputs.video_format }}
+          TEST_MODE: ${{ steps.params.outputs.test_mode }}
           WORKFLOW_DISPATCH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
           GITHUB_REPO_OWNER: ${{ github.repository_owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}

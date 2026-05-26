@@ -1,4 +1,4 @@
-// REV 000/25MAY26 - 03 bitince 07-video-montaj otomatik dispatch
+// REV 001/26MAY26 - TTS markdown temizliği + SSML desteği (Chirp3-HD-Leda)
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -45,7 +45,13 @@ const MAX_CHARS_PER_REQUEST = 4500;
 // ─── METIN TEMİZLEME (TTS için) ─────────────────────────────────
 function ttsMetinTemizle(metin) {
   let sonuc = String(metin || "").trim();
-  
+
+  // Markdown bold marker temizle
+  sonuc = sonuc
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*/g, "")
+    .replace(/[•\-—–]/g, " ");
+
   // İngilizce kısaltma açma
   const kisaltmalar = [
     [/\bMr\./g, "Mister"],
@@ -80,31 +86,52 @@ function ttsMetinTemizle(metin) {
   return sonuc;
 }
 
+// ─── SSML sarmalayıcı ─────────────────────────────────────────
+function metniSsmlYap(metin) {
+  const temiz = ttsMetinTemizle(metin);
+  return `<speak>${temiz
+    .replace(/\./g, "<break time=\"300ms\"/>")
+    .replace(/,/g, "<break time=\"150ms\"/>")
+    .replace(/!/g, "<break time=\"250ms\"/>")
+    .replace(/\?/g, "<break time=\"250ms\"/>")}</speak>`;
+}
+
 // ─── TTS API çağrısı ───────────────────────────────────────────
 async function ttsCagri(metin, accessToken) {
-  const body = {
-    input: { text: metin },
-    voice: { languageCode: LANGUAGE_CODE, name: VOICE_NAME },
-    audioConfig: { audioEncoding: "MP3", sampleRateHertz: 24000 },
+  const voice = { languageCode: LANGUAGE_CODE, name: VOICE_NAME };
+  const audioConfig = { audioEncoding: "MP3", sampleRateHertz: 24000 };
+  const url = "https://texttospeech.googleapis.com/v1/text:synthesize";
+  const headers = {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
   };
-  
-  const response = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`TTS API ${response.status}: ${errText.substring(0, 300)}`);
+
+  // SSML dene (Chirp3-HD-Leda destekliyorsa)
+  try {
+    const ssml = metniSsmlYap(metin);
+    const bodySSML = { input: { ssml }, voice, audioConfig };
+    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(bodySSML) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.audioContent) return Buffer.from(data.audioContent, "base64");
+    }
+    const errText = await res.text();
+    console.warn(`⚠ SSML başarısız (${res.status}), plain text fallback: ${errText.substring(0, 150)}`);
+  } catch (e) {
+    console.warn(`⚠ SSML hatası, plain text fallback: ${e.message}`);
   }
-  
-  const data = await response.json();
-  if (!data.audioContent) throw new Error("TTS audioContent yok");
-  return Buffer.from(data.audioContent, "base64");
+
+  // Plain text fallback — noktalama da sil
+  const temizMetin = ttsMetinTemizle(metin).replace(/[.!?,;:]/g, " ").replace(/\s+/g, " ").trim();
+  const bodyPlain = { input: { text: temizMetin }, voice, audioConfig };
+  const res2 = await fetch(url, { method: "POST", headers, body: JSON.stringify(bodyPlain) });
+  if (!res2.ok) {
+    const errText = await res2.text();
+    throw new Error(`TTS API ${res2.status}: ${errText.substring(0, 300)}`);
+  }
+  const data2 = await res2.json();
+  if (!data2.audioContent) throw new Error("TTS audioContent yok");
+  return Buffer.from(data2.audioContent, "base64");
 }
 
 // ─── Pitch shift (rubberband veya asetrate fallback) ───────────

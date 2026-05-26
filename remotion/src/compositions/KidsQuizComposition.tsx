@@ -1,4 +1,4 @@
-// REV 003/26MAY26 - sfx_pop_single + sfx_pop_double QuestionScene'e eklendi
+// REV 004/26MAY26 - topic_emojis IntroScene'e iletildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -46,6 +46,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   sfx_progress,
   sfx_applause,
   channel_name,
+  topic_emojis,
 }) => {
   const { width, height } = useVideoConfig();
   const isVertical = height > width;
@@ -126,6 +127,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         <IntroSceneComponent
           channelName={channel_name}
           topic={topic}
+          topicEmojis={topic_emojis}
           jessPoses={resolvedJessPoses}
           durationFrames={introFrames}
           jessVideoDurationFrames={Math.ceil(jess_intro_video_duration * FPS)}

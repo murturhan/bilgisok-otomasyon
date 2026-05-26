@@ -1,3 +1,4 @@
+// REV 001/26MAY26 - HighlightedText intro başlığı, topicEmojis prop eklendi
 import React from "react";
 import {
   AbsoluteFill,
@@ -12,6 +13,7 @@ import { BRAND, FONTS, THEME_COLORS, FPS } from "../styles/theme";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { GeniMiniLogo } from "../components/BrandAssets";
+import { HighlightedText } from "../components/HighlightedText";
 import { JessPoses } from "../types/schemas";
 import {
   SHORTS_GREETING_TEXT,
@@ -22,6 +24,7 @@ import {
 interface Props {
   channelName: string;
   topic: string;
+  topicEmojis?: string[];
   jessPoses: JessPoses;
   durationFrames: number;
   jessVideoDurationFrames: number;
@@ -34,6 +37,7 @@ interface Props {
  */
 export const IntroSceneShorts: React.FC<Props> = ({
   topic,
+  topicEmojis,
   durationFrames,
   jessVideoDurationFrames,
 }) => {
@@ -75,7 +79,7 @@ export const IntroSceneShorts: React.FC<Props> = ({
       )}
       
       {inScene2 && !inTransition && (
-        <Scene2Shorts topic={topic} startFrame={scene1End} />
+        <Scene2Shorts topic={topic} topicEmojis={topicEmojis} startFrame={scene1End} />
       )}
       
       {inTransition && (
@@ -149,12 +153,12 @@ const Scene1Shorts: React.FC = () => {
 };
 
 // ═══ SAHNE 2 ═══ Topic 3D + emoji band (DİKEY)
-const Scene2Shorts: React.FC<{ topic: string; startFrame: number }> = ({ topic, startFrame }) => {
+const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame: number }> = ({ topic, topicEmojis: topicEmojisProp, startFrame }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const localFrame = frame - startFrame;
-  
-  const topicEmojis = getTopicEmojis(topic);
+
+  const topicEmojis = topicEmojisProp && topicEmojisProp.length > 0 ? topicEmojisProp : getTopicEmojis(topic);
   const topicUpper = (topic || "").toUpperCase();
   
   const smallLogoAnim = spring({ frame: localFrame, fps, config: { damping: 12, stiffness: 110 } });
@@ -173,8 +177,9 @@ const Scene2Shorts: React.FC<{ topic: string; startFrame: number }> = ({ topic, 
   const emojiOpacity = interpolate(emojiAnim, [0, 1], [0, 1]);
   const emojiY = interpolate(emojiAnim, [0, 1], [80, 0]);
   
-  // Font: shorts 2.5x büyütülmüş, binary search ile fit
-  const topicLen = topicUpper.length;
+  // Font: shorts 2.5x büyütülmüş, binary search ile fit (** markers hariç)
+  const topicForFit = topicUpper.replace(/\*\*/g, "");
+  const topicLen = topicForFit.length;
   let maxTargetFont: number;
   if (topicLen < 18) maxTargetFont = 325;
   else if (topicLen < 30) maxTargetFont = 250;
@@ -185,7 +190,7 @@ const Scene2Shorts: React.FC<{ topic: string; startFrame: number }> = ({ topic, 
   const titleInnerHeight = Math.floor(height * 0.55);
   
   const fitTopicFont = (() => {
-    const words = topicUpper.split(/\s+/).filter(Boolean);
+    const words = topicForFit.split(/\s+/).filter(Boolean);
     if (words.length === 0) return maxTargetFont;
     const fits = (fs: number): boolean => {
       const maxChars = Math.floor(titleInnerWidth / (fs * 0.55));
@@ -231,11 +236,11 @@ const Scene2Shorts: React.FC<{ topic: string; startFrame: number }> = ({ topic, 
           transform: `scale(${topicScale * topicPulse}) rotate(${topicRotate + topicWobble}deg) translateY(${topicFloat}px)`,
           opacity: topicOpacity,
           fontSize: topicFontSize, fontFamily: FONTS.display, fontWeight: 900,
-          color: BRAND.yellow, textShadow: topicTextShadow,
+          textShadow: topicTextShadow,
           maxWidth: "94%", textAlign: "center", letterSpacing: 2,
           textTransform: "uppercase", lineHeight: 1.05,
         }}>
-          {topicUpper}
+          <HighlightedText text={topicUpper} baseColor={BRAND.yellow} />
         </div>
       </div>
       

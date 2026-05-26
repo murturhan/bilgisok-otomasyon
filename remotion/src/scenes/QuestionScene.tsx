@@ -1,4 +1,4 @@
-// REV 007/26MAY26 - pop SFX, HighlightedText fun fact, FunFactPanel idle bounce
+// REV 008/26MAY26 - long fact 3-sütun (gözlük ortada), shorts factBoxHeight +3%
 import React from "react";
 import {
   AbsoluteFill,
@@ -455,67 +455,59 @@ const LongLayout: React.FC<LayoutProps> = ({
           </div>
         </div>
       ) : (
-        // FACT MODU: YAN YANA — resim SOL, panel SAĞ, GÖZLÜK altta ortada
-        // Kullanıcı talebi (jellyfish görseli): resim solda, panel sağda, gözlük altta ortada
+        // FACT MODU: 3 sütun — resim SOL, gözlük ORTA, panel SAĞ (tam yükseklik)
         (() => {
-          const factGap = 30;
-          const factColWidth = Math.floor((width - 100 - factGap) / 2); // 50+50 padding - gap
-          const glassesWidth = 320;
-          const glassesHeight = Math.floor(glassesWidth / (458 / 223)); // ~155px
-          const factColHeight = Math.floor(height - bodyTop - bodyBottom - glassesHeight - 20);
-          
+          const glassesSize = 280;
+          const centerColWidth = 320;
+          const sideGap = 20;
+          const factColWidth = Math.floor((width - 100 - centerColWidth - sideGap * 2) / 2);
+          const factColHeight = Math.floor(height - bodyTop - bodyBottom);
+
           return (
-            <>
-              {/* Yan yana resim + panel */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: sideGap,
+                width: "100%",
+                height: factColHeight,
+              }}
+            >
+              {/* SOL: Resim */}
+              <ImageCard
+                src={funFactImageSrc || imageSrc}
+                width={factColWidth}
+                height={factColHeight}
+                isReveal={false}
+                revealTransition={1}
+                showAsPlaceholder={question.show_image === false && !funFactImageSrc}
+              />
+
+              {/* ORTA: Gözlük */}
               <div
                 style={{
+                  width: centerColWidth,
                   display: "flex",
-                  flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: factGap,
-                  width: "100%",
-                  height: factColHeight,
+                  flexShrink: 0,
                 }}
               >
-                {/* SOL: Resim */}
-                <ImageCard
-                  src={funFactImageSrc || imageSrc}
-                  width={factColWidth}
-                  height={factColHeight}
-                  isReveal={false}
-                  revealTransition={1}
-                  showAsPlaceholder={question.show_image === false && !funFactImageSrc}
-                />
-                
-                {/* SAĞ: Fact paneli */}
-                <FunFactPanel
-                  text={question.fun_fact}
-                  showFrame={phases.funFact}
-                  isVertical={false}
-                  boxWidth={factColWidth}
-                  boxHeight={factColHeight}
-                  hideGlasses={true}
-                />
+                <AnimatedGlasses width={glassesSize} height={Math.floor(glassesSize / (458 / 223))} frame={localFrame} />
               </div>
-              
-              {/* ALT ORTA: Gözlük emoji (büyük) */}
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: 10,
-                  left: 0,
-                  right: 0,
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  height: glassesHeight,
-                  pointerEvents: "none",
-                }}
-              >
-                <AnimatedGlasses width={glassesWidth} height={glassesHeight} frame={localFrame} />
-              </div>
-            </>
+
+              {/* SAĞ: Fact paneli */}
+              <FunFactPanel
+                text={question.fun_fact}
+                showFrame={phases.funFact}
+                isVertical={false}
+                boxWidth={factColWidth}
+                boxHeight={factColHeight}
+                hideGlasses={true}
+              />
+            </div>
           );
         })()
       )}
@@ -619,7 +611,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
           // Kullanıcı: "alan sabit kalsın resimin buyuklugu kadar olsun"
           // Fact bölümü 1/3 büyütüldü (0.30 → 0.40) - kullanıcı talebi
           const factBoxWidth = contentWidth;
-          const factBoxHeight = Math.floor(height * 0.40);
+          const factBoxHeight = Math.floor(height * 0.43);
           const factImageSrc = funFactImageSrc || imageSrc;
           
           return (

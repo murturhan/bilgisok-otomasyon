@@ -31,7 +31,8 @@ const {
 } = process.env;
 
 const FORMAT = VIDEO_FORMAT || "long";
-const QUESTION_COUNT = FORMAT === "shorts" ? 5 : 25;
+const IS_TEST_MODE = process.env.TEST_MODE === "true" || process.env.TEST_MODE === "1";
+const QUESTION_COUNT = IS_TEST_MODE ? 1 : (FORMAT === "shorts" ? 5 : 25);
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -183,6 +184,7 @@ JSON OUTPUT (must be valid JSON, no markdown):
 {
   "konu": "${konu}",
   "format": "${FORMAT}",
+  "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
   "baslik": "Long YouTube title with emoji",
   "thumbnail_title": "2-3 WORDS MAX (uppercase, punchy)",
   "thumbnail_prompt": "FLUX prompt - scenery only, NO CHARACTERS",
@@ -206,7 +208,7 @@ JSON OUTPUT (must be valid JSON, no markdown):
 }
 
 CRITICAL:
-- EXACTLY ${QUESTION_COUNT} questions
+- EXACTLY ${QUESTION_COUNT} question${QUESTION_COUNT === 1 ? "" : "s"}
 - All in English
 - Image prompts MUST be PIXAR/3D CARTOON
 - All child-safe
@@ -244,7 +246,20 @@ In **question_text** and **fun_fact**, mark 1-3 key words with **bold** markers 
 - Example question_text: "Which animal can hold its breath for **22 minutes**?"
 - Keep it natural — only highlight words that deserve emphasis
 - DO NOT highlight more than 3 words per sentence
-- Plain text without markers is fine if nothing stands out`;
+- Plain text without markers is fine if nothing stands out
+
+═══════════════════════════════════════════════════
+TOPIC EMOJIS (for intro screen emoji band)
+═══════════════════════════════════════════════════
+
+**topic_emojis**: 5 emojis representing the TOPIC CONCEPT/OBJECTS — NOT the answer choices.
+- These appear as a decorative emoji band in the intro screen
+- They should represent WHAT THE TOPIC IS ABOUT, not what the answer options are
+- GOOD: "Animal Footprints" → 🐾👣🦶🐾👣 (tracks and paws — the topic itself)
+- BAD: "Animal Footprints" → 🐱🦊🐻🐺🦌 (these are answer choices — spoils the quiz!)
+- GOOD: "Ocean Animals" → 🌊🐚🐠🌊💧 (ocean elements)
+- GOOD: "Fruits" → 🍎🍓🍋🍇🍊 (actual fruits — the topic)
+- Use thematic/atmospheric emojis that evoke the topic without revealing answers`;
 
   const maxRetries = 5;
   // Sadece güçlü model kullan - flash-lite bozuk JSON üretiyor
@@ -496,6 +511,7 @@ async function main() {
       baslik: icerik.baslik,
       thumbnail_title: icerik.thumbnail_title || "",
       background_prompt: icerik.background_prompt || "",
+      topic_emojis: icerik.topic_emojis || [],
       questions: icerik.questions,
     }, null, 2));
     

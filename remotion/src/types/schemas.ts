@@ -92,6 +92,9 @@ export const quizCompositionSchema = z.object({
   sfx_applause: z.string().optional(),
   
   channel_name: z.string().default("GeniMini Tests"),
+
+  // Intro Sahne 2'de emoji bandı için (Gemini üretir — opsiyonel, yoksa getTopicEmojis fallback)
+  topic_emojis: z.array(z.string()).optional(),
 });
 
 export type QuizCompositionProps = z.infer<typeof quizCompositionSchema>;

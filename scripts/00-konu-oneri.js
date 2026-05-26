@@ -1,19 +1,19 @@
+// REV 001/26MAY26 - 12 buton (4/konu), placeholder job_id'ler 00'da üretildi
 /**
  * 00 - KONU ÖNERİ SCRIPT'I
  *
- * Pipedream'den taşındı. Akış:
+ * Akış:
  * 1. Gemini'ye 3 kids quiz konu önerisi sorulur
- * 2. konu_havuzu sheet'ine [konu, tarih, "hayir"] olarak yazılır
- * 3. Telegram'a 6 butonlu mesaj atılır (3 konu × Shorts/Long)
+ * 2. konu_havuzu sheet'ine yazılır
+ * 3. Her konu × format için placeholder job oluşturulur (6 job)
+ * 4. Telegram'a 12 butonlu mesaj atılır (3 konu × 4 buton: Tam/Test × Short/Long)
  *
- * Tetikleme: GitHub Actions cron, her gün 10:00 Europe/Istanbul
- *
- * Callback formatı (Worker tarafında handle ediliyor):
- *   quiz:format:tarih:index
- *   örnek: quiz:shorts:20.05.2026:0
+ * Callback formatı: quiz:format:tarih:index:mode
+ *   örnek: quiz:shorts:20.05.2026:0:full / :test
  */
 
 import { google } from "googleapis";
+import { jobOlustur } from "./lib/google.js";
 
 // ─── ENV ──────────────────────────────────────────────────────
 const {
@@ -141,28 +141,33 @@ async function sheetsYaz(konular, tarih) {
 }
 
 // ─── TELEGRAM ────────────────────────────────────────────────
-async function telegramButonGonder(konular, tarih) {
-  // 3 konu × 2 format = 6 buton
-  const inlineKeyboard = konular.map((konu, idx) => {
-    const kisaKonu = konu.length > 40 ? konu.substring(0, 37) + "..." : konu;
-    return [
-      {
-        text: `🎬 ${idx + 1}. ${kisaKonu} (Short)`,
-        callback_data: `quiz:shorts:${tarih}:${idx}`,
-      },
-      {
-        text: `📺 ${idx + 1}. ${kisaKonu} (Long)`,
-        callback_data: `quiz:long:${tarih}:${idx}`,
-      },
-    ];
-  });
-  
+async function telegramButonGonder(konular, tarih, jobIds) {
+  // 3 konu × 4 buton = 12 buton (her konu 2 satır: Tam + Test)
+  const inlineKeyboard = [];
+  for (let idx = 0; idx < konular.length; idx++) {
+    const konu = konular[idx];
+    const kisaKonu = konu.length > 30 ? konu.substring(0, 27) + "..." : konu;
+    inlineKeyboard.push([
+      { text: `🎬 ${idx + 1}. ${kisaKonu} (Short)`, callback_data: `quiz:shorts:${tarih}:${idx}:full` },
+      { text: `📺 ${idx + 1}. ${kisaKonu} (Long)`,  callback_data: `quiz:long:${tarih}:${idx}:full` },
+    ]);
+    inlineKeyboard.push([
+      { text: `🧪 ${idx + 1}. ${kisaKonu} (Short Test)`, callback_data: `quiz:shorts:${tarih}:${idx}:test` },
+      { text: `🧪 ${idx + 1}. ${kisaKonu} (Long Test)`,  callback_data: `quiz:long:${tarih}:${idx}:test` },
+    ]);
+  }
+
+  const jobIdSatiri = jobIds
+    ? konular.map((_, i) => `   ${i+1}. Shorts: \`${jobIds[i]?.shorts || "?"}\` / Long: \`${jobIds[i]?.long || "?"}\``).join("\n")
+    : "";
+
   const mesajMetni =
     `🦊 *GeniMini Tests - Daily Quiz Selection*\n\n` +
     `📅 ${tarih}\n\n` +
     `Today's 3 quiz topic suggestions:\n\n` +
     konular.map((k, i) => `${i + 1}️⃣ *${k}*`).join("\n\n") +
-    `\n\n👇 Pick a topic AND format below:`;
+    (jobIdSatiri ? `\n\n📋 *Job IDs:*\n${jobIdSatiri}` : "") +
+    `\n\n👇 Pick a topic, format AND mode (Tam=full / Test=1 soru) below:`;
   
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   const body = {
@@ -185,6 +190,40 @@ async function telegramButonGonder(konular, tarih) {
   
   console.log(`✓ Telegram mesaj gönderildi (msg_id: ${result.result.message_id})`);
   return result.result.message_id;
+}
+
+// ─── PLACEHOLDER JOB'LAR ──────────────────────────────────────
+async function placeholderJoblariOlustur(konular, tarih) {
+  // tarih "26.05.2026" → "260526"
+  const tarihKisa = tarih.replace(/\./g, "").slice(0, 6);
+  const jobIds = [];
+
+  for (let idx = 0; idx < konular.length; idx++) {
+    const konu = konular[idx];
+    const shortsId = `${tarihKisa}${idx}S`;
+    const longId   = `${tarihKisa}${idx}L`;
+
+    for (const [jobId, format] of [[shortsId, "shorts"], [longId, "long"]]) {
+      try {
+        await jobOlustur({
+          job_id: jobId,
+          tarih,
+          index: idx,
+          chat_id: TELEGRAM_CHAT_ID,
+          konu,
+          format,
+          durum: "konu_secimi_bekleniyor",
+        });
+        console.log(`✓ Placeholder job: ${jobId} (${konu} / ${format})`);
+      } catch (e) {
+        console.warn(`⚠ Placeholder job hatası ${jobId}: ${e.message}`);
+      }
+    }
+
+    jobIds.push({ shorts: shortsId, long: longId });
+  }
+
+  return jobIds;
 }
 
 // ─── TARİH (Türkiye saati) ───────────────────────────────────
@@ -215,9 +254,17 @@ async function main() {
     
     console.log("📊 Sheets'e yazılıyor...");
     await sheetsYaz(konular, tarih);
-    
+
+    console.log("📋 Placeholder job'lar oluşturuluyor...");
+    let jobIds = null;
+    try {
+      jobIds = await placeholderJoblariOlustur(konular, tarih);
+    } catch (e) {
+      console.warn(`⚠ Placeholder job hatası (devam): ${e.message}`);
+    }
+
     console.log("📱 Telegram mesajı gönderiliyor...");
-    await telegramButonGonder(konular, tarih);
+    await telegramButonGonder(konular, tarih, jobIds);
     
     const sure = ((Date.now() - baslangic) / 1000).toFixed(1);
     console.log(`✅ Tamam (${sure}s)`);

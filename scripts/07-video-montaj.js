@@ -617,6 +617,9 @@ async function main() {
       // Topic-themed background image
       background_image_path: backgroundImagePath,
       
+      // Intro emoji bandı
+      topic_emojis: questionsData.topic_emojis,
+
       // SFX path'leri
       sfx_tick: sfxMap.tick,
       sfx_drum: sfxMap.drum,
