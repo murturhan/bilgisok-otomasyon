@@ -132,7 +132,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       
       {intro_audio_path && (
         <Sequence from={0} durationInFrames={introFrames}>
-          <Audio src={staticFile(intro_audio_path)} volume={1.5} />
+          <Audio src={staticFile(intro_audio_path)} volume={1.6} />
         </Sequence>
       )}
       
@@ -198,7 +198,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       
       {outro_audio_path && (
         <Sequence from={outroStart} durationInFrames={outroFrames}>
-          <Audio src={staticFile(outro_audio_path)} volume={1.5} />
+          <Audio src={staticFile(outro_audio_path)} volume={1.6} />
         </Sequence>
       )}
       
