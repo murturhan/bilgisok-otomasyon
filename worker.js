@@ -1,4 +1,4 @@
-// REV 003/27MAY26 - GitHub Issues storage (KV yerine), tam onay sayfası
+// REV 004/27MAY26 - Onay sayfası: fotoğraf yükleme + pratik layout
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -184,55 +184,92 @@ async function handleApprovalPage(request, env, url) {
 <title>Onay: ${esc(jobId)}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#0f0f1a;color:#e0e0e0;padding:12px}
-h1{font-size:1.3em;margin-bottom:4px}
-.meta{color:#aaa;font-size:.85em;margin-bottom:16px}
-.card{background:#16213e;border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid #1e2d5a}
-.ch{color:#e94560;font-weight:700;font-size:1em;margin-bottom:10px}
-img{max-width:100%;border-radius:6px;margin:6px 0;display:block}
-label{display:block;color:#aaa;font-size:.78em;margin:8px 0 2px}
-textarea,input[type=text],select{width:100%;background:#0a1628;color:#e0e0e0;border:1px solid #2a3f6f;border-radius:5px;padding:7px;font-size:.9em;resize:vertical}
-textarea{min-height:60px}
+body{font-family:system-ui,sans-serif;background:#111827;color:#f3f4f6;padding:0 0 40px}
+.topbar{background:#1f2937;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #374151}
+.topbar h1{font-size:1em;font-weight:700;color:#fff}
+.topbar .meta{font-size:.75em;color:#9ca3af}
+.sticky-btns{display:flex;gap:8px}
+.sticky-btns button{padding:8px 14px;border:none;border-radius:6px;font-weight:700;font-size:.85em;cursor:pointer}
+.b-full{background:#10b981;color:#fff}
+.b-regen{background:#f59e0b;color:#000}
+.b-render{background:#8b5cf6;color:#fff}
+button:hover{opacity:.88}
+.cards{padding:12px 16px}
+.card{background:#1f2937;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #374151}
+.card-num{display:inline-block;background:#e94560;color:#fff;border-radius:6px;padding:2px 10px;font-size:.8em;font-weight:700;margin-bottom:10px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+.img-box{position:relative;background:#111827;border-radius:8px;overflow:hidden;min-height:120px;display:flex;align-items:center;justify-content:center}
+.img-box img{width:100%;display:block;border-radius:8px}
+.img-box .no-img{color:#6b7280;font-size:.8em;text-align:center;padding:20px}
+.img-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.btn-sm{padding:5px 10px;border:1px solid #4b5563;background:#374151;color:#d1d5db;border-radius:5px;font-size:.78em;cursor:pointer}
+.btn-sm:hover{background:#4b5563}
+.btn-upload{border-color:#3b82f6;color:#93c5fd}
+.btn-regen{border-color:#f59e0b;color:#fcd34d}
+input[type=file]{display:none}
+label.lbl{display:block;color:#9ca3af;font-size:.75em;margin:8px 0 3px}
+textarea,input[type=text],select{width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 9px;font-size:.88em;resize:vertical;font-family:inherit}
+textarea{min-height:56px}
 .opts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-.rrow{display:flex;align-items:center;gap:8px;margin:6px 0}
-.rrow input[type=checkbox]{width:16px;height:16px;cursor:pointer}
-.rrow label{margin:0;font-size:.85em;color:#ccc}
-.btns{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0 8px}
-button{padding:12px 18px;border:none;border-radius:8px;font-weight:700;font-size:.95em;cursor:pointer;transition:.2s}
-.b-full{background:#e94560;color:#fff}
-.b-regen{background:transparent;color:#e94560;border:2px solid #e94560}
-.b-render{background:#533483;color:#fff}
-button:hover{opacity:.85}
-#status{margin-top:12px;padding:12px;border-radius:8px;display:none}
-.ok{background:#0d3b0d;color:#4caf50}
-.err{background:#3b0d0d;color:#f44336}
-code{background:#222;padding:2px 6px;border-radius:4px;font-size:.85em}
+.preview-badge{position:absolute;bottom:4px;right:4px;background:#10b981;color:#fff;font-size:.7em;padding:2px 6px;border-radius:4px}
+#status{margin:12px 16px;padding:12px 16px;border-radius:8px;display:none;font-weight:600}
+.ok{background:#064e3b;color:#6ee7b7}
+.err{background:#7f1d1d;color:#fca5a5}
 </style>
 </head>
 <body>
-<div style="background:#16213e;border-radius:10px;padding:14px;margin-bottom:14px">
-  <h1>🦊 GeniMini Tests — Onay</h1>
-  <div class="meta">Job: <code>${esc(jobId)}</code> &nbsp;|&nbsp; Format: ${esc(format)} &nbsp;|&nbsp; ${questions.length} soru</div>
-  <div style="font-weight:600;color:#fff">${esc(topic)}</div>
-  ${baslik ? `<div style="color:#aaa;font-size:.9em;margin-top:4px">${esc(baslik)}</div>` : ""}
-</div>
-<form id="frm" onsubmit="return false">
-${qCards}
-<div class="btns">
-  <button type="button" class="b-full" onclick="submit_('full')">✅ Onayla → Ses Üret</button>
-  <button type="button" class="b-regen" onclick="submit_('regen_only')">🔄 Değiştir → Tekrar İncele</button>
-  <button type="button" class="b-render" onclick="submit_('render_only')">🎬 Onayla → Direkt Render</button>
+<div class="topbar">
+  <div>
+    <div class="topbar h1">🦊 GeniMini — Onay</div>
+    <div class="topbar meta">${esc(jobId)} · ${esc(format)} · ${questions.length} soru · ${esc(topic)}</div>
+  </div>
+  <div class="sticky-btns">
+    <button class="b-full" onclick="submit_('full')">✅ Onayla</button>
+    <button class="b-regen" onclick="submit_('regen_only')">🔄 Tekrar</button>
+    <button class="b-render" onclick="submit_('render_only')">🎬 Render</button>
+  </div>
 </div>
 <div id="status"></div>
+<form id="frm" onsubmit="return false" class="cards">
+${qCards}
 </form>
 <script>
 const JOB_ID = ${JSON.stringify(jobId)};
 const CHAT_ID = ${JSON.stringify(String(chat_id))};
 const N = ${questions.length};
+const customImages = {};
+
 function val(id){const e=document.getElementById(id);return e?e.value:"";}
 function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
+
+function triggerUpload(inputId){document.getElementById(inputId).click();}
+
+function handleFileUpload(inputId, previewId, key){
+  const inp=document.getElementById(inputId);
+  inp.onchange=function(){
+    const file=inp.files[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=function(e){
+      customImages[key]=e.target.result;
+      const box=document.getElementById(previewId);
+      box.innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span>';
+    };
+    reader.readAsDataURL(file);
+  };
+}
+
+function toggleRegen(checkId, btnId, key){
+  const cb=document.getElementById(checkId);
+  cb.checked=!cb.checked;
+  const btn=document.getElementById(btnId);
+  btn.style.background=cb.checked?'#78350f':'';
+  btn.style.color=cb.checked?'#fef3c7':'';
+  if(cb.checked) delete customImages[key];
+}
+
 async function submit_(level){
   const edits={};
+  const reads=[];
   for(let i=0;i<N;i++){
     edits[String(i)]={
       question_text:val("q"+i+"_qt"),
@@ -243,6 +280,8 @@ async function submit_(level){
       fun_fact_image_prompt:val("q"+i+"_fp"),
       regen_question_image:chk("q"+i+"_rq"),
       regen_fact_image:chk("q"+i+"_rf"),
+      custom_question_image:customImages["cq"+i]||null,
+      custom_fact_image:customImages["cf"+i]||null,
     };
   }
   const st=document.getElementById("status");
@@ -254,9 +293,20 @@ async function submit_(level){
       body:JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID}),
     });
     const d=await r.json();
-    if(d.ok){st.className="ok";st.textContent="✅ Gönderildi! Telegram'da bildirim alacaksın.";}
-    else{st.className="err";st.textContent="❌ Hata: "+JSON.stringify(d);}
+    if(d.ok){
+      st.className="ok";
+      st.textContent="✅ Gönderildi! "+({full:"Ses üretimi başlıyor.",regen_only:"Değişiklikler uygulanıyor, yeni onay linki gelecek.",render_only:"Video render başlıyor."}[level]||"");
+      document.querySelectorAll(".sticky-btns button").forEach(b=>b.disabled=true);
+    } else {
+      st.className="err";st.textContent="❌ Hata: "+JSON.stringify(d);
+    }
   }catch(e){st.className="err";st.textContent="❌ "+e.message;}
+}
+
+// File upload listener'larını bağla
+for(let i=0;i<N;i++){
+  handleFileUpload("q"+i+"_cq_file","q"+i+"_qimg","cq"+i);
+  handleFileUpload("q"+i+"_cf_file","q"+i+"_fimg","cf"+i);
 }
 </script>
 </body>
@@ -272,29 +322,55 @@ function buildQuestionCard(q, i) {
     question_image_url = null, fun_fact_image_url = null,
   } = q;
   const optInputs = options.map((o, j) =>
-    `<input type="text" id="q${i}_o${j}" value="${esc(o)}">`
+    `<input type="text" id="q${i}_o${j}" value="${esc(o)}" placeholder="${["A","B","C"][j]}">`
   ).join("");
   const caOpts = options.map((o, j) =>
     `<option value="${j}" ${correct_answer === j ? "selected" : ""}>${["A","B","C"][j]}: ${esc(o)}</option>`
   ).join("");
+
+  const qImgContent = question_image_url
+    ? `<img src="${esc(question_image_url)}" alt="soru görseli">`
+    : `<div class="no-img">Görsel yok</div>`;
+  const fImgContent = fun_fact_image_url
+    ? `<img src="${esc(fun_fact_image_url)}" alt="fact görseli">`
+    : `<div class="no-img">Görsel yok</div>`;
+
   return `<div class="card">
-  <div class="ch">Soru ${i + 1}</div>
-  ${question_image_url ? `<img src="${esc(question_image_url)}" alt="Q${i+1}">` : ""}
-  <label>Soru metni</label>
+  <span class="card-num">Soru ${i + 1}</span>
+  <div class="row2">
+    <div>
+      <div style="font-size:.75em;color:#9ca3af;margin-bottom:4px">📸 Soru Görseli</div>
+      <div class="img-box" id="q${i}_qimg">${qImgContent}</div>
+      <div class="img-actions">
+        <button type="button" class="btn-sm btn-upload" onclick="triggerUpload('q${i}_cq_file')">⬆ Fotoğraf Yükle</button>
+        <input type="file" id="q${i}_cq_file" accept="image/*">
+        <button type="button" class="btn-sm btn-regen" id="q${i}_rq_btn" onclick="toggleRegen('q${i}_rq','q${i}_rq_btn','cq${i}')">🔄 Yeniden Üret</button>
+        <input type="checkbox" id="q${i}_rq" style="display:none">
+      </div>
+    </div>
+    <div>
+      <div style="font-size:.75em;color:#9ca3af;margin-bottom:4px">🌟 Fact Görseli</div>
+      <div class="img-box" id="q${i}_fimg">${fImgContent}</div>
+      <div class="img-actions">
+        <button type="button" class="btn-sm btn-upload" onclick="triggerUpload('q${i}_cf_file')">⬆ Fotoğraf Yükle</button>
+        <input type="file" id="q${i}_cf_file" accept="image/*">
+        <button type="button" class="btn-sm btn-regen" id="q${i}_rf_btn" onclick="toggleRegen('q${i}_rf','q${i}_rf_btn','cf${i}')">🔄 Yeniden Üret</button>
+        <input type="checkbox" id="q${i}_rf" style="display:none">
+      </div>
+    </div>
+  </div>
+  <label class="lbl">Soru metni</label>
   <textarea id="q${i}_qt">${esc(question_text)}</textarea>
-  <label>Şıklar (A / B / C)</label>
+  <label class="lbl">Şıklar (A / B / C)</label>
   <div class="opts">${optInputs}</div>
-  <label>Doğru cevap</label>
+  <label class="lbl">Doğru cevap</label>
   <select id="q${i}_ca">${caOpts}</select>
-  <label>Fun Fact</label>
+  <label class="lbl">Fun Fact</label>
   <textarea id="q${i}_ff">${esc(fun_fact)}</textarea>
-  ${fun_fact_image_url ? `<img src="${esc(fun_fact_image_url)}" alt="Fact${i+1}">` : ""}
-  <label>Soru görseli prompt</label>
-  <textarea id="q${i}_ip">${esc(image_prompt)}</textarea>
-  <div class="rrow"><input type="checkbox" id="q${i}_rq"><label for="q${i}_rq">Soru görselini yeniden üret</label></div>
-  <label>Fact görseli prompt</label>
-  <textarea id="q${i}_fp">${esc(fun_fact_image_prompt)}</textarea>
-  <div class="rrow"><input type="checkbox" id="q${i}_rf"><label for="q${i}_rf">Fact görselini yeniden üret</label></div>
+  <label class="lbl">Soru görseli prompt</label>
+  <textarea id="q${i}_ip" style="min-height:40px">${esc(image_prompt)}</textarea>
+  <label class="lbl">Fact görseli prompt</label>
+  <textarea id="q${i}_fp" style="min-height:40px">${esc(fun_fact_image_prompt)}</textarea>
 </div>`;
 }
 
