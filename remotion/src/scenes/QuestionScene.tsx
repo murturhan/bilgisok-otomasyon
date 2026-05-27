@@ -1,4 +1,4 @@
-// REV 010/27MAY26 - fünye geri getirildi: blurAmount dinamik, show_image=false placeholder reveal'da açılır
+// REV 011/28MAY26 - pop SFX frame'leri kart animasyon başlangıcıyla senkronize edildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -216,14 +216,14 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           <Audio src={staticFile(sfx_whoosh)} volume={0.85} />
         </Sequence>
       )}
-      {/* POP - şıklar çıkarken (show fazı) */}
+      {/* POP - şıklar çıkarken: card[0]=show+8, card[1]=show+26, card[2]=show+44 (ENTRY_OFFSET=8, STAGGER=18) */}
       {sfx_pop_single && (
-        <Sequence from={phases.show} durationInFrames={30}>
+        <Sequence from={phases.show + 8} durationInFrames={30}>
           <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
         </Sequence>
       )}
       {sfx_pop_single && (
-        <Sequence from={phases.show + 8} durationInFrames={30}>
+        <Sequence from={phases.show + 26} durationInFrames={30}>
           <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
         </Sequence>
       )}

@@ -1,4 +1,4 @@
-// REV 002/27MAY26 - baseColor white (sarı palette ile çakışıyordu, renkler görünmüyordu)
+// REV 003/28MAY26 - ** yoksa ilk kelime otomatik vurgulanır (Gemini bazen ** koymayı unutuyor)
 import React from "react";
 import {
   AbsoluteFill,
@@ -160,11 +160,13 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
 
   const topicEmojis = topicEmojisProp && topicEmojisProp.length > 0 ? topicEmojisProp : getTopicEmojis(topic);
   const topicUpper = (topic || "").toUpperCase();
-  
+  // Gemini ** koymayı unutursa ilk kelimeyi otomatik vurgula
+  const topicDisplay = topicUpper.includes("**") ? topicUpper : topicUpper.replace(/^(\S+)/, "**$1**");
+
   const smallLogoAnim = spring({ frame: localFrame, fps, config: { damping: 12, stiffness: 110 } });
   const smallLogoX = interpolate(smallLogoAnim, [0, 1], [-200, 0]);
   const smallLogoOpacity = interpolate(smallLogoAnim, [0, 0.5], [0, 1]);
-  
+
   const topicAnim = spring({ frame: localFrame - 4, fps, config: { damping: 9, stiffness: 130 } });
   const topicScale = interpolate(topicAnim, [0, 1], [0, 1]);
   const topicOpacity = interpolate(topicAnim, [0, 0.5], [0, 1]);
@@ -172,11 +174,11 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
   const topicPulse = 1 + Math.sin(localFrame * 0.1) * 0.025;
   const topicWobble = Math.sin(localFrame * 0.07) * 1.8;
   const topicFloat = Math.cos(localFrame * 0.09) * 12;
-  
+
   const emojiAnim = spring({ frame: localFrame - 18, fps, config: { damping: 11, stiffness: 100 } });
   const emojiOpacity = interpolate(emojiAnim, [0, 1], [0, 1]);
   const emojiY = interpolate(emojiAnim, [0, 1], [80, 0]);
-  
+
   // Font: shorts 2.5x büyütülmüş, binary search ile fit (** markers hariç)
   const topicForFit = topicUpper.replace(/\*\*/g, "");
   const topicLen = topicForFit.length;
@@ -240,7 +242,7 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
           maxWidth: "94%", textAlign: "center", letterSpacing: 2,
           textTransform: "uppercase", lineHeight: 1.05,
         }}>
-          <HighlightedText text={topicUpper} baseColor={BRAND.white} />
+          <HighlightedText text={topicDisplay} baseColor={BRAND.white} />
         </div>
       </div>
       

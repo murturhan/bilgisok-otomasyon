@@ -1,4 +1,4 @@
-// REV 001/27MAY26 - intro_title alanı eklendi (**bold** vurgu destekli)
+// REV 002/28MAY26 - intro_title CRITICAL prompt güçlendirildi (Gemini ** koymayı unutuyordu)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -232,7 +232,7 @@ CRITICAL:
 - **thumbnail_title MUST be 2-3 WORDS MAX, UPPERCASE, PUNCHY** (examples: "FOOD QUIZ", "GUESS THE ANIMAL", "OCEAN QUIZ", "TRUCK CHALLENGE", "MIGHTY MACHINES")
 - thumbnail_title is for the thumbnail image (LARGE TEXT), NOT for YouTube title
 - baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title
-- **intro_title**: short topic title for the video intro screen. Wrap the most important 1-2 words with **double stars** (e.g. "**Wild** Animals", "Amazing **Oceans**", "**Space** Adventure"). Max 4 words total.
+- **intro_title CRITICAL — MANDATORY STARS**: Short topic title for the video intro screen (MAX 4 WORDS). You MUST wrap the 1-2 most important words with **double stars**. Examples: "**Wild** Animals", "Amazing **Oceans**", "**Rocket** Science", "**Dino** World". NEVER output intro_title without ** markers — it MUST contain ** or the UI breaks. Wrong: "Animal Adaptations". Right: "**Animal** Adaptations".
 - **show_image** (boolean, per question): Decide if showing the image during question helps or spoils.
   * TRUE — image is a visual *clue* (blurred during guess, revealed with confetti). Examples: cross-sections, silhouettes, partial views, mood scenes.
   * FALSE — image would obviously reveal the answer ("What is this?" with clear apple photo → false). Shows fancy "?" placeholder instead.

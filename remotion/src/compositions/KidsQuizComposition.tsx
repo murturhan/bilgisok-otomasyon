@@ -1,4 +1,4 @@
-// REV 005/27MAY26 - Jess ses seviyesi 1.6->1.8
+// REV 006/28MAY26 - müzik volume düşürüldü, outro alkış+Jess çakışması giderildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -19,6 +19,7 @@ import {
   computeQuestionPhases,
   questionStartFrame,
   outroStartFrame,
+  APPLAUSE_DELAY_FRAMES,
 } from "../utils/timing";
 
 export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
@@ -109,8 +110,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       }
     }
     
-    const targetVol = speaking ? 0.08 : 0.13;
-    const startVol = prevSpeaking ? 0.08 : 0.13;
+    const targetVol = speaking ? 0.05 : 0.09;
+    const startVol = prevSpeaking ? 0.05 : 0.09;
     
     if (framesSinceChange < MUSIC_DUCK_FRAMES) {
       const t = framesSinceChange / MUSIC_DUCK_FRAMES;
@@ -192,18 +193,18 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         );
       })}
       
-      {/* OUTRO */}
-      <Sequence from={outroStart} durationInFrames={outroFrames}>
+      {/* OUTRO - sahne alkışla başlar, Jess APPLAUSE_DELAY_FRAMES sonra konuşur */}
+      <Sequence from={outroStart} durationInFrames={outroFrames + APPLAUSE_DELAY_FRAMES}>
         <OutroSceneComponent
           channelName={channel_name}
           jessPoses={resolvedJessPoses}
-          durationFrames={outroFrames}
+          durationFrames={outroFrames + APPLAUSE_DELAY_FRAMES}
           jessVideoDurationFrames={Math.ceil(jess_outro_video_duration * FPS)}
         />
       </Sequence>
-      
+
       {outro_audio_path && (
-        <Sequence from={outroStart} durationInFrames={outroFrames}>
+        <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES} durationInFrames={outroFrames}>
           <Audio src={staticFile(outro_audio_path)} volume={1.8} />
         </Sequence>
       )}
