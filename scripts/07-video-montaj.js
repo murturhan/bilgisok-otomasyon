@@ -1,4 +1,4 @@
-// REV 002/26MAY26 - sfx pop_single + pop_double + progress + applause eklendi
+// REV 003/27MAY26 - intro_title destegi, driveIndir write stream race fix
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -587,7 +587,7 @@ async function main() {
     
     const inputProps = {
       title: "GeniMini Tests",
-      topic: questionsData.konu || job.konu || "",
+      topic: questionsData.intro_title || questionsData.konu || job.konu || "",
       channel_name: "GeniMini Tests",
       questions: questions,
       jess_poses: jessPosesForRemotion,

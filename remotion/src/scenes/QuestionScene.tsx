@@ -1,4 +1,4 @@
-// REV 008/26MAY26 - long fact 3-sütun (gözlük ortada), shorts factBoxHeight +3%
+// REV 009/27MAY26 - soru/cevap ses seviyesi 1.7->2.0
 import React from "react";
 import {
   AbsoluteFill,
@@ -175,12 +175,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       {/* AUDIO */}
       {question.question_audio_path && (
         <Sequence from={phases.show} durationInFrames={phases.countdown - phases.show}>
-          <Audio src={staticFile(question.question_audio_path)} volume={1.7} />
+          <Audio src={staticFile(question.question_audio_path)} volume={2.0} />
         </Sequence>
       )}
       {question.answer_audio_path && (
         <Sequence from={phases.reveal} durationInFrames={phases.transition - phases.reveal}>
-          <Audio src={staticFile(question.answer_audio_path)} volume={1.7} />
+          <Audio src={staticFile(question.answer_audio_path)} volume={2.0} />
         </Sequence>
       )}
       

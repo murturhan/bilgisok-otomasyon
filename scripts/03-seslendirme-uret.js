@@ -1,4 +1,4 @@
-// REV 001/26MAY26 - TTS markdown temizliği + SSML desteği (Chirp3-HD-Leda)
+// REV 002/27MAY26 - TTS noktalama korunuyor, SSML kaldırıldı (plain text)
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -44,56 +44,11 @@ const MAX_CHARS_PER_REQUEST = 4500;
 
 // ─── METIN TEMİZLEME (TTS için) ─────────────────────────────────
 function ttsMetinTemizle(metin) {
-  let sonuc = String(metin || "").trim();
-
-  // Markdown bold marker temizle
-  sonuc = sonuc
+  return String(metin || "")
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\*/g, "")
-    .replace(/[•\-—–]/g, " ");
-
-  // İngilizce kısaltma açma
-  const kisaltmalar = [
-    [/\bMr\./g, "Mister"],
-    [/\bMrs\./g, "Misses"],
-    [/\bMs\./g, "Miss"],
-    [/\bDr\./g, "Doctor"],
-    [/\bProf\./g, "Professor"],
-    [/\bSt\./g, "Saint"],
-    [/\be\.g\./gi, "for example"],
-    [/\bi\.e\./gi, "that is"],
-    [/\betc\./gi, "etcetera"],
-    [/\bvs\./gi, "versus"],
-    [/\bapprox\./gi, "approximately"],
-    [/\bno\./gi, "number"],
-    [/(\d+)\s*km\b/gi, "$1 kilometers"],
-    [/(\d+)\s*cm\b/gi, "$1 centimeters"],
-    [/(\d+)\s*kg\b/gi, "$1 kilograms"],
-    [/\bB\.C\./g, "B C"],
-    [/\bA\.D\./g, "A D"],
-  ];
-  for (const [r, rep] of kisaltmalar) sonuc = sonuc.replace(r, rep);
-  
-  // Emoji temizle
-  sonuc = sonuc
-    .replace(/[\u{1F300}-\u{1F9FF}]/gu, "")
-    .replace(/[\u{2600}-\u{26FF}]/gu, "")
-    .replace(/[\u{2700}-\u{27BF}]/gu, "");
-  
-  // Boşluk normalize
-  sonuc = sonuc.replace(/\s+/g, " ").trim();
-  
-  return sonuc;
-}
-
-// ─── SSML sarmalayıcı ─────────────────────────────────────────
-function metniSsmlYap(metin) {
-  const temiz = ttsMetinTemizle(metin);
-  return `<speak>${temiz
-    .replace(/\./g, "<break time=\"300ms\"/>")
-    .replace(/,/g, "<break time=\"150ms\"/>")
-    .replace(/!/g, "<break time=\"250ms\"/>")
-    .replace(/\?/g, "<break time=\"250ms\"/>")}</speak>`;
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // ─── TTS API çağrısı ───────────────────────────────────────────
@@ -106,32 +61,16 @@ async function ttsCagri(metin, accessToken) {
     "Content-Type": "application/json",
   };
 
-  // SSML dene (Chirp3-HD-Leda destekliyorsa)
-  try {
-    const ssml = metniSsmlYap(metin);
-    const bodySSML = { input: { ssml }, voice, audioConfig };
-    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(bodySSML) });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.audioContent) return Buffer.from(data.audioContent, "base64");
-    }
+  const temizMetin = ttsMetinTemizle(metin);
+  const body = { input: { text: temizMetin }, voice, audioConfig };
+  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+  if (!res.ok) {
     const errText = await res.text();
-    console.warn(`⚠ SSML başarısız (${res.status}), plain text fallback: ${errText.substring(0, 150)}`);
-  } catch (e) {
-    console.warn(`⚠ SSML hatası, plain text fallback: ${e.message}`);
+    throw new Error(`TTS API ${res.status}: ${errText.substring(0, 300)}`);
   }
-
-  // Plain text fallback — noktalama da sil
-  const temizMetin = ttsMetinTemizle(metin).replace(/[.!?,;:]/g, " ").replace(/\s+/g, " ").trim();
-  const bodyPlain = { input: { text: temizMetin }, voice, audioConfig };
-  const res2 = await fetch(url, { method: "POST", headers, body: JSON.stringify(bodyPlain) });
-  if (!res2.ok) {
-    const errText = await res2.text();
-    throw new Error(`TTS API ${res2.status}: ${errText.substring(0, 300)}`);
-  }
-  const data2 = await res2.json();
-  if (!data2.audioContent) throw new Error("TTS audioContent yok");
-  return Buffer.from(data2.audioContent, "base64");
+  const data = await res.json();
+  if (!data.audioContent) throw new Error("TTS audioContent yok");
+  return Buffer.from(data.audioContent, "base64");
 }
 
 // ─── Pitch shift (rubberband veya asetrate fallback) ───────────

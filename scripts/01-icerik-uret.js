@@ -1,4 +1,4 @@
-// REV 000/25MAY26 - 01 sonrasi 02-gorsel-uret otomatik dispatch
+// REV 001/27MAY26 - intro_title alanı eklendi (**bold** vurgu destekli)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -183,6 +183,7 @@ JSON OUTPUT (must be valid JSON, no markdown):
 
 {
   "konu": "${konu}",
+  "intro_title": "Topic as intro big title — wrap the most important 1-2 words with **double stars** (e.g. '**Wild** Animals' or 'Amazing **Oceans**')",
   "format": "${FORMAT}",
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
   "baslik": "Long YouTube title with emoji",
@@ -231,6 +232,7 @@ CRITICAL:
 - **thumbnail_title MUST be 2-3 WORDS MAX, UPPERCASE, PUNCHY** (examples: "FOOD QUIZ", "GUESS THE ANIMAL", "OCEAN QUIZ", "TRUCK CHALLENGE", "MIGHTY MACHINES")
 - thumbnail_title is for the thumbnail image (LARGE TEXT), NOT for YouTube title
 - baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title
+- **intro_title**: short topic title for the video intro screen. Wrap the most important 1-2 words with **double stars** (e.g. "**Wild** Animals", "Amazing **Oceans**", "**Space** Adventure"). Max 4 words total.
 - **show_image** (boolean, per question): Decide if showing the image during question helps or spoils.
   * TRUE — image is a visual *clue* (blurred during guess, revealed with confetti). Examples: cross-sections, silhouettes, partial views, mood scenes.
   * FALSE — image would obviously reveal the answer ("What is this?" with clear apple photo → false). Shows fancy "?" placeholder instead.

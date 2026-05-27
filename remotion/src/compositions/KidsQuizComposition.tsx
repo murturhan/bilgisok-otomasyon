@@ -1,4 +1,4 @@
-// REV 004/26MAY26 - topic_emojis IntroScene'e iletildi
+// REV 005/27MAY26 - Jess ses seviyesi 1.6->1.8
 import React from "react";
 import {
   AbsoluteFill,
@@ -136,7 +136,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       
       {intro_audio_path && (
         <Sequence from={0} durationInFrames={introFrames}>
-          <Audio src={staticFile(intro_audio_path)} volume={1.6} />
+          <Audio src={staticFile(intro_audio_path)} volume={1.8} />
         </Sequence>
       )}
       
@@ -204,7 +204,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       
       {outro_audio_path && (
         <Sequence from={outroStart} durationInFrames={outroFrames}>
-          <Audio src={staticFile(outro_audio_path)} volume={1.6} />
+          <Audio src={staticFile(outro_audio_path)} volume={1.8} />
         </Sequence>
       )}
       
