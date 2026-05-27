@@ -1,4 +1,4 @@
-// REV 001/28MAY26 - APPLAUSE_DELAY_FRAMES eklendi, totalDurationFrames outro gecikmeyi hesaba katıyor
+// REV 002/28MAY26 - APPLAUSE_DELAY_FRAMES 60->90 (3sn), OutroScene gecikmesi için
 /**
  * Soru başına faz timing'leri (Quiz Blitz tarzı, çocuk hızında)
  * 
@@ -11,7 +11,7 @@
 import { FPS, FIXED_FRAMES } from "../styles/theme";
 
 // Outro Jess sesi alkış SFX bittikten sonra başlar (2s @ 30fps)
-export const APPLAUSE_DELAY_FRAMES = 60;
+export const APPLAUSE_DELAY_FRAMES = 90;
 import { Question } from "../types/schemas";
 
 export interface QuestionPhases {

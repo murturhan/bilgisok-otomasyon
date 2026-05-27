@@ -1,4 +1,4 @@
-// REV 006/28MAY26 - müzik volume düşürüldü, outro alkış+Jess çakışması giderildi
+// REV 007/28MAY26 - Jess ses +0.2, outro OutroScene gecikmesi düzeltildi, sfx IntroScene'e geçirildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -72,8 +72,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   const isJessSpeaking = (f: number): boolean => {
     // Intro
     if (f < introFrames) return true;
-    // Outro
-    if (f >= outroStart && f < outroStart + outroFrames) return true;
+    // Outro - APPLAUSE_DELAY_FRAMES sonra başlıyor
+    if (f >= outroStart + APPLAUSE_DELAY_FRAMES && f < outroStart + APPLAUSE_DELAY_FRAMES + outroFrames) return true;
     
     // Sorular - question/answer audio fazları
     let scanFrame = introFrames;
@@ -132,12 +132,14 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           jessPoses={resolvedJessPoses}
           durationFrames={introFrames}
           jessVideoDurationFrames={Math.ceil(jess_intro_video_duration * FPS)}
+          sfx_pop_single={sfx_pop_single}
+          sfx_pop_double={sfx_pop_double}
         />
       </Sequence>
       
       {intro_audio_path && (
         <Sequence from={0} durationInFrames={introFrames}>
-          <Audio src={staticFile(intro_audio_path)} volume={1.8} />
+          <Audio src={staticFile(intro_audio_path)} volume={2.0} />
         </Sequence>
       )}
       
@@ -193,26 +195,26 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         );
       })}
       
-      {/* OUTRO - sahne alkışla başlar, Jess APPLAUSE_DELAY_FRAMES sonra konuşur */}
-      <Sequence from={outroStart} durationInFrames={outroFrames + APPLAUSE_DELAY_FRAMES}>
+      {/* OUTRO - alkış (APPLAUSE_DELAY_FRAMES) bittikten sonra OutroScene başlar */}
+      <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES} durationInFrames={outroFrames}>
         <OutroSceneComponent
           channelName={channel_name}
           jessPoses={resolvedJessPoses}
-          durationFrames={outroFrames + APPLAUSE_DELAY_FRAMES}
+          durationFrames={outroFrames}
           jessVideoDurationFrames={Math.ceil(jess_outro_video_duration * FPS)}
         />
       </Sequence>
 
       {outro_audio_path && (
         <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES} durationInFrames={outroFrames}>
-          <Audio src={staticFile(outro_audio_path)} volume={1.8} />
+          <Audio src={staticFile(outro_audio_path)} volume={2.0} />
         </Sequence>
       )}
-      
-      {/* OUTRO ANNOUNCE - Subscribe sahnesinde (Jess outro video bittikten 0.4s sonra) oynar */}
+
+      {/* OUTRO ANNOUNCE - OutroScene başladıktan sonra Jess video bitişinde oynar */}
       {outro_announce_path && (
         <Sequence
-          from={outroStart + Math.ceil(jess_outro_video_duration * FPS) + Math.floor(FPS * 0.4)}
+          from={outroStart + APPLAUSE_DELAY_FRAMES + Math.ceil(jess_outro_video_duration * FPS) + Math.floor(FPS * 0.4)}
           durationInFrames={Math.ceil(outro_announce_duration * FPS)}
         >
           <Audio src={staticFile(outro_announce_path)} volume={1.4} />

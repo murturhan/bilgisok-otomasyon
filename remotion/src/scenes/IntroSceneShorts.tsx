@@ -1,4 +1,4 @@
-// REV 003/28MAY26 - ** yoksa ilk kelime otomatik vurgulanır (Gemini bazen ** koymayı unutuyor)
+// REV 004/28MAY26 - AnimatedTitleWords: kelime kelime pop animasyonu + sfx_pop props eklendi
 import React from "react";
 import {
   AbsoluteFill,
@@ -13,7 +13,7 @@ import { BRAND, FONTS, THEME_COLORS, FPS } from "../styles/theme";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { GeniMiniLogo } from "../components/BrandAssets";
-import { HighlightedText } from "../components/HighlightedText";
+import { AnimatedTitleWords } from "../components/AnimatedTitleWords";
 import { JessPoses } from "../types/schemas";
 import {
   SHORTS_GREETING_TEXT,
@@ -28,6 +28,8 @@ interface Props {
   jessPoses: JessPoses;
   durationFrames: number;
   jessVideoDurationFrames: number;
+  sfx_pop_single?: string;
+  sfx_pop_double?: string;
 }
 
 /**
@@ -40,6 +42,8 @@ export const IntroSceneShorts: React.FC<Props> = ({
   topicEmojis,
   durationFrames,
   jessVideoDurationFrames,
+  sfx_pop_single,
+  sfx_pop_double,
 }) => {
   const frame = useCurrentFrame();
   const theme = THEME_COLORS[0];
@@ -79,7 +83,13 @@ export const IntroSceneShorts: React.FC<Props> = ({
       )}
       
       {inScene2 && !inTransition && (
-        <Scene2Shorts topic={topic} topicEmojis={topicEmojis} startFrame={scene1End} />
+        <Scene2Shorts
+          topic={topic}
+          topicEmojis={topicEmojis}
+          startFrame={scene1End}
+          sfx_pop_single={sfx_pop_single}
+          sfx_pop_double={sfx_pop_double}
+        />
       )}
       
       {inTransition && (
@@ -153,24 +163,19 @@ const Scene1Shorts: React.FC = () => {
 };
 
 // ═══ SAHNE 2 ═══ Topic 3D + emoji band (DİKEY)
-const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame: number }> = ({ topic, topicEmojis: topicEmojisProp, startFrame }) => {
+const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame: number; sfx_pop_single?: string; sfx_pop_double?: string }> = ({ topic, topicEmojis: topicEmojisProp, startFrame, sfx_pop_single, sfx_pop_double }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const localFrame = frame - startFrame;
 
   const topicEmojis = topicEmojisProp && topicEmojisProp.length > 0 ? topicEmojisProp : getTopicEmojis(topic);
-  const topicUpper = (topic || "").toUpperCase();
-  // Gemini ** koymayı unutursa ilk kelimeyi otomatik vurgula
-  const topicDisplay = topicUpper.includes("**") ? topicUpper : topicUpper.replace(/^(\S+)/, "**$1**");
+  const topicUpper = (topic || "").toUpperCase().replace(/\*\*/g, "");
 
   const smallLogoAnim = spring({ frame: localFrame, fps, config: { damping: 12, stiffness: 110 } });
   const smallLogoX = interpolate(smallLogoAnim, [0, 1], [-200, 0]);
   const smallLogoOpacity = interpolate(smallLogoAnim, [0, 0.5], [0, 1]);
 
-  const topicAnim = spring({ frame: localFrame - 4, fps, config: { damping: 9, stiffness: 130 } });
-  const topicScale = interpolate(topicAnim, [0, 1], [0, 1]);
-  const topicOpacity = interpolate(topicAnim, [0, 0.5], [0, 1]);
-  const topicRotate = interpolate(topicAnim, [0, 0.7, 1], [-15, 5, 0]);
+  // Blok animasyonu kaldırıldı — per-word spring AnimatedTitleWords'de
   const topicPulse = 1 + Math.sin(localFrame * 0.1) * 0.025;
   const topicWobble = Math.sin(localFrame * 0.07) * 1.8;
   const topicFloat = Math.cos(localFrame * 0.09) * 12;
@@ -179,8 +184,8 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
   const emojiOpacity = interpolate(emojiAnim, [0, 1], [0, 1]);
   const emojiY = interpolate(emojiAnim, [0, 1], [80, 0]);
 
-  // Font: shorts 2.5x büyütülmüş, binary search ile fit (** markers hariç)
-  const topicForFit = topicUpper.replace(/\*\*/g, "");
+  // Font: shorts 2.5x büyütülmüş, binary search ile fit
+  const topicForFit = topicUpper;
   const topicLen = topicForFit.length;
   let maxTargetFont: number;
   if (topicLen < 18) maxTargetFont = 325;
@@ -235,14 +240,19 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
         paddingLeft: 40, paddingRight: 40,
       }}>
         <div style={{
-          transform: `scale(${topicScale * topicPulse}) rotate(${topicRotate + topicWobble}deg) translateY(${topicFloat}px)`,
-          opacity: topicOpacity,
+          transform: `scale(${topicPulse}) rotate(${topicWobble}deg) translateY(${topicFloat}px)`,
           fontSize: topicFontSize, fontFamily: FONTS.display, fontWeight: 900,
           textShadow: topicTextShadow,
           maxWidth: "94%", textAlign: "center", letterSpacing: 2,
           textTransform: "uppercase", lineHeight: 1.05,
         }}>
-          <HighlightedText text={topicDisplay} baseColor={BRAND.white} />
+          <AnimatedTitleWords
+            text={topicUpper}
+            localFrame={localFrame}
+            absoluteStartFrame={startFrame}
+            sfx_pop_single={sfx_pop_single}
+            sfx_pop_double={sfx_pop_double}
+          />
         </div>
       </div>
       

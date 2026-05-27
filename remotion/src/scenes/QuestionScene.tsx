@@ -1,4 +1,4 @@
-// REV 011/28MAY26 - pop SFX frame'leri kart animasyon başlangıcıyla senkronize edildi
+// REV 012/28MAY26 - Jess ses seviyesi question/answer 2.0->2.2
 import React from "react";
 import {
   AbsoluteFill,
@@ -175,12 +175,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       {/* AUDIO */}
       {question.question_audio_path && (
         <Sequence from={phases.show} durationInFrames={phases.countdown - phases.show}>
-          <Audio src={staticFile(question.question_audio_path)} volume={2.0} />
+          <Audio src={staticFile(question.question_audio_path)} volume={2.2} />
         </Sequence>
       )}
       {question.answer_audio_path && (
         <Sequence from={phases.reveal} durationInFrames={phases.transition - phases.reveal}>
-          <Audio src={staticFile(question.answer_audio_path)} volume={2.0} />
+          <Audio src={staticFile(question.answer_audio_path)} volume={2.2} />
         </Sequence>
       )}
       
