@@ -1,4 +1,4 @@
-// REV 009/27MAY26 - soru/cevap ses seviyesi 1.7->2.0
+// REV 010/27MAY26 - fünye geri getirildi: blurAmount dinamik, show_image=false placeholder reveal'da açılır
 import React from "react";
 import {
   AbsoluteFill,
@@ -379,23 +379,22 @@ const LongLayout: React.FC<LayoutProps> = ({
   const factHeight = Math.min(height - bodyTop - bodyBottom, 800);
   
   // ─── FLU + FİTİL + KONFETI hesabı ───
-  // Soru gösterilirken (countdown ve drumRoll) resim flu
-  // Foto açıksa net kalır (blur yok), reveal anında konfeti patlar
+  // show_image=true: resim flu, fünye yanar, reveal'da net + konfeti
+  // show_image=false: "?" placeholder, fünye yanar, reveal'da resim açılır + konfeti
   const inActiveQuestion = localFrame >= phases.countdown && localFrame < phases.reveal;
-  const blurAmount = 0;
-  
-  // Fitil: countdown başlangıcı → drumRoll bitişi arası 0..1
-  // Süre = phases.silentPause - phases.countdown (countdown + drumRoll)
+  const blurAmount = (question.show_image !== false && inActiveQuestion && !isRevealed) ? 24 : 0;
+
+  // Fitil: countdown başlangıcı → drumRoll bitişi arası 0..1 (tüm sorular için)
   let fusePhase = 0;
-  if (question.show_image !== false && localFrame >= phases.countdown && localFrame < phases.silentPause) {
+  if (localFrame >= phases.countdown && localFrame < phases.silentPause) {
     const fuseDuration = phases.silentPause - phases.countdown;
     fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
   } else if (localFrame >= phases.silentPause) {
     fusePhase = 1; // Tam yandı
   }
-  
-  // Burst: reveal anından itibaren 35 frame (1.17s)
-  const burstActive = question.show_image !== false && localFrame >= phases.reveal && localFrame < phases.reveal + 35;
+
+  // Burst: reveal anından itibaren 35 frame (1.17s) — tüm sorular için
+  const burstActive = localFrame >= phases.reveal && localFrame < phases.reveal + 35;
   const burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   
   return (
@@ -430,10 +429,10 @@ const LongLayout: React.FC<LayoutProps> = ({
               fusePhase={fusePhase}
               burstActive={burstActive}
               burstLocalFrame={burstLocalFrame}
-              showAsPlaceholder={question.show_image === false}
+              showAsPlaceholder={question.show_image === false && !isRevealed}
             />
           </div>
-          
+
           <div
             style={{
               width: rightWidth,
@@ -529,19 +528,21 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   // Progress bar countdown veya drumRoll/silentPause sırasında görünür
   const showProgressBar = inCountdown || inDrumRoll || inSilentPause;
   
-  // ─── FİTİL + KONFETI hesabı (foto açıksa blur YOK) ───
+  // ─── FİTİL + KONFETI hesabı ───
+  // show_image=true: resim flu, fünye yanar, reveal'da net + konfeti
+  // show_image=false: "?" placeholder, fünye yanar, reveal'da resim açılır + konfeti
   const inActiveQuestion = localFrame >= phases.countdown && localFrame < phases.reveal;
-  const blurAmount = 0;
-  
+  const blurAmount = (question.show_image !== false && inActiveQuestion && !isRevealed) ? 24 : 0;
+
   let fusePhase = 0;
-  if (question.show_image !== false && localFrame >= phases.countdown && localFrame < phases.silentPause) {
+  if (localFrame >= phases.countdown && localFrame < phases.silentPause) {
     const fuseDuration = phases.silentPause - phases.countdown;
     fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
   } else if (localFrame >= phases.silentPause) {
     fusePhase = 1;
   }
-  
-  const burstActive = question.show_image !== false && localFrame >= phases.reveal && localFrame < phases.reveal + 35;
+
+  const burstActive = localFrame >= phases.reveal && localFrame < phases.reveal + 35;
   const burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   
   return (
@@ -571,9 +572,9 @@ const ShortsLayout: React.FC<LayoutProps> = ({
             fusePhase={fusePhase}
             burstActive={burstActive}
             burstLocalFrame={burstLocalFrame}
-            showAsPlaceholder={question.show_image === false}
+            showAsPlaceholder={question.show_image === false && !isRevealed}
           />
-          
+
           {/* ŞIKLAR - 3 tane, aralarında eşit boşluk */}
           <div
             style={{
