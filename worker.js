@@ -1,4 +1,4 @@
-// REV 007/27MAY26 - Onay sayfası: emoji büyük dokunmatik kutular
+// REV 008/27MAY26 - show_image toggle onay sayfasına eklendi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -315,6 +315,7 @@ async function submit_(level, applyEdits){
         image_prompt:val("q"+i+"_ip"),
         fun_fact_image_prompt:val("q"+i+"_fp"),
         option_flags:[val("q"+i+"_f0"),val("q"+i+"_f1"),val("q"+i+"_f2")],
+        show_image:chk("q"+i+"_si"),
         regen_question_image:chk("q"+i+"_rq"),
         regen_fact_image:chk("q"+i+"_rf"),
         custom_question_image:customImages["cq"+i]||null,
@@ -370,6 +371,7 @@ function buildQuestionCard(q, i) {
     question_text = "", options = ["","",""], correct_answer = 0,
     fun_fact = "", image_prompt = "", fun_fact_image_prompt = "",
     question_image_url = null, fun_fact_image_url = null,
+    show_image = true,
   } = q;
   const optInputs = options.map((o, j) =>
     `<input type="text" id="q${i}_o${j}" value="${esc(o)}" placeholder="${["A","B","C"][j]}">`
@@ -390,6 +392,10 @@ function buildQuestionCard(q, i) {
 
   return `<div class="card">
   <span class="card-num">Soru ${i + 1}</span>
+  <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
+    <input type="checkbox" id="q${i}_si" ${show_image ? "checked" : ""} style="width:18px;height:18px;accent-color:#10b981;cursor:pointer">
+    <span style="font-size:.82em;color:#d1d5db">📸 Görseli göster <span style="color:#6b7280">(soru sırasında blur, cevapla açılır)</span></span>
+  </label>
   <div class="row2">
     <div>
       <div style="font-size:.75em;color:#9ca3af;margin-bottom:4px">📸 Soru Görseli</div>
