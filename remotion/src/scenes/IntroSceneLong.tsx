@@ -1,4 +1,4 @@
-// REV 001/26MAY26 - HighlightedText intro başlığı, topicEmojis prop eklendi
+// REV 002/27MAY26 - baseColor white (sarı palette ile çakışıyordu, renkler görünmüyordu)
 import React from "react";
 import {
   AbsoluteFill,
@@ -243,7 +243,7 @@ const Scene2Long: React.FC<{ topic: string; topicEmojis?: string[]; startFrame: 
           maxWidth: "94%", textAlign: "center", letterSpacing: 2,
           textTransform: "uppercase", lineHeight: 1.05,
         }}>
-          <HighlightedText text={topicUpper} baseColor={BRAND.yellow} />
+          <HighlightedText text={topicUpper} baseColor={BRAND.white} />
         </div>
       </div>
       
