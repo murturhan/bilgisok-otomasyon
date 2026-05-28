@@ -1,4 +1,4 @@
-// REV 007/28MAY26 - Jess ses +0.2, outro OutroScene gecikmesi düzeltildi, sfx IntroScene'e geçirildi
+// REV 008/28MAY26 - sfx_applause OutroScene ile aynı anda başlar, Jess APPLAUSE_DELAY_FRAMES sonra girer
 import React from "react";
 import {
   AbsoluteFill,
@@ -72,8 +72,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   const isJessSpeaking = (f: number): boolean => {
     // Intro
     if (f < introFrames) return true;
-    // Outro - APPLAUSE_DELAY_FRAMES sonra başlıyor
-    if (f >= outroStart + APPLAUSE_DELAY_FRAMES && f < outroStart + APPLAUSE_DELAY_FRAMES + outroFrames) return true;
+    // Outro - APPLAUSE_DELAY_FRAMES + 20 sonra başlıyor
+    if (f >= outroStart + APPLAUSE_DELAY_FRAMES + 20 && f < outroStart + APPLAUSE_DELAY_FRAMES + 20 + outroFrames) return true;
     
     // Sorular - question/answer audio fazları
     let scanFrame = introFrames;
@@ -195,18 +195,19 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         );
       })}
       
-      {/* OUTRO - alkış (APPLAUSE_DELAY_FRAMES) bittikten sonra OutroScene başlar */}
-      <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES} durationInFrames={outroFrames}>
+      {/* OUTRO - sfx_applause ile aynı anda başlar; Jess APPLAUSE_DELAY_FRAMES sonra girer */}
+      <Sequence from={outroStart} durationInFrames={outroFrames + APPLAUSE_DELAY_FRAMES}>
         <OutroSceneComponent
           channelName={channel_name}
           jessPoses={resolvedJessPoses}
-          durationFrames={outroFrames}
+          durationFrames={outroFrames + APPLAUSE_DELAY_FRAMES}
           jessVideoDurationFrames={Math.ceil(jess_outro_video_duration * FPS)}
+          jessEntryFrames={APPLAUSE_DELAY_FRAMES}
         />
       </Sequence>
 
       {outro_audio_path && (
-        <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES} durationInFrames={outroFrames}>
+        <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES + 20} durationInFrames={outroFrames}>
           <Audio src={staticFile(outro_audio_path)} volume={2.0} />
         </Sequence>
       )}
