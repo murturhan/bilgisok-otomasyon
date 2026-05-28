@@ -1,4 +1,4 @@
-// REV 008/27MAY26 - show_image toggle onay sayfasına eklendi
+// REV 009/28MAY26 - onay sayfası yeni düzen + emoji picker
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -28,6 +28,9 @@ export default {
     }
     if (method === "GET" && path.startsWith("/api/edits/")) {
       return handleGetEdits(request, env, url);
+    }
+    if (method === "GET" && path.startsWith("/api/emojis")) {
+      return handleGetEmojis(request, env, url);
     }
     if (method === "POST" && path.startsWith("/api/submit/")) {
       return handleSubmit(request, env, url, ctx);
@@ -134,6 +137,34 @@ async function handleGetEdits(request, env, url) {
   return json(mevcut?.data?.edits || {});
 }
 
+// ─── GET /api/emojis ──────────────────────────────────────────
+async function handleGetEmojis(request, env, url) {
+  const folderId = env.GDRIVE_EMOJI_FOLDER_ID || "";
+  const apiKey   = env.GDRIVE_API_KEY || "";
+  if (!folderId) return json({ ok: false, error: "GDRIVE_EMOJI_FOLDER_ID secret eksik" });
+  if (!apiKey)   return json({ ok: false, error: "GDRIVE_API_KEY secret eksik" });
+  const q      = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+  const fields = encodeURIComponent("files(id,name,thumbnailLink,mimeType)");
+  try {
+    const r = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&key=${apiKey}&pageSize=100&orderBy=name`
+    );
+    if (!r.ok) {
+      const txt = await r.text();
+      return json({ ok: false, error: `Drive API ${r.status}`, detail: txt.substring(0, 200) });
+    }
+    const data = await r.json();
+    const files = (data.files || []).map(f => ({
+      id:    f.id,
+      name:  f.name.replace(/\.(svg|png|jpg|webp)$/i, ""),
+      thumb: f.thumbnailLink || `https://drive.google.com/thumbnail?id=${f.id}&sz=w64`,
+    }));
+    return json({ ok: true, files });
+  } catch (e) {
+    return json({ ok: false, error: e.message });
+  }
+}
+
 // ─── POST /api/submit/:id ──────────────────────────────────────
 async function handleSubmit(request, env, url, ctx) {
   const jobId = url.pathname.split("/").pop();
@@ -200,8 +231,8 @@ button:hover{opacity:.88}
 .card{background:#1f2937;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #374151}
 .card-num{display:inline-block;background:#e94560;color:#fff;border-radius:6px;padding:2px 10px;font-size:.8em;font-weight:700;margin-bottom:10px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
-.img-box{position:relative;background:#111827;border-radius:8px;overflow:hidden;height:75px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.img-box img{max-height:75px;max-width:100%;width:auto;object-fit:contain;display:block;border-radius:8px;transition:.2s}
+.img-box{position:relative;background:#111827;border-radius:8px;overflow:hidden;height:90px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.img-box img{max-height:90px;max-width:100%;width:auto;object-fit:contain;display:block;border-radius:8px;transition:.2s}
 .img-box:hover img{opacity:.85}
 .img-box .no-img{color:#6b7280;font-size:.75em;text-align:center;padding:12px}
 .emoji-row{display:flex;gap:8px;margin:6px 0;flex-wrap:wrap;align-items:flex-start}
@@ -225,6 +256,24 @@ textarea{min-height:56px}
 #status{margin:12px 16px;padding:12px 16px;border-radius:8px;display:none;font-weight:600}
 .ok{background:#064e3b;color:#6ee7b7}
 .err{background:#7f1d1d;color:#fca5a5}
+.q-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+.q-text{flex:1;min-height:56px}
+.opts-list{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
+.opt-row{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;background:#111827;border:1px solid #374151}
+.opt-row.opt-correct{border-color:#10b981;background:#022c22}
+.opt-lbl{font-weight:700;color:#9ca3af;font-size:.85em;min-width:18px;text-align:center}
+.opt-row input[type=text]{flex:1;margin:0}
+.correct-btn{padding:3px 8px;border:1px solid #374151;background:#374151;color:#6b7280;border-radius:4px;font-size:.75em;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.correct-btn.is-correct{background:#064e3b;color:#6ee7b7;border-color:#10b981;font-weight:700}
+.correct-btn:hover{background:#4b5563;color:#d1d5db}
+#emoji-picker-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center}
+.picker-inner{background:#1f2937;border-radius:12px;padding:14px;width:92%;max-width:440px;max-height:80vh;display:flex;flex-direction:column;gap:10px;border:1px solid #374151}
+.picker-tabs{display:flex;gap:6px}
+.tab-btn{padding:5px 12px;border:1px solid #374151;background:#374151;color:#d1d5db;border-radius:6px;cursor:pointer;font-size:.8em}
+.tab-btn.active-tab{background:#3b82f6;color:#fff;border-color:#2563eb}
+.picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:5px;padding:4px 0}
+.e-btn{width:44px;height:44px;font-size:1.6em;background:#111827;border:1px solid #374151;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
+.e-btn:hover{border-color:#3b82f6;background:#1e3a5f}
 </style>
 </head>
 <body>
@@ -249,6 +298,19 @@ ${topic_emojis.length ? `<div class="card" style="padding:10px 14px">
 </div>` : ""}
 ${qCards}
 </form>
+<div id="emoji-picker-modal">
+  <div class="picker-inner">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="picker-tabs">
+        <button type="button" class="tab-btn active-tab" id="tab-twemoji" onclick="switchPickerTab('twemoji')">🌐 Twemoji</button>
+        <button type="button" class="tab-btn" id="tab-drive" onclick="switchPickerTab('drive')">📁 Özel Emojiler</button>
+      </div>
+      <button type="button" onclick="closeEmojiPicker()" style="background:none;border:none;color:#9ca3af;font-size:1.3em;cursor:pointer;padding:2px 6px">✕</button>
+    </div>
+    <div id="picker-twemoji" style="overflow-y:auto;max-height:55vh"></div>
+    <div id="picker-drive" style="display:none;overflow-y:auto;max-height:55vh"></div>
+  </div>
+</div>
 <script>
 const JOB_ID = ${JSON.stringify(jobId)};
 const CHAT_ID = ${JSON.stringify(String(chat_id))};
@@ -283,24 +345,80 @@ function toggleRegen(checkId, btnId, key){
   if(cb.checked) delete customImages[key];
 }
 
+var _epTarget=null,_driveLoaded=false;
 function editEmoji(inputId){
-  const inp=document.getElementById(inputId);
-  const btn=document.getElementById(inputId+"_btn");
-  if(!inp||!btn) return;
-  const prev=inp.value;
-  btn.style.display="none";
-  inp.value="";
-  inp.style.display="block";
-  inp.focus();
-  function save(){
-    const v=inp.value.trim();
-    if(!v) inp.value=prev;
-    btn.textContent=inp.value||"❓";
-    inp.style.display="none";
-    btn.style.display="flex";
+  _epTarget=inputId;
+  document.getElementById('emoji-picker-modal').style.display='flex';
+  switchPickerTab('twemoji');
+}
+function closeEmojiPicker(){
+  document.getElementById('emoji-picker-modal').style.display='none';
+  _epTarget=null;
+}
+function switchPickerTab(tab){
+  ['twemoji','drive'].forEach(function(t){
+    document.getElementById('picker-'+t).style.display=t===tab?'block':'none';
+    document.getElementById('tab-'+t).classList.toggle('active-tab',t===tab);
+  });
+  if(tab==='twemoji'&&!document.getElementById('picker-twemoji').innerHTML)_renderTwemoji();
+  if(tab==='drive')_loadDrive();
+}
+function _pickEmoji(value,html){
+  if(!_epTarget)return;
+  var inp=document.getElementById(_epTarget);
+  var btn=document.getElementById(_epTarget+'_btn');
+  if(inp)inp.value=value;
+  if(btn)btn.innerHTML=html||value||'❓';
+  closeEmojiPicker();
+}
+function _pickDrive(btn){
+  var n=btn.dataset.name,t=btn.dataset.thumb;
+  _pickEmoji(n,'<img src="'+t+'" style="width:36px;height:36px;object-fit:contain">');
+}
+function _renderTwemoji(){
+  var SETS=[
+    {l:'🦊 Hayvanlar',e:['🐶','🐱','🐭','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🐧','🦆','🦅','🦉','🦇','🐺','🐴','🦄','🐝','🦋','🐌','🐞','🐢','🐍','🦎','🦕','🐙','🐠','🐟','🐬','🐋','🦈','🐊','🦓','🐘','🦒','🦔','🐇','🦝','🦘','🐫']},
+    {l:'🌿 Doğa',e:['🌿','🌱','🌲','🌳','🌴','🌵','🌾','🍀','🍁','🍂','🍃','🌺','🌸','🍄','🌊','⛰','🏔']},
+    {l:'⭐ Semboller',e:['⭐','🌟','💫','✨','🌙','☀','🌈','⚡','🔥','❄','💧','🌎','🏆','🥇','🎉','🎊','🎈','🎁']},
+  ];
+  var h='';
+  SETS.forEach(function(s){
+    h+='<div style="font-size:.72em;color:#9ca3af;margin:6px 0 3px">'+s.l+'</div><div class="picker-grid">';
+    s.e.forEach(function(e){h+='<button type="button" class="e-btn" data-e="'+e+'" onclick="_pickEmoji(this.dataset.e,this.dataset.e)">'+e+'</button>';});
+    h+='</div>';
+  });
+  document.getElementById('picker-twemoji').innerHTML=h;
+}
+async function _loadDrive(){
+  if(_driveLoaded)return;
+  var c=document.getElementById('picker-drive');
+  c.innerHTML='<div style="color:#9ca3af;padding:12px;text-align:center">⏳ Yükleniyor...</div>';
+  try{
+    var r=await fetch('/api/emojis');
+    var d=await r.json();
+    if(!d.ok){c.innerHTML='<div style="color:#fca5a5;padding:12px">❌ '+d.error+'</div>';return;}
+    _driveLoaded=true;
+    var h='<div class="picker-grid">';
+    d.files.forEach(function(f){
+      h+='<button type="button" class="e-btn" title="'+f.name+'" data-name="'+f.name+'" data-thumb="'+f.thumb+'" onclick="_pickDrive(this)"><img src="'+f.thumb+'" style="width:32px;height:32px;object-fit:contain"></button>';
+    });
+    h+='</div>';
+    c.innerHTML=h;
+  }catch(e){c.innerHTML='<div style="color:#fca5a5;padding:12px">❌ '+e.message+'</div>';}
+}
+function setCorrect(qi,j){
+  for(var k=0;k<3;k++){
+    var r=document.getElementById('q'+qi+'_row'+k);
+    var b=document.getElementById('q'+qi+'_cb'+k);
+    if(r)r.classList.remove('opt-correct');
+    if(b)b.classList.remove('is-correct');
   }
-  inp.onblur=save;
-  inp.onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();inp.blur();}};
+  var row=document.getElementById('q'+qi+'_row'+j);
+  var btn=document.getElementById('q'+qi+'_cb'+j);
+  if(row)row.classList.add('opt-correct');
+  if(btn)btn.classList.add('is-correct');
+  var inp=document.getElementById('q'+qi+'_ca');
+  if(inp)inp.value=j;
 }
 
 async function submit_(level, applyEdits){
@@ -373,14 +491,9 @@ function buildQuestionCard(q, i) {
     question_image_url = null, fun_fact_image_url = null,
     show_image = true,
   } = q;
-  const optInputs = options.map((o, j) =>
-    `<input type="text" id="q${i}_o${j}" value="${esc(o)}" placeholder="${["A","B","C"][j]}">`
-  ).join("");
+
   const flagInputs = (q.option_flags || ["","",""]).map((f, j) =>
     `<div class="emoji-cell"><button type="button" class="emoji-pick-btn" id="q${i}_f${j}_btn" onclick="editEmoji('q${i}_f${j}')">${esc(f)||"❓"}</button><input type="text" class="emoji-edit-inp" id="q${i}_f${j}" value="${esc(f)}" maxlength="8"><span class="emoji-hint">${["A","B","C"][j]}</span></div>`
-  ).join("");
-  const caOpts = options.map((o, j) =>
-    `<option value="${j}" ${correct_answer === j ? "selected" : ""}>${["A","B","C"][j]}: ${esc(o)}</option>`
   ).join("");
 
   const qImgContent = question_image_url
@@ -390,48 +503,55 @@ function buildQuestionCard(q, i) {
     ? `<img src="${esc(fun_fact_image_url)}" alt="fact görseli">`
     : `<div class="no-img">Görsel yok</div>`;
 
+  const optRows = options.map((o, j) =>
+    `<div class="opt-row${correct_answer===j?" opt-correct":""}" id="q${i}_row${j}">` +
+    `<span class="opt-lbl">${["A","B","C"][j]}</span>` +
+    `<input type="text" id="q${i}_o${j}" value="${esc(o)}" placeholder="${["A","B","C"][j]}">` +
+    `<button type="button" class="correct-btn${correct_answer===j?" is-correct":""}" id="q${i}_cb${j}" onclick="setCorrect(${i},${j})">✓ doğru</button>` +
+    `</div>`
+  ).join("");
+
   return `<div class="card">
-  <span class="card-num">Soru ${i + 1}</span>
   <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
     <input type="checkbox" id="q${i}_si" ${show_image ? "checked" : ""} style="width:18px;height:18px;accent-color:#10b981;cursor:pointer">
     <span style="font-size:.82em;color:#d1d5db">📸 Görseli göster <span style="color:#6b7280">(soru sırasında blur, cevapla açılır)</span></span>
   </label>
-  <div class="row2">
+  <div class="q-header">
+    <span class="card-num" style="flex-shrink:0">Soru ${i + 1}</span>
+    <textarea id="q${i}_qt" class="q-text">${esc(question_text)}</textarea>
+  </div>
+  <div class="opts-list">${optRows}</div>
+  <input type="hidden" id="q${i}_ca" value="${correct_answer}">
+  <label class="lbl" style="margin-top:4px">Şık Emojileri <span style="color:#6b7280">(dokunarak değiştir)</span></label>
+  <div class="emoji-row">${flagInputs}</div>
+  <label class="lbl">Fun Fact</label>
+  <textarea id="q${i}_ff">${esc(fun_fact)}</textarea>
+  <div class="row2" style="gap:8px;margin-top:10px">
     <div>
-      <div style="font-size:.75em;color:#9ca3af;margin-bottom:4px">📸 Soru Görseli</div>
+      <label class="lbl">Soru görseli prompt</label>
+      <textarea id="q${i}_ip" style="min-height:38px">${esc(image_prompt)}</textarea>
+      <div style="font-size:.75em;color:#9ca3af;margin:4px 0 3px">📸 Soru Görseli</div>
       <div class="img-box" id="q${i}_qimg">${qImgContent}</div>
       <div class="img-actions">
-        <button type="button" class="btn-sm btn-upload" onclick="triggerUpload('q${i}_cq_file')">⬆ Fotoğraf Yükle</button>
+        <button type="button" class="btn-sm btn-upload" onclick="triggerUpload('q${i}_cq_file')">⬆ Yükle</button>
         <input type="file" id="q${i}_cq_file" accept="image/*">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rq_btn" onclick="toggleRegen('q${i}_rq','q${i}_rq_btn','cq${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rq" style="display:none">
       </div>
     </div>
     <div>
-      <div style="font-size:.75em;color:#9ca3af;margin-bottom:4px">🌟 Fact Görseli</div>
+      <label class="lbl">Fact görseli prompt</label>
+      <textarea id="q${i}_fp" style="min-height:38px">${esc(fun_fact_image_prompt)}</textarea>
+      <div style="font-size:.75em;color:#9ca3af;margin:4px 0 3px">🌟 Fact Görseli</div>
       <div class="img-box" id="q${i}_fimg">${fImgContent}</div>
       <div class="img-actions">
-        <button type="button" class="btn-sm btn-upload" onclick="triggerUpload('q${i}_cf_file')">⬆ Fotoğraf Yükle</button>
+        <button type="button" class="btn-sm btn-upload" onclick="triggerUpload('q${i}_cf_file')">⬆ Yükle</button>
         <input type="file" id="q${i}_cf_file" accept="image/*">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rf_btn" onclick="toggleRegen('q${i}_rf','q${i}_rf_btn','cf${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rf" style="display:none">
       </div>
     </div>
   </div>
-  <label class="lbl">Soru metni</label>
-  <textarea id="q${i}_qt">${esc(question_text)}</textarea>
-  <label class="lbl">Şıklar (A / B / C)</label>
-  <div class="opts">${optInputs}</div>
-  <label class="lbl" style="margin-top:8px">Şık Emojileri <span style="color:#6b7280">(dokunarak değiştir)</span></label>
-  <div class="emoji-row">${flagInputs}</div>
-  <label class="lbl">Doğru cevap</label>
-  <select id="q${i}_ca">${caOpts}</select>
-  <label class="lbl">Fun Fact</label>
-  <textarea id="q${i}_ff">${esc(fun_fact)}</textarea>
-  <label class="lbl">Soru görseli prompt</label>
-  <textarea id="q${i}_ip" style="min-height:40px">${esc(image_prompt)}</textarea>
-  <label class="lbl">Fact görseli prompt</label>
-  <textarea id="q${i}_fp" style="min-height:40px">${esc(fun_fact_image_prompt)}</textarea>
 </div>`;
 }
 
