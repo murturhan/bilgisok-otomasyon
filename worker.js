@@ -1,4 +1,4 @@
-// REV 011/28MAY26 - Twemoji -> Fluent Emoji picker + arama
+// REV 012/29MAY26 - tuslar duzeltildi, layout guncellendi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -318,12 +318,12 @@ textarea{min-height:56px}
 .err{background:#7f1d1d;color:#fca5a5}
 .q-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
 .q-text{flex:1;min-height:56px}
-.opts-list{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
-.opt-row{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;background:#111827;border:1px solid #374151}
+.opts-list{display:flex;flex-direction:row;gap:5px;margin-bottom:8px}
+.opt-row{flex:1;min-width:0;display:flex;align-items:center;gap:5px;padding:5px 6px;border-radius:6px;background:#111827;border:1px solid #374151}
 .opt-row.opt-correct{border-color:#10b981;background:#022c22}
-.opt-lbl{font-weight:700;color:#9ca3af;font-size:.85em;min-width:18px;text-align:center}
-.opt-row input[type=text]{flex:1;margin:0}
-.correct-btn{padding:3px 8px;border:1px solid #374151;background:#374151;color:#6b7280;border-radius:4px;font-size:.75em;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.opt-lbl{font-weight:700;color:#9ca3af;font-size:.85em;min-width:16px;text-align:center;flex-shrink:0}
+.opt-row input[type=text]{flex:1;margin:0;min-width:0}
+.correct-btn{padding:3px 6px;border:1px solid #374151;background:#374151;color:#6b7280;border-radius:4px;font-size:.72em;cursor:pointer;white-space:nowrap;flex-shrink:0}
 .correct-btn.is-correct{background:#064e3b;color:#6ee7b7;border-color:#10b981;font-weight:700}
 .correct-btn:hover{background:#4b5563;color:#d1d5db}
 #emoji-picker-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center}
@@ -381,20 +381,19 @@ const customImages = {};
 function val(id){const e=document.getElementById(id);return e?e.value:"";}
 function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
 
-function triggerUpload(inputId){document.getElementById(inputId).click();}
-
-function handleFileUpload(inputId, previewId, key){
-  const inp=document.getElementById(inputId);
+function uploadAndPreview(fileInputId,previewId,key){
+  var inp=document.getElementById(fileInputId);
   inp.onchange=function(){
-    const file=inp.files[0]; if(!file) return;
-    const reader=new FileReader();
+    var file=inp.files[0];if(!file)return;
+    var reader=new FileReader();
     reader.onload=function(e){
       customImages[key]=e.target.result;
-      const box=document.getElementById(previewId);
+      var box=document.getElementById(previewId);
       box.innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span>';
     };
     reader.readAsDataURL(file);
   };
+  inp.click();
 }
 
 function toggleRegen(checkId, btnId, key){
@@ -462,7 +461,7 @@ function _renderFluent(){
     FLUENT_DATA[g].forEach(function(item){
       var e=item[0],n=item[1],s=item[2];
       var url='https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/'+encodeURIComponent(n)+'/3D/'+s+'_3d.png';
-      h+='<button type="button" class="e-btn" title="'+n+'" data-e="'+e+'" data-n="'+n+'" data-s="'+s+'" onclick="pickFluent(this)"><img src="'+url+'" loading="lazy" style="width:32px;height:32px;object-fit:contain" onerror="this.style.display='none';this.parentNode.textContent=this.parentNode.dataset.e"></button>';
+      h+='<button type="button" class="e-btn" title="'+n+'" data-e="'+e+'" data-n="'+n+'" data-s="'+s+'" onclick="pickFluent(this)"><img src="'+url+'" loading="lazy" style="width:32px;height:32px;object-fit:contain" onerror="this.remove()"></button>';
     });
     h+='</div>';
   });
@@ -509,12 +508,12 @@ function setCorrect(qi,j){
     var r=document.getElementById('q'+qi+'_row'+k);
     var b=document.getElementById('q'+qi+'_cb'+k);
     if(r)r.classList.remove('opt-correct');
-    if(b)b.classList.remove('is-correct');
+    if(b){b.classList.remove('is-correct');b.textContent='○';}
   }
   var row=document.getElementById('q'+qi+'_row'+j);
   var btn=document.getElementById('q'+qi+'_cb'+j);
   if(row)row.classList.add('opt-correct');
-  if(btn)btn.classList.add('is-correct');
+  if(btn){btn.classList.add('is-correct');btn.textContent='✓ doğru';}
   var inp=document.getElementById('q'+qi+'_ca');
   if(inp)inp.value=j;
 }
@@ -601,49 +600,61 @@ function buildQuestionCard(q, i) {
     ? `<img src="${esc(fun_fact_image_url)}" alt="fact görseli">`
     : `<div class="no-img">Görsel yok</div>`;
 
+  // b) Şıklar yatayda; ✓ doğru SADECE correct_answer'da
   const optRows = options.map((o, j) =>
     `<div class="opt-row${correct_answer===j?" opt-correct":""}" id="q${i}_row${j}">` +
     `<span class="opt-lbl">${["A","B","C"][j]}</span>` +
     `<input type="text" id="q${i}_o${j}" value="${esc(o)}" placeholder="${["A","B","C"][j]}">` +
-    `<button type="button" class="correct-btn${correct_answer===j?" is-correct":""}" id="q${i}_cb${j}" onclick="setCorrect(${i},${j})">✓ doğru</button>` +
+    `<button type="button" class="correct-btn${correct_answer===j?" is-correct":""}" id="q${i}_cb${j}" onclick="setCorrect(${i},${j})">${correct_answer===j?"✓ doğru":"○"}</button>` +
     `</div>`
   ).join("");
 
   return `<div class="card">
-  <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer">
-    <input type="checkbox" id="q${i}_si" ${show_image ? "checked" : ""} style="width:18px;height:18px;accent-color:#10b981;cursor:pointer">
-    <span style="font-size:.82em;color:#d1d5db">📸 Görseli göster <span style="color:#6b7280">(soru sırasında blur, cevapla açılır)</span></span>
-  </label>
-  <div class="q-header">
+  <!-- a) Soru no + metin -->
+  <div class="q-header" style="margin-bottom:8px">
     <span class="card-num" style="flex-shrink:0">Soru ${i + 1}</span>
     <textarea id="q${i}_qt" class="q-text">${esc(question_text)}</textarea>
   </div>
+  <!-- b) Şıklar yan yana -->
   <div class="opts-list">${optRows}</div>
   <input type="hidden" id="q${i}_ca" value="${correct_answer}">
-  <label class="lbl" style="margin-top:4px">Şık Emojileri <span style="color:#6b7280">(dokunarak değiştir)</span></label>
-  <div class="emoji-row">${flagInputs}</div>
-  <label class="lbl">Fun Fact</label>
-  <textarea id="q${i}_ff">${esc(fun_fact)}</textarea>
-  <div class="row2" style="gap:8px;margin-top:10px">
+  <label class="lbl" style="margin-top:2px">Şık Emojileri <span style="color:#6b7280">(dokunarak değiştir)</span></label>
+  <div class="emoji-row" style="margin-bottom:10px">${flagInputs}</div>
+  <!-- c) Sol: Soru Görseli | Sağ: Prompt + butonlar -->
+  <div class="row2" style="gap:10px;margin-bottom:10px">
     <div>
-      <label class="lbl">Soru görseli prompt</label>
-      <textarea id="q${i}_ip" style="min-height:38px">${esc(image_prompt)}</textarea>
-      <div style="font-size:.75em;color:#9ca3af;margin:4px 0 3px">📸 Soru Görseli</div>
+      <div style="font-size:.72em;color:#6b7280;margin-bottom:4px">📸 Soru Görseli</div>
       <div class="img-box" id="q${i}_qimg">${qImgContent}</div>
+      <label style="display:flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer">
+        <input type="checkbox" id="q${i}_si" ${show_image?"checked":""} style="width:15px;height:15px;accent-color:#10b981;cursor:pointer">
+        <span style="font-size:.76em;color:#d1d5db">Görseli göster <span style="color:#6b7280">(blur/açık)</span></span>
+      </label>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <label class="lbl" style="margin:0">Soru görseli prompt</label>
+      <textarea id="q${i}_ip" style="min-height:52px;flex:1">${esc(image_prompt)}</textarea>
       <div class="img-actions">
-        <button type="button" class="btn-sm btn-upload" onclick="triggerUpload('q${i}_cq_file')">⬆ Yükle</button>
+        <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cq_file','q${i}_qimg','cq${i}')">⬆ Yükle</button>
         <input type="file" id="q${i}_cq_file" accept="image/*">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rq_btn" onclick="toggleRegen('q${i}_rq','q${i}_rq_btn','cq${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rq" style="display:none">
       </div>
     </div>
+  </div>
+  <!-- d) Fun Fact tam genişlik -->
+  <label class="lbl">Fun Fact</label>
+  <textarea id="q${i}_ff" style="margin-bottom:10px">${esc(fun_fact)}</textarea>
+  <!-- e) Sol: Fact Görseli | Sağ: Fact Prompt + butonlar -->
+  <div class="row2" style="gap:10px">
     <div>
-      <label class="lbl">Fact görseli prompt</label>
-      <textarea id="q${i}_fp" style="min-height:38px">${esc(fun_fact_image_prompt)}</textarea>
-      <div style="font-size:.75em;color:#9ca3af;margin:4px 0 3px">🌟 Fact Görseli</div>
+      <div style="font-size:.72em;color:#6b7280;margin-bottom:4px">🌟 Fact Görseli</div>
       <div class="img-box" id="q${i}_fimg">${fImgContent}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <label class="lbl" style="margin:0">Fact görseli prompt</label>
+      <textarea id="q${i}_fp" style="min-height:52px;flex:1">${esc(fun_fact_image_prompt)}</textarea>
       <div class="img-actions">
-        <button type="button" class="btn-sm btn-upload" onclick="triggerUpload('q${i}_cf_file')">⬆ Yükle</button>
+        <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cf_file','q${i}_fimg','cf${i}')">⬆ Yükle</button>
         <input type="file" id="q${i}_cf_file" accept="image/*">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rf_btn" onclick="toggleRegen('q${i}_rf','q${i}_rf_btn','cf${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rf" style="display:none">
