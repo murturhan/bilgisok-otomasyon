@@ -1,4 +1,4 @@
-// REV 013/28MAY26 - pop SFX volume 0.7->0.5
+// REV 014/29MAY26 - show_image=true ise blur/fuse/burst yok, hep net
 import React from "react";
 import {
   AbsoluteFill,
@@ -378,24 +378,25 @@ const LongLayout: React.FC<LayoutProps> = ({
   // Fact modunda alan 1/3 büyük (kullanıcı talebi)
   const factHeight = Math.min(height - bodyTop - bodyBottom, 800);
   
-  // ─── FLU + FİTİL + KONFETI hesabı ───
-  // show_image=true: resim flu, fünye yanar, reveal'da net + konfeti
+  // ─── FİTİL + KONFETI hesabı ───
+  // show_image=true: resim hep net, fitil/patlama yok
   // show_image=false: "?" placeholder, fünye yanar, reveal'da resim açılır + konfeti
-  const inActiveQuestion = localFrame >= phases.countdown && localFrame < phases.reveal;
-  const blurAmount = (question.show_image !== false && inActiveQuestion && !isRevealed) ? 24 : 0;
+  const showImageClear = question.show_image !== false;
+  const blurAmount = 0;
 
-  // Fitil: countdown başlangıcı → drumRoll bitişi arası 0..1 (tüm sorular için)
   let fusePhase = 0;
-  if (localFrame >= phases.countdown && localFrame < phases.silentPause) {
-    const fuseDuration = phases.silentPause - phases.countdown;
-    fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
-  } else if (localFrame >= phases.silentPause) {
-    fusePhase = 1; // Tam yandı
+  let burstActive = false;
+  let burstLocalFrame = 0;
+  if (!showImageClear) {
+    if (localFrame >= phases.countdown && localFrame < phases.silentPause) {
+      const fuseDuration = phases.silentPause - phases.countdown;
+      fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
+    } else if (localFrame >= phases.silentPause) {
+      fusePhase = 1;
+    }
+    burstActive = localFrame >= phases.reveal && localFrame < phases.reveal + 35;
+    burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   }
-
-  // Burst: reveal anından itibaren 35 frame (1.17s) — tüm sorular için
-  const burstActive = localFrame >= phases.reveal && localFrame < phases.reveal + 35;
-  const burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   
   return (
     <div
@@ -529,21 +530,24 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   const showProgressBar = inCountdown || inDrumRoll || inSilentPause;
   
   // ─── FİTİL + KONFETI hesabı ───
-  // show_image=true: resim flu, fünye yanar, reveal'da net + konfeti
+  // show_image=true: resim hep net, fitil/patlama yok
   // show_image=false: "?" placeholder, fünye yanar, reveal'da resim açılır + konfeti
-  const inActiveQuestion = localFrame >= phases.countdown && localFrame < phases.reveal;
-  const blurAmount = (question.show_image !== false && inActiveQuestion && !isRevealed) ? 24 : 0;
+  const showImageClear = question.show_image !== false;
+  const blurAmount = 0;
 
   let fusePhase = 0;
-  if (localFrame >= phases.countdown && localFrame < phases.silentPause) {
-    const fuseDuration = phases.silentPause - phases.countdown;
-    fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
-  } else if (localFrame >= phases.silentPause) {
-    fusePhase = 1;
+  let burstActive = false;
+  let burstLocalFrame = 0;
+  if (!showImageClear) {
+    if (localFrame >= phases.countdown && localFrame < phases.silentPause) {
+      const fuseDuration = phases.silentPause - phases.countdown;
+      fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
+    } else if (localFrame >= phases.silentPause) {
+      fusePhase = 1;
+    }
+    burstActive = localFrame >= phases.reveal && localFrame < phases.reveal + 35;
+    burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   }
-
-  const burstActive = localFrame >= phases.reveal && localFrame < phases.reveal + 35;
-  const burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   
   return (
     <div

@@ -1,4 +1,4 @@
-// REV 002/28MAY26 - intro_title CRITICAL prompt güçlendirildi (Gemini ** koymayı unutuyordu)
+// REV 003/29MAY26 - question_text MAX 6 WORDS eklendi, show_image açıklaması güncellendi
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -126,7 +126,7 @@ QUESTION OBJECT FORMAT
 ═══════════════════════════════════════════════════
 
 Each question object MUST have ALL these fields:
-- **question_text**: Short text shown on screen (e.g., "Which animal is this?")
+- **question_text**: Short text shown on screen — MAX 6 WORDS (e.g., "Which animal is this?")
 - **image_prompt**: FLUX prompt for question's image (Pixar-style, kid-friendly)
 - **options**: Array of 3 short answers (1-3 words each)
 - **correct_answer**: Index 0, 1, 2, or 3
@@ -232,6 +232,7 @@ CRITICAL:
 - **thumbnail_title MUST be 2-3 WORDS MAX, UPPERCASE, PUNCHY** (examples: "FOOD QUIZ", "GUESS THE ANIMAL", "OCEAN QUIZ", "TRUCK CHALLENGE", "MIGHTY MACHINES")
 - thumbnail_title is for the thumbnail image (LARGE TEXT), NOT for YouTube title
 - baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title
+- **question_text MUST be MAX 6 WORDS** — short and impactful, never exceed 6 words. Wrong: "What is the name of the largest ocean on Earth?". Right: "Which is Earth's largest ocean?"
 - **intro_title CRITICAL — MANDATORY STARS**: Short topic title for the video intro screen (MAX 4 WORDS). You MUST wrap the 1-2 most important words with **double stars**. Examples: "**Wild** Animals", "Amazing **Oceans**", "**Rocket** Science", "**Dino** World". NEVER output intro_title without ** markers — it MUST contain ** or the UI breaks. Wrong: "Animal Adaptations". Right: "**Animal** Adaptations".
 - **show_image** (boolean, per question): Decide if showing the image during question helps or spoils.
   * TRUE — image is a visual *clue* (blurred during guess, revealed with confetti). Examples: cross-sections, silhouettes, partial views, mood scenes.
