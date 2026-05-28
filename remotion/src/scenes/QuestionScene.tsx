@@ -1,4 +1,4 @@
-// REV 012/28MAY26 - Jess ses seviyesi question/answer 2.0->2.2
+// REV 013/28MAY26 - pop SFX volume 0.7->0.5
 import React from "react";
 import {
   AbsoluteFill,
@@ -204,7 +204,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       {/* CORRECT - reveal anında çalar (silentPause bittikten sonra) */}
       {sfx_correct && (
         <Sequence from={phases.reveal} durationInFrames={Math.floor(FPS * 1.5)}>
-          <Audio src={staticFile(sfx_correct)} volume={0.7} />
+          <Audio src={staticFile(sfx_correct)} volume={0.5} />
         </Sequence>
       )}
       {/* WHOOSH - güçlendirilmiş transition için biraz daha erken + yüksek volume */}
@@ -219,23 +219,23 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       {/* POP - şıklar çıkarken: card[0]=show+8, card[1]=show+26, card[2]=show+44 (ENTRY_OFFSET=8, STAGGER=18) */}
       {sfx_pop_single && (
         <Sequence from={phases.show + 8} durationInFrames={30}>
-          <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
+          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
         </Sequence>
       )}
       {sfx_pop_single && (
         <Sequence from={phases.show + 26} durationInFrames={30}>
-          <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
+          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
         </Sequence>
       )}
       {sfx_pop_double && (
         <Sequence from={phases.show + 44} durationInFrames={30}>
-          <Audio src={staticFile(sfx_pop_double)} volume={0.7} />
+          <Audio src={staticFile(sfx_pop_double)} volume={0.5} />
         </Sequence>
       )}
       {/* POP - fun fact ekranı açılınca */}
       {sfx_pop_single && (
         <Sequence from={phases.funFact} durationInFrames={30}>
-          <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
+          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
         </Sequence>
       )}
       

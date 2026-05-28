@@ -1,4 +1,4 @@
-// REV 001/28MAY26 - Intro başlık kelime kelime spring animasyonu + pop SFX (SADECE IntroScene'de kullanılır)
+// REV 002/28MAY26 - pop SFX volume 0.7->0.5
 import React from "react";
 import { Sequence, Audio, staticFile, spring, interpolate, useVideoConfig } from "remotion";
 import { BRAND, highlightPalette } from "../styles/theme";
@@ -82,19 +82,19 @@ export const AnimatedTitleWords: React.FC<AnimatedTitleWordsProps> = ({
       {/* Pop SFX: N=1 → pop_single; N=2 → pop_double; N>2 → her tek kelime pop_single, son çift pop_double */}
       {N === 1 && sfx_pop_single && (
         <Sequence from={absoluteStartFrame} durationInFrames={20}>
-          <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
+          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
         </Sequence>
       )}
       {N >= 2 && words.slice(0, N - 2).map((_, i) =>
         sfx_pop_single ? (
           <Sequence key={`pop-s-${i}`} from={absoluteStartFrame + i * stagger} durationInFrames={20}>
-            <Audio src={staticFile(sfx_pop_single)} volume={0.7} />
+            <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
           </Sequence>
         ) : null
       )}
       {N >= 2 && sfx_pop_double && (
         <Sequence from={absoluteStartFrame + Math.max(0, N - 2) * stagger} durationInFrames={20}>
-          <Audio src={staticFile(sfx_pop_double)} volume={0.7} />
+          <Audio src={staticFile(sfx_pop_double)} volume={0.5} />
         </Sequence>
       )}
     </>

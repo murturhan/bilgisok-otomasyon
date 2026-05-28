@@ -1,4 +1,4 @@
-// REV 004/28MAY26 - AnimatedTitleWords: kelime kelime pop animasyonu + sfx_pop props eklendi
+// REV 005/28MAY26 - Intro emojileri tek tek spring+pop animasyonu ile geliyor
 import React from "react";
 import {
   AbsoluteFill,
@@ -6,6 +6,8 @@ import {
   useVideoConfig,
   interpolate,
   spring,
+  Sequence,
+  Audio,
   Video,
   staticFile,
 } from "remotion";
@@ -180,9 +182,13 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
   const topicWobble = Math.sin(localFrame * 0.07) * 1.8;
   const topicFloat = Math.cos(localFrame * 0.09) * 12;
 
-  const emojiAnim = spring({ frame: localFrame - 18, fps, config: { damping: 11, stiffness: 100 } });
-  const emojiOpacity = interpolate(emojiAnim, [0, 1], [0, 1]);
-  const emojiY = interpolate(emojiAnim, [0, 1], [80, 0]);
+  // Emoji giriş zamanlaması: başlık animasyonu bittikten sonra
+  const titleWords = topicUpper.split(/\s+/).filter(Boolean);
+  const titleEndLocalFrame = Math.max(0, titleWords.length - 2) * 12 + 25;
+  const EMOJI_STAGGER = 12;
+  const emojisToShow = topicEmojis.slice(0, 3);
+  const emojiCount = emojisToShow.length;
+  const emojiSingleCount = Math.max(0, emojiCount - 2);
 
   // Font: shorts 2.5x büyütülmüş, binary search ile fit
   const topicForFit = topicUpper;
@@ -256,20 +262,29 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
         </div>
       </div>
       
+      {/* EMOJI bandı — her emoji kendi spring ile giriyor */}
       <div style={{
         position: "absolute", bottom: "18%", left: 0, right: 0,
         display: "flex", justifyContent: "center", gap: 30,
-        transform: `translateY(${emojiY}px)`, opacity: emojiOpacity,
       }}>
-        {topicEmojis.slice(0, 3).map((emoji, i) => {
+        {emojisToShow.map((emoji, i) => {
+          const enterOffset = (i < emojiSingleCount ? i : emojiSingleCount) * EMOJI_STAGGER;
+          const emojiAnim = spring({
+            frame: localFrame - (titleEndLocalFrame + enterOffset),
+            fps,
+            config: { damping: 10, stiffness: 130 },
+          });
+          const entryScale = interpolate(emojiAnim, [0, 1], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+          const entryOpacity = interpolate(emojiAnim, [0, 0.4, 1], [0, 1, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
           const swing = Math.sin(localFrame * 0.1 + i * 0.7) * 18;
           const bounce = Math.cos(localFrame * 0.12 + i * 0.5) * 14;
           const idleScale = 1 + Math.sin(localFrame * 0.13 + i) * 0.06;
-          
+
           return (
             <div key={i} style={{
               fontSize: 180,
-              transform: `translateY(${bounce}px) rotate(${swing}deg) scale(${idleScale})`,
+              opacity: entryOpacity,
+              transform: `scale(${entryScale * idleScale}) translateY(${bounce}px) rotate(${swing}deg)`,
               filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.5))",
               lineHeight: 1,
             }}>
@@ -278,6 +293,25 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
           );
         })}
       </div>
+
+      {/* Emoji pop SFX */}
+      {Array.from({ length: emojiSingleCount }).map((_, i) =>
+        sfx_pop_single ? (
+          <Sequence key={`epop-s-${i}`} from={startFrame + titleEndLocalFrame + i * EMOJI_STAGGER} durationInFrames={20}>
+            <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
+          </Sequence>
+        ) : null
+      )}
+      {emojiCount >= 2 && sfx_pop_double && (
+        <Sequence from={startFrame + titleEndLocalFrame + emojiSingleCount * EMOJI_STAGGER} durationInFrames={20}>
+          <Audio src={staticFile(sfx_pop_double)} volume={0.5} />
+        </Sequence>
+      )}
+      {emojiCount === 1 && sfx_pop_single && (
+        <Sequence from={startFrame + titleEndLocalFrame} durationInFrames={20}>
+          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
+        </Sequence>
+      )}
     </>
   );
 };
