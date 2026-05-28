@@ -1,4 +1,4 @@
-// REV 009/28MAY26 - onay sayfası yeni düzen + emoji picker
+// REV 010/28MAY26 - emoji picker drive: GDRIVE_API_KEY yerine SA JWT ile
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -140,14 +140,23 @@ async function handleGetEdits(request, env, url) {
 // ─── GET /api/emojis ──────────────────────────────────────────
 async function handleGetEmojis(request, env, url) {
   const folderId = env.GDRIVE_EMOJI_FOLDER_ID || "";
-  const apiKey   = env.GDRIVE_API_KEY || "";
+  const saJson   = env.GDRIVE_SERVICE_ACCOUNT_JSON || "";
   if (!folderId) return json({ ok: false, error: "GDRIVE_EMOJI_FOLDER_ID secret eksik" });
-  if (!apiKey)   return json({ ok: false, error: "GDRIVE_API_KEY secret eksik" });
+  if (!saJson)   return json({ ok: false, error: "GDRIVE_SERVICE_ACCOUNT_JSON secret eksik (Worker secret olarak eklenmeli)" });
+
+  let accessToken;
+  try {
+    accessToken = await getGDriveToken(saJson);
+  } catch (e) {
+    return json({ ok: false, error: "SA token hatası: " + e.message });
+  }
+
   const q      = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
   const fields = encodeURIComponent("files(id,name,thumbnailLink,mimeType)");
   try {
     const r = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&key=${apiKey}&pageSize=100&orderBy=name`
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&pageSize=100&orderBy=name`,
+      { headers: { "Authorization": `Bearer ${accessToken}` } }
     );
     if (!r.ok) {
       const txt = await r.text();
@@ -163,6 +172,57 @@ async function handleGetEmojis(request, env, url) {
   } catch (e) {
     return json({ ok: false, error: e.message });
   }
+}
+
+// Service Account JWT → Google OAuth2 access token (Web Crypto API, no deps)
+async function getGDriveToken(saJson) {
+  const sa  = JSON.parse(saJson);
+  const now = Math.floor(Date.now() / 1000);
+
+  const b64url = s => btoa(s).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+  const header  = b64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const payload = b64url(JSON.stringify({
+    iss:   sa.client_email,
+    scope: "https://www.googleapis.com/auth/drive.readonly",
+    aud:   "https://oauth2.googleapis.com/token",
+    exp:   now + 3600,
+    iat:   now,
+  }));
+
+  const sigInput = `${header}.${payload}`;
+
+  // PEM → DER (pkcs8)
+  const pem    = sa.private_key.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
+  const derBuf = Uint8Array.from(atob(pem), c => c.charCodeAt(0)).buffer;
+
+  const cryptoKey = await crypto.subtle.importKey(
+    "pkcs8", derBuf,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false, ["sign"]
+  );
+
+  const sigBuf = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5", cryptoKey,
+    new TextEncoder().encode(sigInput)
+  );
+
+  let sigStr = "";
+  new Uint8Array(sigBuf).forEach(b => { sigStr += String.fromCharCode(b); });
+  const jwt = `${sigInput}.${b64url(sigStr)}`;
+
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=" + jwt,
+  });
+  if (!tokenRes.ok) {
+    const t = await tokenRes.text();
+    throw new Error(`${tokenRes.status} ${t.substring(0, 200)}`);
+  }
+  const td = await tokenRes.json();
+  if (!td.access_token) throw new Error("access_token yok: " + JSON.stringify(td).substring(0, 200));
+  return td.access_token;
 }
 
 // ─── POST /api/submit/:id ──────────────────────────────────────
