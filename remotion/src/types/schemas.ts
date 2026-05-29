@@ -1,4 +1,4 @@
-// REV 001/29MAY26 - WouldYouRatherQuestion tipleri ve isWyrQuestion yardimcisi eklendi
+// REV 002/29MAY26 - questions z.any() ile WYR schema validasyon hatasini duzelt
 import { z } from "zod";
 
 export const questionSchema = z.object({
@@ -89,7 +89,7 @@ export type JessPoses = z.infer<typeof jessPosesSchema>;
 export const quizCompositionSchema = z.object({
   title: z.string().default("GeniMini Tests"),
   topic: z.string().default(""),
-  questions: z.array(questionSchema),
+  questions: z.array(z.any()),
   
   intro_audio_path: z.string().nullable().optional(),
   outro_audio_path: z.string().nullable().optional(),

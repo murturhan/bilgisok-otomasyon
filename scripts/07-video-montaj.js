@@ -1,4 +1,4 @@
-// REV 004/29MAY26 - WYR soru tipi görsel ve ses path atama
+// REV 005/29MAY26 - WYR duration log crash duzeltildi
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -655,7 +655,7 @@ async function main() {
     console.log(`✓ inputProps yazıldı`);
     console.log(`  Intro: ${inputProps.intro_audio_duration.toFixed(1)}s`);
     console.log(`  Outro: ${inputProps.outro_audio_duration.toFixed(1)}s`);
-    console.log(`  Q durations: ${questions.map(q => `${q.question_audio_duration.toFixed(1)}+${q.answer_audio_duration.toFixed(1)}`).join(", ")}`);
+    console.log(`  Q durations: ${questions.map(q => `${(q.question_audio_duration || 0).toFixed(1)}+${(q.answer_audio_duration ?? q.reveal_audio_duration ?? 0).toFixed(1)}`).join(", ")}`);
 
     // 10. NPM install
     console.log("📦 Remotion bağımlılıkları kuruluyor...");
