@@ -1,4 +1,4 @@
-// REV 003/29MAY26 - WYR sorularında question+reveal ses desteği
+// REV 004/29MAY26 - WYR question audio "Pick one!" on basligi zorla
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -243,10 +243,15 @@ async function main() {
       const idx = String(i + 1).padStart(2, "0");
       const isWyr = q.question_type === "would_you_rather";
 
+      const qAudioText = isWyr
+        ? (String(q.question_audio_text || "").toLowerCase().startsWith("pick one")
+            ? q.question_audio_text
+            : `Pick one! ${q.question_audio_text || ""}`)
+        : q.question_audio_text;
       segmentTasks.push({
         key: `q${idx}-question`,
         filename: `q${idx}-question.mp3`,
-        text: q.question_audio_text,
+        text: qAudioText,
         question_index: i,
         type: "question",
       });

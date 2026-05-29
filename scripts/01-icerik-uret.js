@@ -1,4 +1,4 @@
-// REV 004/29MAY26 - WYR prompt eklendi, QUESTION_TYPE env desteği
+// REV 005/29MAY26 - WYR question_text sabit "Pick One!", audio_text guncellendi
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -68,7 +68,7 @@ OUTPUT (valid JSON, no markdown):
   "questions": [
     {
       "question_type": "would_you_rather",
-      "question_text": "MAX 6 WORDS (e.g. 'Hangisini tercih edersin?')",
+      "question_text": "Pick One!",
       "visible_option": {
         "label": "Short label (1-5 words)",
         "image_prompt": "Pixar-style image showing the visible option item"
@@ -80,7 +80,7 @@ OUTPUT (valid JSON, no markdown):
         "surprise_is_good": true
       },
       "jess_reaction": "What Jess says when revealing (excited for good, funny for bad)",
-      "question_audio_text": "Question 1. Would you rather have [visible option], or open this mystery surprise box? You have 10 seconds to decide!",
+      "question_audio_text": "Question 1. Pick one! Would you rather have [visible option], or open this mystery surprise box? You have 10 seconds to decide!",
       "reveal_audio_text": "What Jess says when opening the box (= jess_reaction, natural speech)"
     }
   ]
@@ -91,7 +91,7 @@ CRITICAL:
 - question_type MUST be "would_you_rather" for all
 - Mix surprise_is_good: roughly half true, half false
 - All content kid-safe (ages 4-12)
-- question_text MAX 6 WORDS
+- question_text MUST be exactly "Pick One!" — do not change it
 - reveal_audio_text = jess_reaction as natural speech
 `;
 }

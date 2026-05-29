@@ -1,4 +1,4 @@
-// REV 001/29MAY26 - Would You Rather sahne component'i
+// REV 002/29MAY26 - Pick One!, cift baslik kaldir, etiket buyuk, hediye buyuk, funye+konfeti
 import React from "react";
 import {
   AbsoluteFill,
@@ -18,7 +18,6 @@ import { QuizHeader } from "../components/QuizHeader";
 import { LiquidProgressBar } from "../components/LiquidProgressBar";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { AnimatedBackground, getPatternForQuestion } from "../components/AnimatedBackground";
-import { HighlightedText } from "../components/HighlightedText";
 import { computeWyrPhases, WYR_COUNTDOWN_FRAMES } from "../utils/timing";
 
 interface WouldYouRatherSceneProps {
@@ -69,7 +68,16 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
   const inReaction = frame >= phases.reaction;
   const inTransition = frame >= phases.transition;
 
-  // === TRANSITION (same as QuestionScene) ===
+  // Fuse: 0→1 during countdown
+  const fusePhase = inCountdown
+    ? Math.min(1, (frame - phases.countdown) / WYR_COUNTDOWN_FRAMES)
+    : frame >= phases.timerEnd ? 1 : 0;
+
+  // Burst: 35 frames after reveal
+  const burstActive = frame >= phases.reveal && frame < phases.reveal + 35;
+  const burstLocalFrame = burstActive ? frame - phases.reveal : 0;
+
+  // === TRANSITION ===
   const transitionLocalFrame = frame - phases.transition;
   const TR_LEN = FIXED_FRAMES.transition;
   const flashOpacity = inTransition
@@ -98,22 +106,13 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
     ? interpolate(frame, [0, ENTER_LEN], [0, 1], { extrapolateRight: "clamp" })
     : 1;
 
-  // === COUNTDOWN PROGRESS ===
-  const countdownProgress = inCountdown
-    ? 1 - Math.min(1, (frame - phases.countdown) / WYR_COUNTDOWN_FRAMES)
-    : isRevealed ? 0 : 1;
-
   // === REVEAL ANIMATION ===
-  const revealProgress = isRevealed
-    ? spring({ frame: frame - phases.reveal, fps: FPS, config: { damping: 12, stiffness: 200, mass: 0.8 } })
-    : 0;
   const mysteryOpacity = isRevealed
     ? interpolate(frame - phases.reveal, [0, 8], [1, 0], { extrapolateRight: "clamp" })
     : 1;
   const surpriseOpacity = isRevealed
     ? interpolate(frame - phases.reveal, [4, 12], [0, 1], { extrapolateRight: "clamp" })
     : 0;
-  const surpriseScale = 0.7 + 0.3 * revealProgress;
 
   // Jess pose
   let currentJessPose: keyof JessPoses = "question";
@@ -122,14 +121,14 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
 
   const pattern = getPatternForQuestion(questionNumber - 1);
 
-  // Layout
+  // Layout - bodyTop starts below actual QuizHeader height
   const padding = isVertical ? 30 : 50;
-  const headerH = isVertical ? 80 : 100;
-  const questionTextH = isVertical ? 120 : 140;
-  const bodyTop = headerH + questionTextH + 12;
+  const quizHeaderH = isVertical ? 267 : 293;
+  const bodyTop = quizHeaderH + (isVertical ? 24 : 40);
   const bodyBottom = isVertical ? 180 : 220;
   const cardAreaH = height - bodyTop - bodyBottom;
   const cardGap = isVertical ? 16 : 24;
+  const cardWidth = Math.floor((width - padding * 2 - cardGap) / 2);
 
   const showProgressBar = inCountdown || inSilentPause;
 
@@ -168,48 +167,15 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         </Sequence>
       )}
 
-      {/* HEADER */}
+      {/* HEADER - "Pick One!" sabit */}
       <QuizHeader
         questionNumber={questionNumber}
-        questionText={question.question_text || "Hangisini tercih edersin?"}
+        questionText="Pick One!"
         showFrame={phases.show}
         isVertical={isVertical}
         theme={theme}
         isFactMode={false}
       />
-
-      {/* QUESTION TEXT */}
-      <div style={{
-        position: "absolute",
-        top: headerH,
-        left: padding,
-        right: padding,
-        height: questionTextH,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 10,
-      }}>
-        <div style={{
-          background: "rgba(0,0,0,0.45)",
-          borderRadius: 16,
-          padding: isVertical ? "10px 18px" : "12px 24px",
-          textAlign: "center",
-          maxWidth: "90%",
-        }}>
-          <HighlightedText
-            text={question.question_text || "Hangisini tercih edersin?"}
-            style={{
-              fontFamily: FONTS.display,
-              fontSize: isVertical ? 28 : 36,
-              color: "#FFFFFF",
-              fontWeight: 900,
-              lineHeight: 1.2,
-              textShadow: "0 2px 8px rgba(0,0,0,0.6)",
-            }}
-          />
-        </div>
-      </div>
 
       {/* TWO CARDS */}
       <div style={{
@@ -242,23 +208,26 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
             )}
           </div>
           <div style={{
-            padding: isVertical ? "8px 12px" : "10px 14px",
+            padding: isVertical ? "12px 16px" : "14px 20px",
             background: theme.accent,
             textAlign: "center",
           }}>
             <span style={{
               fontFamily: FONTS.display,
-              fontSize: isVertical ? 18 : 22,
+              fontSize: isVertical ? 52 : 80,
               color: "#fff",
-              fontWeight: 800,
-              textShadow: "0 1px 4px rgba(0,0,0,0.5)",
+              fontWeight: 900,
+              textTransform: "uppercase",
+              textShadow: "0 2px 6px rgba(0,0,0,0.5)",
+              lineHeight: 1.1,
+              display: "block",
             }}>
               {question.visible_option.label}
             </span>
           </div>
         </div>
 
-        {/* SURPRISE CARD */}
+        {/* SURPRISE CARD - no overflow:hidden on outer so fuse+confetti can extend */}
         <div style={{
           flex: 1,
           background: isRevealed
@@ -268,29 +237,26 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
           border: `3px solid ${isRevealed
             ? (question.surprise_option.surprise_is_good ? BRAND.correctGreen : "#EF4444")
             : "#6B7280"}`,
-          overflow: "hidden",
           display: "flex",
           flexDirection: "column",
           boxShadow: isRevealed ? `0 4px 32px rgba(0,0,0,0.5)` : `0 4px 16px rgba(0,0,0,0.3)`,
-          transform: `scale(${surpriseScale})`,
+          position: "relative",
         }}>
-          <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-            {/* Mystery face */}
+          {/* image area - overflow hidden for clip */}
+          <div style={{ flex: 1, overflow: "hidden", position: "relative", borderRadius: "17px 17px 0 0" }}>
+            {/* Mystery face - büyük hediye paketi */}
             <div style={{
               position: "absolute", inset: 0,
-              display: "flex", flexDirection: "column",
+              display: "flex",
               alignItems: "center", justifyContent: "center",
               opacity: mysteryOpacity,
               background: "linear-gradient(135deg, #1f2937 0%, #374151 100%)",
             }}>
-              <span style={{ fontSize: isVertical ? 56 : 72, lineHeight: 1 }}>🎁</span>
               <span style={{
-                fontFamily: FONTS.display,
-                fontSize: isVertical ? 22 : 28,
-                color: "#9CA3AF",
-                fontWeight: 700,
-                marginTop: 8,
-              }}>?</span>
+                fontSize: isVertical ? 240 : 320,
+                lineHeight: 1,
+                filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.6))",
+              }}>🎁</span>
             </div>
             {/* Revealed face */}
             {surpriseImageSrc && (
@@ -302,24 +268,88 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
               </div>
             )}
           </div>
+
+          {/* Label */}
           <div style={{
-            padding: isVertical ? "8px 12px" : "10px 14px",
+            padding: isVertical ? "12px 16px" : "14px 20px",
             background: isRevealed
               ? (question.surprise_option.surprise_is_good ? BRAND.correctGreen : "#EF4444")
               : "#374151",
             textAlign: "center",
+            borderRadius: "0 0 17px 17px",
           }}>
             <span style={{
               fontFamily: FONTS.display,
-              fontSize: isVertical ? 18 : 22,
+              fontSize: isVertical ? 52 : 80,
               color: "#fff",
-              fontWeight: 800,
-              textShadow: "0 1px 4px rgba(0,0,0,0.5)",
+              fontWeight: 900,
+              textTransform: "uppercase",
+              textShadow: "0 2px 6px rgba(0,0,0,0.5)",
               opacity: isRevealed ? surpriseOpacity : 1,
+              lineHeight: 1.1,
+              display: "block",
             }}>
               {isRevealed ? question.surprise_option.surprise_outcome : question.surprise_option.label}
             </span>
           </div>
+
+          {/* FUSE SVG - countdown boyunca kart etrafında */}
+          {fusePhase > 0 && fusePhase < 1 && (() => {
+            const perim = 2 * (cardWidth + cardAreaH);
+            const offset = perim * (1 - fusePhase);
+            return (
+              <svg
+                style={{
+                  position: "absolute",
+                  top: -3, left: -3,
+                  pointerEvents: "none",
+                  zIndex: 3,
+                  overflow: "visible",
+                }}
+                width={cardWidth + 6}
+                height={cardAreaH + 6}
+              >
+                <rect x={3} y={3} width={cardWidth} height={cardAreaH} rx={17}
+                  fill="none" stroke="#1a0500" strokeWidth={6}
+                  strokeDasharray={perim} strokeDashoffset={offset} strokeLinecap="round" />
+                <rect x={3} y={3} width={cardWidth} height={cardAreaH} rx={17}
+                  fill="none" stroke="#FFD700" strokeWidth={8}
+                  strokeDasharray={`12 ${perim - 12}`} strokeDashoffset={offset} strokeLinecap="round"
+                  style={{ filter: "drop-shadow(0 0 8px #FF6B00) drop-shadow(0 0 16px #FFD700)" }} />
+              </svg>
+            );
+          })()}
+
+          {/* CONFETTI BURST - reveal anında */}
+          {burstActive && (
+            <div style={{
+              position: "absolute",
+              top: "50%", left: "50%",
+              width: 0, height: 0,
+              pointerEvents: "none",
+              zIndex: 10,
+            }}>
+              {Array.from({ length: 24 }, (_, i) => {
+                const angle = (i / 24) * Math.PI * 2;
+                const dist = 60 + Math.min(burstLocalFrame * 8, 400);
+                const fade = Math.max(0, 1 - burstLocalFrame / 35);
+                const rot = burstLocalFrame * 12 + i * 30;
+                const sz = 40 + (i % 3) * 12;
+                return (
+                  <div key={i} style={{
+                    position: "absolute",
+                    left: 0, top: 0,
+                    fontSize: sz, lineHeight: 1,
+                    transform: `translate(${Math.cos(angle) * dist - sz / 2}px, ${Math.sin(angle) * dist - burstLocalFrame * 2 - sz / 2}px) rotate(${rot}deg)`,
+                    opacity: fade,
+                    filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
+                  }}>
+                    {["🎊", "⭐", "✨", "💫", "🎉"][i % 5]}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -362,10 +392,7 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         <div
           style={{
             position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: BRAND.white,
             opacity: flashOpacity,
             zIndex: 99,
