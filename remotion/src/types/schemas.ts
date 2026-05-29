@@ -1,3 +1,4 @@
+// REV 001/29MAY26 - WouldYouRatherQuestion tipleri ve isWyrQuestion yardimcisi eklendi
 import { z } from "zod";
 
 export const questionSchema = z.object({
@@ -33,9 +34,44 @@ export const questionSchema = z.object({
   answer_audio_path: z.string().optional(),
   question_audio_duration: z.number().default(8.0),
   answer_audio_duration: z.number().default(8.0),
-});
+  question_type: z.string().optional(),
+}).passthrough();
 
 export type Question = z.infer<typeof questionSchema>;
+
+export interface WyrVisibleOption {
+  label: string;
+  image_path?: string;
+  image_url?: string;
+  image_prompt?: string;
+}
+
+export interface WyrSurpriseOption {
+  label: string;
+  surprise_outcome: string;
+  surprise_image_path?: string;
+  surprise_image_url?: string;
+  surprise_image_prompt?: string;
+  surprise_is_good: boolean;
+}
+
+export interface WouldYouRatherQuestion {
+  question_type: "would_you_rather";
+  question_text: string;
+  visible_option: WyrVisibleOption;
+  surprise_option: WyrSurpriseOption;
+  jess_reaction: string;
+  question_audio_path?: string;
+  reveal_audio_path?: string;
+  question_audio_duration: number;
+  reveal_audio_duration: number;
+}
+
+export type AnyQuestion = Question | WouldYouRatherQuestion;
+
+export function isWyrQuestion(q: AnyQuestion): q is WouldYouRatherQuestion {
+  return (q as WouldYouRatherQuestion).question_type === "would_you_rather";
+}
 
 export const jessPosesSchema = z.object({
   intro: z.string().optional(),

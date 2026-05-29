@@ -1,4 +1,4 @@
-// REV 002/27MAY26 - TTS noktalama korunuyor, SSML kaldırıldı (plain text)
+// REV 003/29MAY26 - WYR sorularında question+reveal ses desteği
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -241,7 +241,8 @@ async function main() {
     for (let i = 0; i < soruSayisi; i++) {
       const q = questions[i];
       const idx = String(i + 1).padStart(2, "0");
-      
+      const isWyr = q.question_type === "would_you_rather";
+
       segmentTasks.push({
         key: `q${idx}-question`,
         filename: `q${idx}-question.mp3`,
@@ -249,17 +250,27 @@ async function main() {
         question_index: i,
         type: "question",
       });
-      segmentTasks.push({
-        key: `q${idx}-answer`,
-        filename: `q${idx}-answer.mp3`,
-        text: q.answer_audio_text,
-        question_index: i,
-        type: "answer",
-      });
+      if (isWyr) {
+        segmentTasks.push({
+          key: `q${idx}-reveal`,
+          filename: `q${idx}-reveal.mp3`,
+          text: q.reveal_audio_text || q.jess_reaction || "",
+          question_index: i,
+          type: "reveal",
+        });
+      } else {
+        segmentTasks.push({
+          key: `q${idx}-answer`,
+          filename: `q${idx}-answer.mp3`,
+          text: q.answer_audio_text,
+          question_index: i,
+          type: "answer",
+        });
+      }
     }
-    
+
     console.log(`📊 Toplam ${segmentTasks.length} ses parçası üretilecek`);
-    console.log(`   (2 announce + ${soruSayisi*2} soru/cevap - Jess greeting video kendi sesini taşıyor)`);
+    console.log(`   (2 announce + question/answer or question/reveal audio - Jess greeting video kendi sesini taşıyor)`);
     
     const segments = [];
     for (let i = 0; i < segmentTasks.length; i++) {

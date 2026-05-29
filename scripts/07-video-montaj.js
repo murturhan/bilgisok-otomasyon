@@ -1,4 +1,4 @@
-// REV 003/27MAY26 - intro_title destegi, driveIndir write stream race fix
+// REV 004/29MAY26 - WYR soru tipi görsel ve ses path atama
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -510,6 +510,13 @@ async function main() {
       
       questions[i].image_path = `questions/${qAdi}`;
       questions[i].fun_fact_image_path = `questions/${fAdi}`;
+
+      if (questions[i].question_type === "would_you_rather") {
+        if (!questions[i].visible_option) questions[i].visible_option = {};
+        if (!questions[i].surprise_option) questions[i].surprise_option = {};
+        questions[i].visible_option.image_path = `questions/${qAdi}`;
+        questions[i].surprise_option.surprise_image_path = `questions/${fAdi}`;
+      }
     }
 
     // 6. Jess pose'larını indir
@@ -544,19 +551,30 @@ async function main() {
       const idx = String(i + 1).padStart(2, "0");
       const qSeg = segByKey[`q${idx}-question`];
       const aSeg = segByKey[`q${idx}-answer`];
-      
+      const isWyr = questions[i].question_type === "would_you_rather";
+
       if (qSeg) {
         questions[i].question_audio_path = `audio/${qSeg.filename}`;
         questions[i].question_audio_duration = qSeg.duration;
       } else {
         questions[i].question_audio_duration = 8.0;
       }
-      
-      if (aSeg) {
-        questions[i].answer_audio_path = `audio/${aSeg.filename}`;
-        questions[i].answer_audio_duration = aSeg.duration;
+
+      if (isWyr) {
+        const rSeg = segByKey[`q${idx}-reveal`];
+        if (rSeg) {
+          questions[i].reveal_audio_path = `audio/${rSeg.filename}`;
+          questions[i].reveal_audio_duration = rSeg.duration;
+        } else {
+          questions[i].reveal_audio_duration = 5.0;
+        }
       } else {
-        questions[i].answer_audio_duration = 8.0;
+        if (aSeg) {
+          questions[i].answer_audio_path = `audio/${aSeg.filename}`;
+          questions[i].answer_audio_duration = aSeg.duration;
+        } else {
+          questions[i].answer_audio_duration = 8.0;
+        }
       }
     }
 

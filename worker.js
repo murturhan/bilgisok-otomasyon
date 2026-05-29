@@ -1,4 +1,4 @@
-// REV 012/29MAY26 - tuslar duzeltildi, layout guncellendi
+// REV 013/29MAY26 - WYR callback, WYR onay sayfası eklendi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -265,7 +265,9 @@ async function handleApprovalPage(request, env, url) {
 
   const job = mevcut.data.job;
   const { topic = "", format = "", baslik = "", questions = [], chat_id = "", topic_emojis = [] } = job;
-  const qCards = questions.map((q, i) => buildQuestionCard(q, i)).join("\n");
+  const qCards = questions.map((q, i) =>
+    q.question_type === "would_you_rather" ? buildWyrCard(q, i) : buildQuestionCard(q, i)
+  ).join("\n");
 
   const html = `<!DOCTYPE html>
 <html lang="tr">
@@ -376,6 +378,7 @@ ${qCards}
 const JOB_ID = ${JSON.stringify(jobId)};
 const CHAT_ID = ${JSON.stringify(String(chat_id))};
 const N = ${questions.length};
+const QUESTIONS = ${JSON.stringify(questions)};
 const customImages = {};
 
 function val(id){const e=document.getElementById(id);return e?e.value:"";}
@@ -522,20 +525,43 @@ async function submit_(level, applyEdits){
   const edits={};
   if(applyEdits){
     for(let i=0;i<N;i++){
-      edits[String(i)]={
-        question_text:val("q"+i+"_qt"),
-        options:[val("q"+i+"_o0"),val("q"+i+"_o1"),val("q"+i+"_o2")],
-        correct_answer:parseInt(val("q"+i+"_ca"))||0,
-        fun_fact:val("q"+i+"_ff"),
-        image_prompt:val("q"+i+"_ip"),
-        fun_fact_image_prompt:val("q"+i+"_fp"),
-        option_flags:[val("q"+i+"_f0"),val("q"+i+"_f1"),val("q"+i+"_f2")],
-        show_image:chk("q"+i+"_si"),
-        regen_question_image:chk("q"+i+"_rq"),
-        regen_fact_image:chk("q"+i+"_rf"),
-        custom_question_image:customImages["cq"+i]||null,
-        custom_fact_image:customImages["cf"+i]||null,
-      };
+      const isWyr=QUESTIONS[i]&&QUESTIONS[i].question_type==="would_you_rather";
+      if(isWyr){
+        edits[String(i)]={
+          question_type:"would_you_rather",
+          question_text:val("q"+i+"_qt"),
+          visible_option:{
+            label:val("q"+i+"_vl"),
+            image_prompt:val("q"+i+"_vp"),
+          },
+          surprise_option:{
+            label:val("q"+i+"_sl"),
+            surprise_outcome:val("q"+i+"_so"),
+            surprise_image_prompt:val("q"+i+"_sp"),
+            surprise_is_good:chk("q"+i+"_sg"),
+          },
+          jess_reaction:val("q"+i+"_jr"),
+          regen_visible_image:chk("q"+i+"_rv"),
+          regen_surprise_image:chk("q"+i+"_rs"),
+          custom_visible_image:customImages["cv"+i]||null,
+          custom_surprise_image:customImages["cs"+i]||null,
+        };
+      } else {
+        edits[String(i)]={
+          question_text:val("q"+i+"_qt"),
+          options:[val("q"+i+"_o0"),val("q"+i+"_o1"),val("q"+i+"_o2")],
+          correct_answer:parseInt(val("q"+i+"_ca"))||0,
+          fun_fact:val("q"+i+"_ff"),
+          image_prompt:val("q"+i+"_ip"),
+          fun_fact_image_prompt:val("q"+i+"_fp"),
+          option_flags:[val("q"+i+"_f0"),val("q"+i+"_f1"),val("q"+i+"_f2")],
+          show_image:chk("q"+i+"_si"),
+          regen_question_image:chk("q"+i+"_rq"),
+          regen_fact_image:chk("q"+i+"_rf"),
+          custom_question_image:customImages["cq"+i]||null,
+          custom_fact_image:customImages["cf"+i]||null,
+        };
+      }
     }
     // Topic emojileri
     const te=[];
@@ -664,6 +690,62 @@ function buildQuestionCard(q, i) {
 </div>`;
 }
 
+function buildWyrCard(q, i) {
+  const {
+    question_text = "Hangisini tercih edersin?",
+    visible_option = {},
+    surprise_option = {},
+    jess_reaction = "",
+  } = q;
+  const { label: vLabel = "", image_url: vImgUrl = null, image_prompt: vPrompt = "" } = visible_option;
+  const { label: sLabel = "Sürpriz Kutu", surprise_outcome: sOutcome = "", surprise_image_url: sImgUrl = null, surprise_image_prompt: sPrompt = "", surprise_is_good: sGood = true } = surprise_option;
+
+  const vImgContent = vImgUrl ? `<img src="${esc(vImgUrl)}" alt="visible" style="max-height:86px;max-width:100%;border-radius:8px">` : `<div class="no-img">Görsel yok</div>`;
+  const sImgContent = sImgUrl ? `<img src="${esc(sImgUrl)}" alt="surprise" style="max-height:86px;max-width:100%;border-radius:8px">` : `<div class="no-img">Görsel yok</div>`;
+
+  return `<div class="card">
+  <div class="q-header" style="margin-bottom:8px">
+    <span class="card-num" style="flex-shrink:0;background:#f59e0b">🤔 WYR ${i + 1}</span>
+    <textarea id="q${i}_qt" class="q-text">${esc(question_text)}</textarea>
+  </div>
+  <div class="row2" style="gap:10px;margin-bottom:10px">
+    <div>
+      <div style="font-size:.72em;color:#10b981;font-weight:700;margin-bottom:4px">✅ Görünür Seçenek</div>
+      <div class="img-box" id="q${i}_vimg">${vImgContent}</div>
+      <input type="text" id="q${i}_vl" value="${esc(vLabel)}" placeholder="Etiket" style="margin-top:6px;width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 8px;font-size:.85em">
+      <label class="lbl" style="margin-top:8px;margin-bottom:0">Görsel prompt</label>
+      <textarea id="q${i}_vp" style="min-height:42px">${esc(vPrompt)}</textarea>
+      <div class="img-actions">
+        <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cv_file','q${i}_vimg','cv${i}')">⬆ Yükle</button>
+        <input type="file" id="q${i}_cv_file" accept="image/*">
+        <button type="button" class="btn-sm btn-regen" id="q${i}_rv_btn" onclick="toggleRegen('q${i}_rv','q${i}_rv_btn','cv${i}')">🔄 Yeniden Üret</button>
+        <input type="checkbox" id="q${i}_rv" style="display:none">
+      </div>
+    </div>
+    <div>
+      <div style="font-size:.72em;color:#f59e0b;font-weight:700;margin-bottom:4px">🎁 Sürpriz Seçenek</div>
+      <div class="img-box" id="q${i}_simg">${sImgContent}</div>
+      <input type="text" id="q${i}_sl" value="${esc(sLabel)}" placeholder="Kapalı etiket" style="margin-top:6px;width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 8px;font-size:.85em">
+      <input type="text" id="q${i}_so" value="${esc(sOutcome)}" placeholder="Açılınca ne çıkıyor?" style="margin-top:4px;width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 8px;font-size:.85em">
+      <label style="display:flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer">
+        <input type="checkbox" id="q${i}_sg" ${sGood?"checked":""} style="width:15px;height:15px;accent-color:#10b981">
+        <span style="font-size:.76em;color:#d1d5db">İyi sürpriz</span>
+      </label>
+      <label class="lbl" style="margin-top:8px;margin-bottom:0">Görsel prompt</label>
+      <textarea id="q${i}_sp" style="min-height:42px">${esc(sPrompt)}</textarea>
+      <div class="img-actions">
+        <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cs_file','q${i}_simg','cs${i}')">⬆ Yükle</button>
+        <input type="file" id="q${i}_cs_file" accept="image/*">
+        <button type="button" class="btn-sm btn-regen" id="q${i}_rs_btn" onclick="toggleRegen('q${i}_rs','q${i}_rs_btn','cs${i}')">🔄 Yeniden Üret</button>
+        <input type="checkbox" id="q${i}_rs" style="display:none">
+      </div>
+    </div>
+  </div>
+  <label class="lbl">Jess Reaksiyon</label>
+  <textarea id="q${i}_jr" style="margin-bottom:0">${esc(jess_reaction)}</textarea>
+</div>`;
+}
+
 // ─── POST / — Telegram Webhook ────────────────────────────────
 async function handleTelegram(request, env, ctx) {
   let body;
@@ -679,23 +761,26 @@ async function handleTelegram(request, env, ctx) {
 
     const parts = data.split(":");
     if (parts[0] === "quiz" && parts.length >= 4) {
-      const format       = parts[1];
-      const tarih        = parts[2];
-      const idx          = parts[3];
-      const mode         = parts[4] || "full";
-      const isTest       = mode === "test";
-      const tarihKisa    = tarih.replace(/\./g, "").slice(0, 6);
-      const formatSuffix = format === "shorts" ? "S" : "L";
-      const jobId        = `${tarihKisa}${idx}${formatSuffix}`;
+      const format            = parts[1];
+      const tarih             = parts[2];
+      const idx               = parts[3];
+      const mode              = parts[4] || "full";
+      const questionType      = parts[5] || "mc";
+      const isTest            = mode === "test";
+      const questionTypeEnv   = questionType === "wyr" ? "would_you_rather" : "multiple_choice";
+      const tarihKisa         = tarih.replace(/\./g, "").slice(0, 6);
+      const formatSuffix      = format === "shorts" ? "S" : "L";
+      const jobId             = `${tarihKisa}${idx}${formatSuffix}`;
 
       ctx.waitUntil(
         githubDispatch("icerik_uret", {
-          job_id:       jobId,
+          job_id:        jobId,
           tarih,
-          index:        idx,
-          chat_id:      chatId,
-          video_format: format,
-          test_mode:    isTest,
+          index:         idx,
+          chat_id:       chatId,
+          video_format:  format,
+          test_mode:     isTest,
+          question_type: questionTypeEnv,
         }, env)
       );
     }

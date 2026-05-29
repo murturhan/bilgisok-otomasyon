@@ -1,4 +1,4 @@
-// REV 002/28MAY26 - APPLAUSE_DELAY_FRAMES 60->90 (3sn), OutroScene gecikmesi için
+// REV 003/29MAY26 - WyrPhases eklendi
 /**
  * Soru başına faz timing'leri (Quiz Blitz tarzı, çocuk hızında)
  * 
@@ -9,10 +9,10 @@
  */
 
 import { FPS, FIXED_FRAMES } from "../styles/theme";
+import { Question, WouldYouRatherQuestion, AnyQuestion, isWyrQuestion } from "../types/schemas";
 
 // Outro Jess sesi alkış SFX bittikten sonra başlar (2s @ 30fps)
 export const APPLAUSE_DELAY_FRAMES = 90;
-import { Question } from "../types/schemas";
 
 export interface QuestionPhases {
   show: number;          // 0 - başlangıç
@@ -56,22 +56,53 @@ export function computeQuestionPhases(question: Question): QuestionPhases {
   return { show, countdown, drumRoll, silentPause, reveal, funFact, transition, end };
 }
 
+export const WYR_COUNTDOWN_FRAMES = FPS * 10; // 10s countdown
+
+export interface WyrPhases {
+  show: number;
+  countdown: number;
+  timerEnd: number;
+  silentPause: number;
+  reveal: number;
+  reaction: number;
+  transition: number;
+  end: number;
+}
+
+export function computeWyrPhases(question: WouldYouRatherQuestion): WyrPhases {
+  const showDuration = Math.max(FPS, Math.ceil(question.question_audio_duration * FPS));
+  const show = 0;
+  const countdown = show + showDuration;
+  const timerEnd = countdown + WYR_COUNTDOWN_FRAMES;
+  const silentPause = timerEnd + FPS;
+  const reveal = silentPause + Math.floor(FPS * 0.5);
+  const reaction = reveal + FPS * 2;
+  const reactionDuration = Math.max(FPS * 4, Math.ceil(question.reveal_audio_duration * FPS));
+  const transition = reaction + reactionDuration;
+  const end = transition + FIXED_FRAMES.transition;
+  return { show, countdown, timerEnd, silentPause, reveal, reaction, transition, end };
+}
+
+export function computeAnyQuestionEnd(question: AnyQuestion): number {
+  if (isWyrQuestion(question)) return computeWyrPhases(question).end;
+  return computeQuestionPhases(question as Question).end;
+}
+
 /**
  * Belirli bir sorunun video içindeki başlangıç frame'ini hesapla
  */
 export function questionStartFrame(
   questionIndex: number,
   introAudioDuration: number,
-  questions: Question[]
+  questions: AnyQuestion[]
 ): number {
   const introFrames = Math.ceil(introAudioDuration * FPS);
   let frame = introFrames;
-  
+
   for (let i = 0; i < questionIndex; i++) {
-    const phases = computeQuestionPhases(questions[i]);
-    frame += phases.end;
+    frame += computeAnyQuestionEnd(questions[i]);
   }
-  
+
   return frame;
 }
 
@@ -80,7 +111,7 @@ export function questionStartFrame(
  */
 export function outroStartFrame(
   introAudioDuration: number,
-  questions: Question[]
+  questions: AnyQuestion[]
 ): number {
   return questionStartFrame(questions.length, introAudioDuration, questions);
 }
@@ -91,7 +122,7 @@ export function outroStartFrame(
 export function totalDurationFrames(
   introAudioDuration: number,
   outroAudioDuration: number,
-  questions: Question[]
+  questions: AnyQuestion[]
 ): number {
   const outroFrames = Math.ceil(outroAudioDuration * FPS);
   return outroStartFrame(introAudioDuration, questions) + outroFrames + APPLAUSE_DELAY_FRAMES;

@@ -1,4 +1,4 @@
-// REV 003/29MAY26 - question_text MAX 6 WORDS eklendi, show_image açıklaması güncellendi
+// REV 004/29MAY26 - WYR prompt eklendi, QUESTION_TYPE env desteği
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -33,18 +33,76 @@ const {
 const FORMAT = VIDEO_FORMAT || "long";
 const IS_TEST_MODE = process.env.TEST_MODE === "true" || process.env.TEST_MODE === "1";
 const QUESTION_COUNT = IS_TEST_MODE ? 1 : (FORMAT === "shorts" ? 5 : 25);
+const QUESTION_TYPE = process.env.QUESTION_TYPE || "multiple_choice";
+const IS_WYR = QUESTION_TYPE === "would_you_rather";
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function wyrGeminiPrompt(konu, QUESTION_COUNT, FORMAT) {
+  return `You are creating "Would You Rather?" questions for a kids YouTube quiz channel (ages 4-12).
+Host: Jess the Fox (cute Pixar-style fox)
+
+TASK: Generate ${QUESTION_COUNT} "Would You Rather?" questions.
+
+Each question: one option is VISIBLE (kids know what they're picking), one is a SURPRISE BOX (contents revealed after timer).
+
+Mix surprise_is_good: roughly half good, half bad. Keep it funny and kid-appropriate.
+
+VISIBLE options examples: "100,000 TL", "A Puppy", "Infinite Pizza", "A Unicorn", "A Week Vacation"
+GOOD surprise outcomes: "A Million TL!", "A Real Dragon!", "Magic Powers!", "Your Own Island!"
+BAD surprise outcomes: "Empty Box 😅", "Homework for a Month!", "No Internet for a Week!", "A Spider Collection"
+
+OUTPUT (valid JSON, no markdown):
+{
+  "konu": "${konu}",
+  "format": "${FORMAT}",
+  "intro_title": "**Would** You Rather?",
+  "topic_emojis": ["🤔","🎁","✨","🎯","🎉"],
+  "baslik": "Would You Rather? Kids Edition with Jess the Fox! 🤔",
+  "thumbnail_title": "WOULD YOU RATHER",
+  "thumbnail_prompt": "Colorful cartoon split screen with question marks and gift boxes, vibrant Pixar style, no characters",
+  "background_prompt": "Colorful cartoon background with floating question marks and ribbons, soft blur, center empty, Pixar 3D style",
+  "aciklama": "Play Would You Rather with Jess the Fox! ${QUESTION_COUNT} fun questions for kids. #WouldYouRather #KidsQuiz #JessTheFox #GeniMiniTests",
+  "questions": [
+    {
+      "question_type": "would_you_rather",
+      "question_text": "MAX 6 WORDS (e.g. 'Hangisini tercih edersin?')",
+      "visible_option": {
+        "label": "Short label (1-5 words)",
+        "image_prompt": "Pixar-style image showing the visible option item"
+      },
+      "surprise_option": {
+        "label": "Sürpriz Kutu",
+        "surprise_outcome": "Short reveal label (1-6 words)",
+        "surprise_image_prompt": "Pixar-style image showing the surprise outcome",
+        "surprise_is_good": true
+      },
+      "jess_reaction": "What Jess says when revealing (excited for good, funny for bad)",
+      "question_audio_text": "Question 1. Would you rather have [visible option], or open this mystery surprise box? You have 10 seconds to decide!",
+      "reveal_audio_text": "What Jess says when opening the box (= jess_reaction, natural speech)"
+    }
+  ]
+}
+
+CRITICAL:
+- EXACTLY ${QUESTION_COUNT} questions
+- question_type MUST be "would_you_rather" for all
+- Mix surprise_is_good: roughly half true, half false
+- All content kid-safe (ages 4-12)
+- question_text MAX 6 WORDS
+- reveal_audio_text = jess_reaction as natural speech
+`;
+}
+
 async function icerikUret(konu) {
-  console.log(`Gemini quiz üretiyor: "${konu}", format: ${FORMAT}, ${QUESTION_COUNT} soru`);
-  
+  console.log(`Gemini quiz üretiyor: "${konu}", format: ${FORMAT}, ${QUESTION_COUNT} soru, type: ${QUESTION_TYPE}`);
+
   const geminiKeys = [GEMINI_API_KEY];
   if (GEMINI_API_KEY_2) geminiKeys.push(GEMINI_API_KEY_2);
-  
-  const prompt = `You are an expert content creator for "GeniMini Tests" - educational quiz YouTube channel for kids ages 4-12.
+
+  const prompt = IS_WYR ? wyrGeminiPrompt(konu, QUESTION_COUNT, FORMAT) : `You are an expert content creator for "GeniMini Tests" - educational quiz YouTube channel for kids ages 4-12.
 
 Channel mascot: **Jess the Fox** - cute, friendly Pixar-style fox who hosts the quiz.
 
@@ -293,9 +351,10 @@ TOPIC EMOJIS (for intro screen emoji band)
       if (json.questions && Array.isArray(json.questions)) {
         const oncekiSayi = json.questions.length;
         json.questions = json.questions.filter((q) => {
+          if (!q.question_text) return false;
+          if (IS_WYR) return true; // WYR sorularında options kontrolü yok
           if (!q.options || !Array.isArray(q.options) || q.options.length !== 3) return false;
           if (q.correct_answer === undefined || q.correct_answer < 0 || q.correct_answer > 2) return false;
-          if (!q.question_text) return false;
           return true;
         });
         const sonrakiSayi = json.questions.length;
@@ -318,6 +377,18 @@ TOPIC EMOJIS (for intro screen emoji band)
       for (let i = 0; i < json.questions.length; i++) {
         const q = json.questions[i];
         if (!q.question_text) throw new Error(`Soru ${i+1}: question_text yok`);
+        if (IS_WYR) {
+          // WYR soruları için hafif validasyon
+          if (!q.visible_option) q.visible_option = { label: "Option A" };
+          if (!q.surprise_option) q.surprise_option = { label: "Sürpriz Kutu", surprise_outcome: "Surprise!", surprise_is_good: true };
+          // WYR için ai_gorsel_prompts prompt'larını yükle
+          const vp = q.visible_option.image_prompt || `Pixar-style image of ${q.visible_option.label}, kid-friendly`;
+          const sp = q.surprise_option.surprise_image_prompt || `Pixar-style image of ${q.surprise_option.surprise_outcome}, kid-friendly`;
+          json.ai_gorsel_prompts = json.ai_gorsel_prompts || [];
+          json.ai_gorsel_prompts.push(vp);
+          json.ai_gorsel_prompts.push(sp);
+          continue;
+        }
         if (!q.image_prompt) throw new Error(`Soru ${i+1}: image_prompt yok`);
         if (!q.options || q.options.length !== 3) throw new Error(`Soru ${i+1}: 3 option olmalı (var: ${q.options?.length})`);
         if (q.correct_answer === undefined || q.correct_answer < 0 || q.correct_answer > 2) {
@@ -407,13 +478,19 @@ TOPIC EMOJIS (for intro screen emoji band)
       }
       console.log(`Background prompt: "${json.background_prompt.substring(0, 80)}..."`);
 
-      // ai_gorsel_prompts: her soru için 2 prompt (question + fun_fact) + 1 background (en sonda)
-      // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ..., background
-      // 02-gorsel-uret bunu sıralı işler ve q01.jpg, q01-fact.jpg, ..., background.jpg
-      json.ai_gorsel_prompts = [];
-      for (const q of json.questions) {
-        json.ai_gorsel_prompts.push(q.image_prompt);
-        json.ai_gorsel_prompts.push(q.fun_fact_image_prompt);
+      // ai_gorsel_prompts: her soru için 2 prompt + 1 background (en sonda)
+      // MC: q1_question, q1_funfact, ..., background
+      // WYR: q1_visible, q1_surprise, ..., background
+      if (!IS_WYR) {
+        json.ai_gorsel_prompts = [];
+        for (const q of json.questions) {
+          json.ai_gorsel_prompts.push(q.image_prompt);
+          json.ai_gorsel_prompts.push(q.fun_fact_image_prompt);
+        }
+      } else {
+        // WYR: ai_gorsel_prompts already built in validation loop above
+        // just ensure array exists
+        if (!json.ai_gorsel_prompts) json.ai_gorsel_prompts = [];
       }
       // Background prompt - EN SON
       json.ai_gorsel_prompts.push(json.background_prompt);
@@ -424,19 +501,23 @@ TOPIC EMOJIS (for intro screen emoji band)
       // Senaryo: Tüm ses parçalarının birleşimi (backward compat için)
       // Not: intro/outro Jess video kendi sesini taşıdığı için burada yok
       json.senaryo = json.questions
-        .map(q => `${q.question_audio_text} ${q.answer_audio_text}`)
+        .map(q => IS_WYR
+          ? `${q.question_audio_text || ""} ${q.reveal_audio_text || q.jess_reaction || ""}`
+          : `${q.question_audio_text} ${q.answer_audio_text}`)
         .join("\n\n");
       
       json.tts_telaffuz = json.senaryo;
       json.muzik_mood = "kids";
       
       console.log(`İçerik üretildi: ${json.baslik}`);
-      console.log(`${json.questions.length} soru, format: ${FORMAT}`);
-      console.log(`Zorluk: ${
-        ["easy", "medium", "hard"].map(d => 
-          `${d}=${json.questions.filter(q => q.difficulty === d).length}`
-        ).join(", ")
-      }`);
+      console.log(`${json.questions.length} soru, format: ${FORMAT}, type: ${QUESTION_TYPE}`);
+      if (!IS_WYR) {
+        console.log(`Zorluk: ${
+          ["easy", "medium", "hard"].map(d =>
+            `${d}=${json.questions.filter(q => q.difficulty === d).length}`
+          ).join(", ")
+        }`);
+      }
       
       return json;
       
