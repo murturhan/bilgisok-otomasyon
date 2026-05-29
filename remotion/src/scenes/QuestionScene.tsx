@@ -1,4 +1,4 @@
-// REV 014/29MAY26 - show_image=true ise blur/fuse/burst yok, hep net
+// REV 015/29MAY26 - Jess sesi +0.2 (question/answer 2.2→2.4)
 import React from "react";
 import {
   AbsoluteFill,
@@ -175,12 +175,12 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       {/* AUDIO */}
       {question.question_audio_path && (
         <Sequence from={phases.show} durationInFrames={phases.countdown - phases.show}>
-          <Audio src={staticFile(question.question_audio_path)} volume={2.2} />
+          <Audio src={staticFile(question.question_audio_path)} volume={2.4} />
         </Sequence>
       )}
       {question.answer_audio_path && (
         <Sequence from={phases.reveal} durationInFrames={phases.transition - phases.reveal}>
-          <Audio src={staticFile(question.answer_audio_path)} volume={2.2} />
+          <Audio src={staticFile(question.answer_audio_path)} volume={2.4} />
         </Sequence>
       )}
       

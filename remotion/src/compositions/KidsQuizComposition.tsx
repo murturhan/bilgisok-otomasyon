@@ -1,4 +1,4 @@
-// REV 008/28MAY26 - sfx_applause OutroScene ile aynı anda başlar, Jess APPLAUSE_DELAY_FRAMES sonra girer
+// REV 009/29MAY26 - Jess sesi +0.2 (intro/outro 2.0→2.2)
 import React from "react";
 import {
   AbsoluteFill,
@@ -139,7 +139,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       
       {intro_audio_path && (
         <Sequence from={0} durationInFrames={introFrames}>
-          <Audio src={staticFile(intro_audio_path)} volume={2.0} />
+          <Audio src={staticFile(intro_audio_path)} volume={2.2} />
         </Sequence>
       )}
       
@@ -208,7 +208,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
 
       {outro_audio_path && (
         <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES + 20} durationInFrames={outroFrames}>
-          <Audio src={staticFile(outro_audio_path)} volume={2.0} />
+          <Audio src={staticFile(outro_audio_path)} volume={2.2} />
         </Sequence>
       )}
 
