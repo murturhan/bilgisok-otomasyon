@@ -1,4 +1,4 @@
-// REV 002/30MAY26 - WYR: 05-Surprise-Box'tan random kutu URL'leri onay sayfasına eklendi
+// REV 003/30MAY26 - 05-Surprise-Box: name contains yerine list+client-filter
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -84,15 +84,20 @@ async function driveGorselUrlleri(klasorId, pattern) {
 async function getSurpriseBoxUrls() {
   if (!GDRIVE_FOLDER_ID) return [];
   const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
-  const folderRes = await drive.files.list({
-    q: `mimeType='application/vnd.google-apps.folder' and '${GDRIVE_FOLDER_ID}' in parents and name contains '05-Surprise-Box' and trashed=false`,
-    fields: "files(id, name)",
-    pageSize: 5,
+  // name contains yerine: tüm içeriği listele → client-side filtrele
+  const anaRes = await drive.files.list({
+    q: `'${GDRIVE_FOLDER_ID}' in parents and trashed=false`,
+    fields: "files(id, name, mimeType)",
+    pageSize: 200,
+    orderBy: "name",
   });
-  const folders = folderRes.data.files || [];
-  if (folders.length === 0) return [];
+  const sbFolder = (anaRes.data.files || []).find(f =>
+    f.mimeType === "application/vnd.google-apps.folder" &&
+    f.name.includes("Surprise-Box")
+  );
+  if (!sbFolder) return [];
   const filesRes = await drive.files.list({
-    q: `'${folders[0].id}' in parents and trashed=false`,
+    q: `'${sbFolder.id}' in parents and trashed=false`,
     fields: "files(id, name)",
     pageSize: 100,
   });

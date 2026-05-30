@@ -1,4 +1,4 @@
-// REV 008/30MAY26 - is_test_mode questions.json'dan okunuyor (Sheets'te yok)
+// REV 009/30MAY26 - 05-Surprise-Box: name contains yerine list+client-filter
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -489,17 +489,25 @@ async function main() {
     }
     
     // Surprise box görselleri (sadece WYR sorular için, 05-Surprise-Box klasöründen)
+    // name contains yerine: tüm içeriği listele → client-side filtrele (Drive query güvenilmez)
     let surpriseBoxFiles = [];
     const hasWyrQ = questions.some(q => q.question_type === "would_you_rather");
     if (hasWyrQ && GDRIVE_FOLDER_ID) {
       try {
-        const sbFolders = await driveAltKlasorAraSA("05-Surprise-Box", GDRIVE_FOLDER_ID, saAuth);
-        if (sbFolders.length > 0) {
-          const sbAllFiles = await driveKlasorIcerigi(sbFolders[0].id, saAuth);
+        const anaIcerik = await driveKlasorIcerigi(GDRIVE_FOLDER_ID, saAuth);
+        const sbFolder = anaIcerik.find(f =>
+          f.mimeType === "application/vnd.google-apps.folder" &&
+          f.name.includes("Surprise-Box")
+        );
+        if (sbFolder) {
+          const sbAllFiles = await driveKlasorIcerigi(sbFolder.id, saAuth);
           surpriseBoxFiles = sbAllFiles.filter(f => /\.png$/i.test(f.name));
-          console.log(`  ✓ 05-Surprise-Box: ${surpriseBoxFiles.length} görsel`);
+          console.log(`  ✓ ${sbFolder.name}: ${surpriseBoxFiles.length} görsel`);
         } else {
-          console.warn("  ⚠ 05-Surprise-Box klasörü bulunamadı");
+          const altKlasorler = anaIcerik
+            .filter(f => f.mimeType === "application/vnd.google-apps.folder")
+            .map(f => f.name).slice(0, 10).join(", ");
+          console.warn(`  ⚠ Surprise-Box klasörü bulunamadı. İlk 10 alt klasör: ${altKlasorler || "yok"}`);
         }
       } catch (e) {
         console.warn(`  ⚠ Sürpriz kutu hatası: ${e.message}`);
