@@ -1,4 +1,4 @@
-// REV 007/30MAY26 - Pick one TTS kaldirildi, is_test_mode job kaydedildi
+// REV 008/30MAY26 - is_test_mode questions.json'a yaziliyor (07-montaj okuyabilsin)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -598,6 +598,7 @@ async function main() {
       thumbnail_title: icerik.thumbnail_title || "",
       background_prompt: icerik.background_prompt || "",
       topic_emojis: icerik.topic_emojis || [],
+      is_test_mode: IS_TEST_MODE,
       questions: icerik.questions,
     }, null, 2));
     

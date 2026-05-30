@@ -1,4 +1,4 @@
-// REV 007/30MAY26 - WYR: 05-Surprise-Box'tan random kutu görseli indirilir
+// REV 008/30MAY26 - is_test_mode questions.json'dan okunuyor (Sheets'te yok)
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -630,7 +630,7 @@ async function main() {
     );
     console.log(`  ⏱ Intro toplam: ${introMinDuration.toFixed(2)}s, Outro toplam: ${outroMinDuration.toFixed(2)}s`);
 
-    const IS_TEST_MODE = job.is_test_mode === true;
+    const IS_TEST_MODE = questionsData.is_test_mode === true;
     if (IS_TEST_MODE) console.log("🧪 TEST MODE: intro/outro render edilmeyecek, sadece sorular");
 
     const inputProps = {
