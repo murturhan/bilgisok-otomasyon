@@ -1,4 +1,4 @@
-// REV 000/25MAY26 - Drive public gorsel + tek pattern 2i+1, 2i+2
+// REV 001/30MAY26 - WYR sorular için question_type + visible/surprise_option geçişi
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -169,10 +169,27 @@ async function main() {
       topic_emojis: questionsData.topic_emojis || [],
       questions: questionsData.questions.map((q, i) => {
         // Soru i (0-indexed) için:
-        // Question image  = gorsel-(2i+1) (1-indexed)
-        // Fun fact image  = gorsel-(2i+2) (1-indexed)
+        // Question/visible image = gorsel-(2i+1) (1-indexed)
+        // Fact/surprise image    = gorsel-(2i+2) (1-indexed)
         const questionImageIdx = 2 * i + 1;
         const factImageIdx = 2 * i + 2;
+        const isWyr = q.question_type === "would_you_rather";
+        if (isWyr) {
+          return {
+            index: i,
+            question_type: "would_you_rather",
+            question_text: q.question_text || "Pick One!",
+            visible_option: {
+              ...(q.visible_option || {}),
+              image_url: tumGorseller[questionImageIdx] || null,
+            },
+            surprise_option: {
+              ...(q.surprise_option || {}),
+              surprise_image_url: tumGorseller[factImageIdx] || null,
+            },
+            jess_reaction: q.jess_reaction || "",
+          };
+        }
         return {
           index: i,
           question_text: q.question_text,

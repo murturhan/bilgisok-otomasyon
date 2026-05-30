@@ -1,4 +1,4 @@
-// REV 005/29MAY26 - WYR question_text sabit "Pick One!", audio_text guncellendi
+// REV 006/30MAY26 - WYR validasyonda question_type garantilendi
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -379,6 +379,7 @@ TOPIC EMOJIS (for intro screen emoji band)
         if (!q.question_text) throw new Error(`Soru ${i+1}: question_text yok`);
         if (IS_WYR) {
           // WYR soruları için hafif validasyon
+          q.question_type = "would_you_rather"; // Gemini bazen unutuyor, garantile
           if (!q.visible_option) q.visible_option = { label: "Option A" };
           if (!q.surprise_option) q.surprise_option = { label: "Sürpriz Kutu", surprise_outcome: "Surprise!", surprise_is_good: true };
           // WYR için ai_gorsel_prompts prompt'larını yükle
