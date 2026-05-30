@@ -1,4 +1,4 @@
-// REV 015/29MAY26 - Jess sesi +0.2 (question/answer 2.2→2.4)
+// REV 016/30MAY26 - ImageCard cerceve kalin + highlightPalette renk
 import React from "react";
 import {
   AbsoluteFill,
@@ -11,7 +11,7 @@ import {
   Sequence,
   Img,
 } from "remotion";
-import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor } from "../styles/theme";
+import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor, highlightPalette } from "../styles/theme";
 import { Question, JessPoses } from "../types/schemas";
 import { JessCharacter } from "../components/JessCharacter";
 import { QuizHeader } from "../components/QuizHeader";
@@ -163,7 +163,8 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
     : 0;
   
   const pattern = getPatternForQuestion(questionNumber - 1);
-  
+  const frameBorderColor = highlightPalette[(questionNumber - 1) % highlightPalette.length];
+
   return (
     <AbsoluteFill style={{
       opacity: fadeOut * enterOpacity,
@@ -276,6 +277,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           inDrumRoll={inDrumRoll}
           inSilentPause={inSilentPause}
           localFrame={frame}
+          borderColor={frameBorderColor}
         />
       ) : (
         <LongLayout
@@ -290,6 +292,7 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           width={width}
           height={height}
           localFrame={frame}
+          borderColor={frameBorderColor}
         />
       )}
       
@@ -360,12 +363,14 @@ interface LayoutProps {
   inSilentPause?: boolean;
   /** Local frame (soru başlangıcından itibaren) - flu/fitil/burst hesabı için */
   localFrame: number;
+  /** Çerçeve rengi (highlightPalette rotasyonu) */
+  borderColor?: string;
 }
 
 const LongLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases,
   inFunFact, isRevealed, revealImageTransition, width, height,
-  localFrame,
+  localFrame, borderColor = BRAND.white,
 }) => {
   const bodyTop = 345;  // long header 293 + 52 padding (resim biraz daha aşağı)
   const bodyBottom = 200;
@@ -431,6 +436,7 @@ const LongLayout: React.FC<LayoutProps> = ({
               burstActive={burstActive}
               burstLocalFrame={burstLocalFrame}
               showAsPlaceholder={question.show_image === false && !isRevealed}
+              borderColor={borderColor}
             />
           </div>
 
@@ -483,6 +489,7 @@ const LongLayout: React.FC<LayoutProps> = ({
                 isReveal={false}
                 revealTransition={1}
                 showAsPlaceholder={question.show_image === false && !funFactImageSrc}
+                borderColor={borderColor}
               />
 
               {/* ORTA: Gözlük */}
@@ -517,7 +524,7 @@ const LongLayout: React.FC<LayoutProps> = ({
 
 const ShortsLayout: React.FC<LayoutProps> = ({
   question, imageSrc, funFactImageSrc, phases, inDrumRoll, inSilentPause, inCountdown,
-  inFunFact, isRevealed, revealImageTransition, width, height, localFrame,
+  inFunFact, isRevealed, revealImageTransition, width, height, localFrame, borderColor = BRAND.white,
 }) => {
   const bodyTop = 320;  // shorts header 267 + 53 padding (resim biraz daha aşağı)
   const padding = 40;
@@ -577,6 +584,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
             burstActive={burstActive}
             burstLocalFrame={burstLocalFrame}
             showAsPlaceholder={question.show_image === false && !isRevealed}
+            borderColor={borderColor}
           />
 
           {/* ŞIKLAR - 3 tane, aralarında eşit boşluk */}
@@ -629,6 +637,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
                 isReveal={false}
                 revealTransition={1}
                 showAsPlaceholder={question.show_image === false && !funFactImageSrc}
+                borderColor={borderColor}
               />
               
               {/* Fact paneli ortada (resim ile aynı alan) - gözlük altta */}
@@ -737,12 +746,14 @@ interface ImageCardProps {
   burstLocalFrame?: number;
   /** show_image false ise resim yerine süslü "?" placeholder göster */
   showAsPlaceholder?: boolean;
+  /** Çerçeve rengi (highlightPalette'den) */
+  borderColor?: string;
 }
 
 const ImageCard: React.FC<ImageCardProps> = ({
   src, width, height, isReveal = false, revealTransition = 0,
   blurAmount = 0, fusePhase = 0, burstActive = false, burstLocalFrame = 0,
-  showAsPlaceholder = false,
+  showAsPlaceholder = false, borderColor = BRAND.white,
 }) => {
   const scale = isReveal
     ? interpolate(revealTransition, [0, 1], [0.95, 1])
@@ -781,9 +792,9 @@ const ImageCard: React.FC<ImageCardProps> = ({
         height,
         position: "relative",
         borderRadius: 28,
-        backgroundColor: BRAND.white,
-        border: `6px solid ${BRAND.white}`,
-        boxShadow: "0 14px 32px rgba(0,0,0,0.45), 0 0 0 3px rgba(0,0,0,0.15)",
+        backgroundColor: borderColor,
+        border: `12px solid ${borderColor}`,
+        boxShadow: "0 14px 32px rgba(0,0,0,0.45), 0 0 0 5px rgba(0,0,0,0.2)",
         transform: `scale(${scale})`,
         opacity,
       }}

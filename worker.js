@@ -1,4 +1,4 @@
-// REV 013/29MAY26 - WYR callback, WYR onay sayfası eklendi
+// REV 014/30MAY26 - WYR onay sayfasında Pick One! statik başlık
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -529,7 +529,7 @@ async function submit_(level, applyEdits){
       if(isWyr){
         edits[String(i)]={
           question_type:"would_you_rather",
-          question_text:val("q"+i+"_qt"),
+          question_text:"Pick One!",
           visible_option:{
             label:val("q"+i+"_vl"),
             image_prompt:val("q"+i+"_vp"),
@@ -706,7 +706,7 @@ function buildWyrCard(q, i) {
   return `<div class="card">
   <div class="q-header" style="margin-bottom:8px">
     <span class="card-num" style="flex-shrink:0;background:#f59e0b">🤔 WYR ${i + 1}</span>
-    <textarea id="q${i}_qt" class="q-text">${esc(question_text)}</textarea>
+    <span class="q-text" style="font-weight:700;font-size:18px;color:#f59e0b;padding:6px 10px;display:inline-block">PICK ONE!</span>
   </div>
   <div class="row2" style="gap:10px;margin-bottom:10px">
     <div>
