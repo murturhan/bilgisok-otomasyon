@@ -1,4 +1,4 @@
-// REV 006/30MAY26 - is_test_mode: intro/outro 0, sadece sorular render edilir
+// REV 007/30MAY26 - WYR: 05-Surprise-Box'tan random kutu görseli indirilir
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -37,6 +37,7 @@ const execAsync = promisify(exec);
 
 const {
   JOB_ID,
+  GDRIVE_FOLDER_ID,
   GDRIVE_MUZIK_FOLDER_ID,
   GDRIVE_JESS_FOLDER_ID,
   GDRIVE_SFX_FOLDER_ID,
@@ -487,6 +488,24 @@ async function main() {
       console.log(`  ✓ Background: ${bgGorseli.name}`);
     }
     
+    // Surprise box görselleri (sadece WYR sorular için, 05-Surprise-Box klasöründen)
+    let surpriseBoxFiles = [];
+    const hasWyrQ = questions.some(q => q.question_type === "would_you_rather");
+    if (hasWyrQ && GDRIVE_FOLDER_ID) {
+      try {
+        const sbFolders = await driveAltKlasorAraSA("05-Surprise-Box", GDRIVE_FOLDER_ID, saAuth);
+        if (sbFolders.length > 0) {
+          const sbAllFiles = await driveKlasorIcerigi(sbFolders[0].id, saAuth);
+          surpriseBoxFiles = sbAllFiles.filter(f => /\.png$/i.test(f.name));
+          console.log(`  ✓ 05-Surprise-Box: ${surpriseBoxFiles.length} görsel`);
+        } else {
+          console.warn("  ⚠ 05-Surprise-Box klasörü bulunamadı");
+        }
+      } catch (e) {
+        console.warn(`  ⚠ Sürpriz kutu hatası: ${e.message}`);
+      }
+    }
+
     for (let i = 0; i < soruSayisi; i++) {
       // Soru görseli (q01.jpg)
       const qAdi = `q${String(i + 1).padStart(2, "0")}.jpg`;
@@ -516,6 +535,14 @@ async function main() {
         if (!questions[i].surprise_option) questions[i].surprise_option = {};
         questions[i].visible_option.image_path = `questions/${qAdi}`;
         questions[i].surprise_option.surprise_image_path = `questions/${fAdi}`;
+        // Random kutu görseli (her soru için farklı seçim)
+        if (surpriseBoxFiles.length > 0) {
+          const sbFile = surpriseBoxFiles[Math.floor(Math.random() * surpriseBoxFiles.length)];
+          const sbAdi = `surprise-box-${String(i + 1).padStart(2, "0")}.png`;
+          const sbYol = path.join(REMOTION_PUBLIC, "questions", sbAdi);
+          gorselIndirmePromises.push(driveIndir(sbFile.id, sbYol, saAuth));
+          questions[i].surprise_box_image_path = `questions/${sbAdi}`;
+        }
       }
     }
 

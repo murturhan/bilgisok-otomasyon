@@ -1,4 +1,4 @@
-// REV 004/30MAY26 - Etiket tasmaz (flexShrink+dinamik font), fitil cerceveye hizali, logo zIndex
+// REV 005/30MAY26 - surpriseBoxSrc prop: Drive'dan random kutu görseli (yoksa 🎁 fallback)
 import React from "react";
 import {
   AbsoluteFill,
@@ -36,6 +36,7 @@ interface WouldYouRatherSceneProps {
   sfx_pop_single?: string;
   sfx_pop_double?: string;
   sfx_progress?: string;
+  surpriseBoxSrc?: string;
 }
 
 export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
@@ -54,6 +55,7 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
   sfx_pop_single,
   sfx_pop_double,
   sfx_progress,
+  surpriseBoxSrc,
 }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
@@ -278,7 +280,7 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         }}>
           {/* image area - overflow hidden for clip */}
           <div style={{ flex: 1, overflow: "hidden", position: "relative", borderRadius: "12px 12px 0 0" }}>
-            {/* Mystery face - büyük hediye paketi kartı dolduruyor */}
+            {/* Mystery face - kutu görseli varsa Img, yoksa 🎁 emoji */}
             <div style={{
               position: "absolute", inset: 0,
               display: "flex",
@@ -286,11 +288,23 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
               opacity: mysteryOpacity,
               background: "linear-gradient(135deg, #1f2937 0%, #374151 100%)",
             }}>
-              <span style={{
-                fontSize: giftBoxSize,
-                lineHeight: 1,
-                filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.6))",
-              }}>🎁</span>
+              {surpriseBoxSrc ? (
+                <Img
+                  src={surpriseBoxSrc}
+                  style={{
+                    width: giftBoxSize,
+                    height: giftBoxSize,
+                    objectFit: "contain",
+                    filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.6))",
+                  }}
+                />
+              ) : (
+                <span style={{
+                  fontSize: giftBoxSize,
+                  lineHeight: 1,
+                  filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.6))",
+                }}>🎁</span>
+              )}
             </div>
             {/* Revealed face */}
             {surpriseImageSrc && (

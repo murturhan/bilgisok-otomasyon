@@ -1,4 +1,4 @@
-// REV 003/30MAY26 - is_test_mode prop eklendi (intro/outro atla)
+// REV 004/30MAY26 - WouldYouRatherQuestion: surprise_box_image_path/url eklendi
 import { z } from "zod";
 
 export const questionSchema = z.object({
@@ -65,6 +65,8 @@ export interface WouldYouRatherQuestion {
   reveal_audio_path?: string;
   question_audio_duration: number;
   reveal_audio_duration: number;
+  surprise_box_image_path?: string;
+  surprise_box_image_url?: string;
 }
 
 export type AnyQuestion = Question | WouldYouRatherQuestion;

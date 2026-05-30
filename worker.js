@@ -1,4 +1,4 @@
-// REV 014/30MAY26 - WYR onay sayfasında Pick One! statik başlık
+// REV 015/30MAY26 - WYR onay sayfasında sürpriz kutu görseli + Başka kutu butonu
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -521,6 +521,13 @@ function setCorrect(qi,j){
   if(inp)inp.value=j;
 }
 
+function changeBox(qi, urls){
+  if(!urls||!urls.length)return;
+  var newUrl=urls[Math.floor(Math.random()*urls.length)];
+  var box=document.getElementById('q'+qi+'_sbimg');
+  if(box)box.innerHTML='<img src="'+newUrl+'" style="max-height:110px;max-width:100%;object-fit:contain;border-radius:8px">';
+}
+
 async function submit_(level, applyEdits){
   const edits={};
   if(applyEdits){
@@ -695,6 +702,8 @@ function buildWyrCard(q, i) {
     question_text = "Hangisini tercih edersin?",
     visible_option = {},
     surprise_option = {},
+    surprise_box_image_url: sbUrl = null,
+    surprise_box_urls: sbUrls = [],
     jess_reaction = "",
   } = q;
   const { label: vLabel = "", image_url: vImgUrl = null, image_prompt: vPrompt = "" } = visible_option;
@@ -702,6 +711,8 @@ function buildWyrCard(q, i) {
 
   const vImgContent = vImgUrl ? `<img src="${esc(vImgUrl)}" alt="visible" style="max-height:86px;max-width:100%;border-radius:8px">` : `<div class="no-img">Görsel yok</div>`;
   const sImgContent = sImgUrl ? `<img src="${esc(sImgUrl)}" alt="surprise" style="max-height:86px;max-width:100%;border-radius:8px">` : `<div class="no-img">Görsel yok</div>`;
+  const sbImgContent = sbUrl ? `<img src="${esc(sbUrl)}" id="q${i}_sbimg_inner" alt="kutu" style="max-height:110px;max-width:100%;object-fit:contain;border-radius:8px">` : `<div class="no-img">Kutu yok</div>`;
+  const sbUrlsJson = JSON.stringify(sbUrls);
 
   return `<div class="card">
   <div class="q-header" style="margin-bottom:8px">
@@ -724,6 +735,10 @@ function buildWyrCard(q, i) {
     </div>
     <div>
       <div style="font-size:.72em;color:#f59e0b;font-weight:700;margin-bottom:4px">🎁 Sürpriz Seçenek</div>
+      <div style="font-size:.68em;color:#9ca3af;margin-bottom:3px">📦 Kutu görseli (video'da soru sırasında görünür)</div>
+      <div class="img-box" id="q${i}_sbimg" style="height:120px;margin-bottom:4px">${sbImgContent}</div>
+      ${sbUrls.length > 1 ? `<button type="button" class="btn-sm" style="margin-bottom:8px;border-color:#a78bfa;color:#c4b5fd" onclick="changeBox(${i},${sbUrlsJson})">🔄 Başka kutu</button>` : ""}
+      <div style="font-size:.68em;color:#9ca3af;margin-bottom:3px">🖼 Reveal görseli (açılınca görünür)</div>
       <div class="img-box" id="q${i}_simg">${sImgContent}</div>
       <input type="text" id="q${i}_sl" value="${esc(sLabel)}" placeholder="Kapalı etiket" style="margin-top:6px;width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 8px;font-size:.85em">
       <input type="text" id="q${i}_so" value="${esc(sOutcome)}" placeholder="Açılınca ne çıkıyor?" style="margin-top:4px;width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 8px;font-size:.85em">

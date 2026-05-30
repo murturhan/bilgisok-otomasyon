@@ -1,4 +1,4 @@
-// REV 011/30MAY26 - is_test_mode: intro/outro atlanir, sadece sorular render edilir
+// REV 012/30MAY26 - WYR: surpriseBoxSrc Drive'dan random kutu görseli
 import React from "react";
 import {
   AbsoluteFill,
@@ -182,6 +182,9 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           const surpriseSrc = wyrQ.surprise_option?.surprise_image_path
             ? staticFile(wyrQ.surprise_option.surprise_image_path)
             : wyrQ.surprise_option?.surprise_image_url || "";
+          const surpriseBoxSrc = wyrQ.surprise_box_image_path
+            ? staticFile(wyrQ.surprise_box_image_path)
+            : wyrQ.surprise_box_image_url || "";
           return (
             <React.Fragment key={idx}>
               <Sequence from={startFrame} durationInFrames={wyrPhases.end}>
@@ -189,6 +192,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
                   question={wyrQ}
                   visibleImageSrc={visibleSrc}
                   surpriseImageSrc={surpriseSrc}
+                  surpriseBoxSrc={surpriseBoxSrc}
                   questionNumber={idx + 1}
                   totalQuestions={questions.length}
                   theme={theme}

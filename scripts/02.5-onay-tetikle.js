@@ -1,4 +1,4 @@
-// REV 001/30MAY26 - WYR sorular için question_type + visible/surprise_option geçişi
+// REV 002/30MAY26 - WYR: 05-Surprise-Box'tan random kutu URL'leri onay sayfasına eklendi
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -24,6 +24,7 @@ import { telegram } from "./lib/telegram.js";
 
 const {
   JOB_ID,
+  GDRIVE_FOLDER_ID,
   WORKER_URL: WORKER_URL_RAW,
   GITHUB_TOKEN,
   CLOUDFLARE_PAGES_URL,
@@ -78,6 +79,40 @@ async function driveGorselUrlleri(klasorId, pattern) {
   }
   
   return sonuc;
+}
+
+async function getSurpriseBoxUrls() {
+  if (!GDRIVE_FOLDER_ID) return [];
+  const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
+  const folderRes = await drive.files.list({
+    q: `mimeType='application/vnd.google-apps.folder' and '${GDRIVE_FOLDER_ID}' in parents and name contains '05-Surprise-Box' and trashed=false`,
+    fields: "files(id, name)",
+    pageSize: 5,
+  });
+  const folders = folderRes.data.files || [];
+  if (folders.length === 0) return [];
+  const filesRes = await drive.files.list({
+    q: `'${folders[0].id}' in parents and trashed=false`,
+    fields: "files(id, name)",
+    pageSize: 100,
+  });
+  const files = (filesRes.data.files || []).filter(f => /\.png$/i.test(f.name));
+  const urls = [];
+  for (const f of files) {
+    try {
+      await drive.permissions.create({
+        fileId: f.id,
+        requestBody: { role: "reader", type: "anyone" },
+        fields: "id",
+      });
+    } catch (e) {
+      if (!String(e.message || "").includes("already exists")) {
+        console.warn(`  ⚠ Permission hata (${f.name}): ${e.message}`);
+      }
+    }
+    urls.push(`https://drive.google.com/thumbnail?id=${f.id}&sz=w800`);
+  }
+  return urls;
 }
 
 async function main() {
@@ -157,6 +192,18 @@ async function main() {
     // Sıralama: 1=soru1, 2=fact1, 3=soru2, 4=fact2, ..., son=background
     const tumGorseller = await driveGorselUrlleri(gorselKlasorId, /^gorsel-(\d+)-/);
     
+    // Sürpriz kutu URL'leri (WYR sorular için)
+    const isAnyWyr = questionsData.questions.some(q => q.question_type === "would_you_rather");
+    let surpriseBoxUrls = [];
+    if (isAnyWyr) {
+      try {
+        surpriseBoxUrls = await getSurpriseBoxUrls();
+        console.log(`  ✓ Sürpriz kutu: ${surpriseBoxUrls.length} görsel`);
+      } catch (e) {
+        console.warn(`  ⚠ Sürpriz kutu alınamadı: ${e.message}`);
+      }
+    }
+
     // Worker'a gönderilecek payload
     const payload = {
       job_id: JOB_ID,
@@ -175,6 +222,9 @@ async function main() {
         const factImageIdx = 2 * i + 2;
         const isWyr = q.question_type === "would_you_rather";
         if (isWyr) {
+          const randBoxUrl = surpriseBoxUrls.length > 0
+            ? surpriseBoxUrls[Math.floor(Math.random() * surpriseBoxUrls.length)]
+            : null;
           return {
             index: i,
             question_type: "would_you_rather",
@@ -187,6 +237,8 @@ async function main() {
               ...(q.surprise_option || {}),
               surprise_image_url: tumGorseller[factImageIdx] || null,
             },
+            surprise_box_image_url: randBoxUrl,
+            surprise_box_urls: surpriseBoxUrls,
             jess_reaction: q.jess_reaction || "",
           };
         }
