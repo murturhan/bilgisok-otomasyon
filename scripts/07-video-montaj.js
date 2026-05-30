@@ -1,4 +1,4 @@
-// REV 005/29MAY26 - WYR duration log crash duzeltildi
+// REV 006/30MAY26 - is_test_mode: intro/outro 0, sadece sorular render edilir
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -602,7 +602,10 @@ async function main() {
       8
     );
     console.log(`  ⏱ Intro toplam: ${introMinDuration.toFixed(2)}s, Outro toplam: ${outroMinDuration.toFixed(2)}s`);
-    
+
+    const IS_TEST_MODE = job.is_test_mode === true;
+    if (IS_TEST_MODE) console.log("🧪 TEST MODE: intro/outro render edilmeyecek, sadece sorular");
+
     const inputProps = {
       title: "GeniMini Tests",
       topic: questionsData.intro_title || questionsData.konu || job.konu || "",
@@ -614,8 +617,9 @@ async function main() {
       // Sahne 1 = Jess video süresi, Sahne 2 = kalan zaman (topic announce + buffer)
       intro_audio_path: null,
       outro_audio_path: null,
-      intro_audio_duration: introMinDuration,
-      outro_audio_duration: outroMinDuration,
+      intro_audio_duration: IS_TEST_MODE ? 0 : introMinDuration,
+      outro_audio_duration: IS_TEST_MODE ? 0 : outroMinDuration,
+      is_test_mode: IS_TEST_MODE,
       
       // Jess video gerçek süreleri (composition Sahne 1 / Sahne 2 ayrım noktası için)
       jess_intro_video_duration: jessSureleri.introDuration,

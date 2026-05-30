@@ -1,4 +1,4 @@
-// REV 002/29MAY26 - questions z.any() ile WYR schema validasyon hatasini duzelt
+// REV 003/30MAY26 - is_test_mode prop eklendi (intro/outro atla)
 import { z } from "zod";
 
 export const questionSchema = z.object({
@@ -131,6 +131,9 @@ export const quizCompositionSchema = z.object({
 
   // Intro Sahne 2'de emoji bandı için (Gemini üretir — opsiyonel, yoksa getTopicEmojis fallback)
   topic_emojis: z.array(z.string()).optional(),
+
+  // Test modunda intro/outro render edilmez, sadece sorular
+  is_test_mode: z.boolean().optional().default(false),
 });
 
 export type QuizCompositionProps = z.infer<typeof quizCompositionSchema>;

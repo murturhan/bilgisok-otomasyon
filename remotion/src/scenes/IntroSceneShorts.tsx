@@ -1,4 +1,4 @@
-// REV 005/28MAY26 - Intro emojileri tek tek spring+pop animasyonu ile geliyor
+// REV 006/30MAY26 - Scene2 logo kucultuldu, baslik zIndex yukseltildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -228,22 +228,22 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
   
   const topicFontSize = fitTopicFont;
   const topicTextShadow = buildTopic3DShadow(topicFontSize);
-  const smallLogoWidth = width * 0.42;
-  
+  const smallLogoWidth = width * 0.26;
+
   return (
     <>
       <div style={{
         position: "absolute", top: 60, left: 40,
         transform: `translateX(${smallLogoX}px)`,
-        opacity: smallLogoOpacity, zIndex: 5,
+        opacity: smallLogoOpacity, zIndex: 2,
       }}>
         <GeniMiniLogo width={smallLogoWidth} />
       </div>
-      
+
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
-        paddingLeft: 40, paddingRight: 40,
+        paddingLeft: 40, paddingRight: 40, zIndex: 10,
       }}>
         <div style={{
           transform: `scale(${topicPulse}) rotate(${topicWobble}deg) translateY(${topicFloat}px)`,

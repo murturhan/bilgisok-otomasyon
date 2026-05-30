@@ -1,4 +1,4 @@
-// REV 003/30MAY26 - Shorts alt-alta kart, gorunur kart net, hediye dolu, renk cerceve
+// REV 004/30MAY26 - Etiket tasmaz (flexShrink+dinamik font), fitil cerceveye hizali, logo zIndex
 import React from "react";
 import {
   AbsoluteFill,
@@ -144,6 +144,15 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
   // Gift box fills ~80% of card height
   const giftBoxSize = Math.floor(cardH * 0.8);
 
+  // Dynamic label font — shrinks for long text to prevent overflow
+  const labelFontBase = isVertical ? 52 : 80;
+  const labelFont = (label: string) => {
+    const len = (label || "").length;
+    if (len <= 10) return labelFontBase;
+    if (len <= 18) return Math.floor(labelFontBase * 0.75);
+    return Math.floor(labelFontBase * 0.6);
+  };
+
   const showProgressBar = inCountdown || inSilentPause;
 
   return (
@@ -228,19 +237,24 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
             )}
           </div>
           <div style={{
-            padding: isVertical ? "12px 16px" : "14px 20px",
+            padding: isVertical ? "10px 14px" : "12px 18px",
             background: theme.accent,
             textAlign: "center",
+            flexShrink: 0,
+            overflow: "hidden",
           }}>
             <span style={{
               fontFamily: FONTS.display,
-              fontSize: isVertical ? 52 : 80,
+              fontSize: labelFont(question.visible_option.label),
               color: "#fff",
               fontWeight: 900,
               textTransform: "uppercase",
               textShadow: "0 2px 6px rgba(0,0,0,0.5)",
               lineHeight: 1.1,
               display: "block",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}>
               {question.visible_option.label}
             </span>
@@ -291,16 +305,18 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
 
           {/* Label */}
           <div style={{
-            padding: isVertical ? "12px 16px" : "14px 20px",
+            padding: isVertical ? "10px 14px" : "12px 18px",
             background: isRevealed
               ? (question.surprise_option.surprise_is_good ? BRAND.correctGreen : "#EF4444")
               : "#374151",
             textAlign: "center",
             borderRadius: "0 0 12px 12px",
+            flexShrink: 0,
+            overflow: "hidden",
           }}>
             <span style={{
               fontFamily: FONTS.display,
-              fontSize: isVertical ? 52 : 80,
+              fontSize: labelFont(isRevealed ? question.surprise_option.surprise_outcome : question.surprise_option.label),
               color: "#fff",
               fontWeight: 900,
               textTransform: "uppercase",
@@ -308,6 +324,9 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
               opacity: isRevealed ? surpriseOpacity : 1,
               lineHeight: 1.1,
               display: "block",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}>
               {isRevealed ? question.surprise_option.surprise_outcome : question.surprise_option.label}
             </span>
@@ -321,13 +340,13 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
               <svg
                 style={{
                   position: "absolute",
-                  top: -3, left: -3,
+                  top: -7, left: -7,
                   pointerEvents: "none",
                   zIndex: 3,
                   overflow: "visible",
                 }}
-                width={cardW + 6}
-                height={cardH + 6}
+                width={cardW + 14}
+                height={cardH + 14}
               >
                 <rect x={3} y={3} width={cardW} height={cardH} rx={17}
                   fill="none" stroke="#1a0500" strokeWidth={6}

@@ -1,4 +1,4 @@
-// REV 010/29MAY26 - WYR soru tipi switch eklendi
+// REV 011/30MAY26 - is_test_mode: intro/outro atlanir, sadece sorular render edilir
 import React from "react";
 import {
   AbsoluteFill,
@@ -52,6 +52,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   sfx_applause,
   channel_name,
   topic_emojis,
+  is_test_mode = false,
 }) => {
   const { width, height } = useVideoConfig();
   const isVertical = height > width;
@@ -134,28 +135,30 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   
   return (
     <AbsoluteFill>
-      {/* INTRO */}
-      <Sequence from={0} durationInFrames={introFrames}>
-        <IntroSceneComponent
-          channelName={channel_name}
-          topic={topic}
-          topicEmojis={topic_emojis}
-          jessPoses={resolvedJessPoses}
-          durationFrames={introFrames}
-          jessVideoDurationFrames={Math.ceil(jess_intro_video_duration * FPS)}
-          sfx_pop_single={sfx_pop_single}
-          sfx_pop_double={sfx_pop_double}
-        />
-      </Sequence>
-      
-      {intro_audio_path && (
+      {/* INTRO - test modunda atlanır */}
+      {!is_test_mode && introFrames > 0 && (
+        <Sequence from={0} durationInFrames={introFrames}>
+          <IntroSceneComponent
+            channelName={channel_name}
+            topic={topic}
+            topicEmojis={topic_emojis}
+            jessPoses={resolvedJessPoses}
+            durationFrames={introFrames}
+            jessVideoDurationFrames={Math.ceil(jess_intro_video_duration * FPS)}
+            sfx_pop_single={sfx_pop_single}
+            sfx_pop_double={sfx_pop_double}
+          />
+        </Sequence>
+      )}
+
+      {!is_test_mode && intro_audio_path && (
         <Sequence from={0} durationInFrames={introFrames}>
           <Audio src={staticFile(intro_audio_path)} volume={2.2} />
         </Sequence>
       )}
       
-      {/* TOPIC ANNOUNCEMENT - Sahne 2'de oynar (Jess video bittikten sonra) */}
-      {topic_announce_path && (
+      {/* TOPIC ANNOUNCEMENT - test modunda atlanır */}
+      {!is_test_mode && topic_announce_path && (
         <Sequence
           from={Math.ceil(jess_intro_video_duration * FPS) + Math.floor(FPS * 0.4)}
           durationInFrames={Math.ceil(topic_announce_duration * FPS)}
@@ -241,25 +244,27 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         );
       })}
       
-      {/* OUTRO - sfx_applause ile aynı anda başlar; Jess APPLAUSE_DELAY_FRAMES sonra girer */}
-      <Sequence from={outroStart} durationInFrames={outroFrames + APPLAUSE_DELAY_FRAMES}>
-        <OutroSceneComponent
-          channelName={channel_name}
-          jessPoses={resolvedJessPoses}
-          durationFrames={outroFrames + APPLAUSE_DELAY_FRAMES}
-          jessVideoDurationFrames={Math.ceil(jess_outro_video_duration * FPS)}
-          jessEntryFrames={APPLAUSE_DELAY_FRAMES}
-        />
-      </Sequence>
+      {/* OUTRO - test modunda atlanır */}
+      {!is_test_mode && (
+        <Sequence from={outroStart} durationInFrames={outroFrames + APPLAUSE_DELAY_FRAMES}>
+          <OutroSceneComponent
+            channelName={channel_name}
+            jessPoses={resolvedJessPoses}
+            durationFrames={outroFrames + APPLAUSE_DELAY_FRAMES}
+            jessVideoDurationFrames={Math.ceil(jess_outro_video_duration * FPS)}
+            jessEntryFrames={APPLAUSE_DELAY_FRAMES}
+          />
+        </Sequence>
+      )}
 
-      {outro_audio_path && (
+      {!is_test_mode && outro_audio_path && (
         <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES + 20} durationInFrames={outroFrames}>
           <Audio src={staticFile(outro_audio_path)} volume={2.2} />
         </Sequence>
       )}
 
-      {/* OUTRO ANNOUNCE - OutroScene başladıktan sonra Jess video bitişinde oynar */}
-      {outro_announce_path && (
+      {/* OUTRO ANNOUNCE - test modunda atlanır */}
+      {!is_test_mode && outro_announce_path && (
         <Sequence
           from={outroStart + APPLAUSE_DELAY_FRAMES + Math.ceil(jess_outro_video_duration * FPS) + Math.floor(FPS * 0.4)}
           durationInFrames={Math.ceil(outro_announce_duration * FPS)}
@@ -267,9 +272,9 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           <Audio src={staticFile(outro_announce_path)} volume={1.4} />
         </Sequence>
       )}
-      
-      {/* OUTRO ALKIŞ - "GREAT JOB!" göründüğünde çalar */}
-      {sfx_applause && (
+
+      {/* OUTRO ALKIŞ - test modunda atlanır */}
+      {!is_test_mode && sfx_applause && (
         <Sequence from={outroStart} durationInFrames={Math.floor(FPS * 3)}>
           <Audio src={staticFile(sfx_applause)} volume={0.6} />
         </Sequence>

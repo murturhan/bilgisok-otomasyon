@@ -1,4 +1,4 @@
-// REV 006/30MAY26 - WYR validasyonda question_type garantilendi
+// REV 007/30MAY26 - Pick one TTS kaldirildi, is_test_mode job kaydedildi
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -80,7 +80,7 @@ OUTPUT (valid JSON, no markdown):
         "surprise_is_good": true
       },
       "jess_reaction": "What Jess says when revealing (excited for good, funny for bad)",
-      "question_audio_text": "Question 1. Pick one! Would you rather have [visible option], or open this mystery surprise box? You have 10 seconds to decide!",
+      "question_audio_text": "Question 1. Would you rather have [visible option], or open this mystery surprise box? You have 10 seconds to decide!",
       "reveal_audio_text": "What Jess says when opening the box (= jess_reaction, natural speech)"
     }
   ]
@@ -571,6 +571,7 @@ async function main() {
       index: INDEX,
       chat_id: CHAT_ID,
       konu: konu,
+      is_test_mode: IS_TEST_MODE,
       baslik: icerik.baslik,
       thumbnail_baslik: icerik.thumbnail_title || "",  // YENİ: 2-3 kelime kısa başlık
       thumbnail_alt_baslik: "",
