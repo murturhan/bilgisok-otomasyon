@@ -1,4 +1,4 @@
-// REV 003/30MAY26 - 05-Surprise-Box: name contains yerine list+client-filter
+// REV 004/30MAY26 - 05-Surprise-Box: GDRIVE_SURPRISE_BOX_FOLDER_ID ile direkt erişim
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -25,6 +25,7 @@ import { telegram } from "./lib/telegram.js";
 const {
   JOB_ID,
   GDRIVE_FOLDER_ID,
+  GDRIVE_SURPRISE_BOX_FOLDER_ID,
   WORKER_URL: WORKER_URL_RAW,
   GITHUB_TOKEN,
   CLOUDFLARE_PAGES_URL,
@@ -82,22 +83,10 @@ async function driveGorselUrlleri(klasorId, pattern) {
 }
 
 async function getSurpriseBoxUrls() {
-  if (!GDRIVE_FOLDER_ID) return [];
+  if (!GDRIVE_SURPRISE_BOX_FOLDER_ID) return [];
   const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
-  // name contains yerine: tüm içeriği listele → client-side filtrele
-  const anaRes = await drive.files.list({
-    q: `'${GDRIVE_FOLDER_ID}' in parents and trashed=false`,
-    fields: "files(id, name, mimeType)",
-    pageSize: 200,
-    orderBy: "name",
-  });
-  const sbFolder = (anaRes.data.files || []).find(f =>
-    f.mimeType === "application/vnd.google-apps.folder" &&
-    f.name.includes("Surprise-Box")
-  );
-  if (!sbFolder) return [];
   const filesRes = await drive.files.list({
-    q: `'${sbFolder.id}' in parents and trashed=false`,
+    q: `'${GDRIVE_SURPRISE_BOX_FOLDER_ID}' in parents and trashed=false`,
     fields: "files(id, name)",
     pageSize: 100,
   });

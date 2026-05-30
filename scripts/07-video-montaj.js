@@ -1,4 +1,4 @@
-// REV 009/30MAY26 - 05-Surprise-Box: name contains yerine list+client-filter
+// REV 010/30MAY26 - 05-Surprise-Box: GDRIVE_SURPRISE_BOX_FOLDER_ID ile direkt erişim
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -38,6 +38,7 @@ const execAsync = promisify(exec);
 const {
   JOB_ID,
   GDRIVE_FOLDER_ID,
+  GDRIVE_SURPRISE_BOX_FOLDER_ID,
   GDRIVE_MUZIK_FOLDER_ID,
   GDRIVE_JESS_FOLDER_ID,
   GDRIVE_SFX_FOLDER_ID,
@@ -489,29 +490,23 @@ async function main() {
     }
     
     // Surprise box görselleri (sadece WYR sorular için, 05-Surprise-Box klasöründen)
-    // name contains yerine: tüm içeriği listele → client-side filtrele (Drive query güvenilmez)
+    // Direkt folder ID kullanılır (SA bu klasörü göremeyebilir, share gerekmez)
     let surpriseBoxFiles = [];
     const hasWyrQ = questions.some(q => q.question_type === "would_you_rather");
-    if (hasWyrQ && GDRIVE_FOLDER_ID) {
+    if (hasWyrQ && GDRIVE_SURPRISE_BOX_FOLDER_ID) {
       try {
-        const anaIcerik = await driveKlasorIcerigi(GDRIVE_FOLDER_ID, saAuth);
-        const sbFolder = anaIcerik.find(f =>
-          f.mimeType === "application/vnd.google-apps.folder" &&
-          f.name.includes("Surprise-Box")
-        );
-        if (sbFolder) {
-          const sbAllFiles = await driveKlasorIcerigi(sbFolder.id, saAuth);
-          surpriseBoxFiles = sbAllFiles.filter(f => /\.png$/i.test(f.name));
-          console.log(`  ✓ ${sbFolder.name}: ${surpriseBoxFiles.length} görsel`);
+        const sbAllFiles = await driveKlasorIcerigi(GDRIVE_SURPRISE_BOX_FOLDER_ID, saAuth);
+        surpriseBoxFiles = sbAllFiles.filter(f => /\.png$/i.test(f.name));
+        if (surpriseBoxFiles.length > 0) {
+          console.log(`  ✓ 05-Surprise-Box: ${surpriseBoxFiles.length} görsel`);
         } else {
-          const altKlasorler = anaIcerik
-            .filter(f => f.mimeType === "application/vnd.google-apps.folder")
-            .map(f => f.name).slice(0, 10).join(", ");
-          console.warn(`  ⚠ Surprise-Box klasörü bulunamadı. İlk 10 alt klasör: ${altKlasorler || "yok"}`);
+          console.warn(`  ⚠ 05-Surprise-Box klasörü boş veya PNG yok (ID: ${GDRIVE_SURPRISE_BOX_FOLDER_ID})`);
         }
       } catch (e) {
         console.warn(`  ⚠ Sürpriz kutu hatası: ${e.message}`);
       }
+    } else if (hasWyrQ) {
+      console.warn(`  ⚠ GDRIVE_SURPRISE_BOX_FOLDER_ID secret eksik`);
     }
 
     for (let i = 0; i < soruSayisi; i++) {

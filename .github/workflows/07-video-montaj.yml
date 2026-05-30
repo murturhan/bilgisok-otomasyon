@@ -1,4 +1,4 @@
-# REV 001/25MAY26 - GDRIVE_JESS/MUZIK/SFX env'leri geri eklendi
+# REV 002/30MAY26 - GDRIVE_SURPRISE_BOX_FOLDER_ID secret eklendi
 name: 07 - Video Montaj
 
 on:
@@ -56,6 +56,7 @@ jobs:
           GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
           GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          GDRIVE_SURPRISE_BOX_FOLDER_ID: ${{ secrets.GDRIVE_SURPRISE_BOX_FOLDER_ID }}
           GDRIVE_JESS_FOLDER_ID: ${{ secrets.GDRIVE_JESS_FOLDER_ID }}
           GDRIVE_MUZIK_FOLDER_ID: ${{ secrets.GDRIVE_MUZIK_FOLDER_ID }}
           GDRIVE_SFX_FOLDER_ID: ${{ secrets.GDRIVE_SFX_FOLDER_ID }}
