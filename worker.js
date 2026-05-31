@@ -1,4 +1,4 @@
-// REV 015/30MAY26 - WYR onay sayfasında sürpriz kutu görseli + Başka kutu butonu
+// REV 016/01JUN26 - /api/random-surprise-box endpoint + changeBoxApi + WYR submit fix
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -10,6 +10,7 @@
  *   GET  /?job=ID           → Onay sayfası HTML
  *   POST /api/submit/:id    → Form submit → edits yaz + GitHub dispatch
  *   GET  /api/edits/:id     → Editleri dön (02.7 için)
+ *   GET  /api/random-surprise-box → WYR için random kutu PNG URL'si
  *
  * Secrets: GITHUB_TOKEN, TELEGRAM_BOT_TOKEN
  */
@@ -31,6 +32,9 @@ export default {
     }
     if (method === "GET" && path.startsWith("/api/emojis")) {
       return handleGetEmojis(request, env, url);
+    }
+    if (method === "GET" && path.startsWith("/api/random-surprise-box")) {
+      return handleRandomSurpriseBox(request, env, url);
     }
     if (method === "POST" && path.startsWith("/api/submit/")) {
       return handleSubmit(request, env, url, ctx);
@@ -169,6 +173,42 @@ async function handleGetEmojis(request, env, url) {
       thumb: f.thumbnailLink || `https://drive.google.com/thumbnail?id=${f.id}&sz=w64`,
     }));
     return json({ ok: true, files });
+  } catch (e) {
+    return json({ ok: false, error: e.message });
+  }
+}
+
+// ─── GET /api/random-surprise-box ─────────────────────────────
+async function handleRandomSurpriseBox(request, env, url) {
+  const folderId = env.GDRIVE_SURPRISE_BOX_FOLDER_ID || "";
+  const saJson   = env.GDRIVE_SERVICE_ACCOUNT_JSON || "";
+  if (!folderId) return json({ ok: false, error: "GDRIVE_SURPRISE_BOX_FOLDER_ID secret eksik (Worker secrets'a ekle)" });
+  if (!saJson)   return json({ ok: false, error: "GDRIVE_SERVICE_ACCOUNT_JSON secret eksik" });
+
+  let accessToken;
+  try {
+    accessToken = await getGDriveToken(saJson);
+  } catch (e) {
+    return json({ ok: false, error: "SA token hatası: " + e.message });
+  }
+
+  const q      = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+  const fields = encodeURIComponent("files(id,name)");
+  try {
+    const r = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&pageSize=100`,
+      { headers: { "Authorization": `Bearer ${accessToken}` } }
+    );
+    if (!r.ok) {
+      const txt = await r.text();
+      return json({ ok: false, error: `Drive API ${r.status}`, detail: txt.substring(0, 200) });
+    }
+    const data = await r.json();
+    const pngs = (data.files || []).filter(f => /\.png$/i.test(f.name));
+    if (!pngs.length) return json({ ok: false, error: "05-Surprise-Box klasörü boş veya PNG yok" });
+    const chosen = pngs[Math.floor(Math.random() * pngs.length)];
+    const imageUrl = `https://drive.google.com/thumbnail?id=${chosen.id}&sz=w800`;
+    return json({ ok: true, url: imageUrl, file_id: chosen.id, name: chosen.name });
   } catch (e) {
     return json({ ok: false, error: e.message });
   }
@@ -521,11 +561,19 @@ function setCorrect(qi,j){
   if(inp)inp.value=j;
 }
 
-function changeBox(qi, urls){
-  if(!urls||!urls.length)return;
-  var newUrl=urls[Math.floor(Math.random()*urls.length)];
+var selectedSurpriseBoxes={};
+async function changeBoxApi(qi){
   var box=document.getElementById('q'+qi+'_sbimg');
-  if(box)box.innerHTML='<img src="'+newUrl+'" style="max-height:110px;max-width:100%;object-fit:contain;border-radius:8px">';
+  if(box)box.innerHTML='<div style="color:#9ca3af;padding:12px;text-align:center">⏳</div>';
+  try{
+    var r=await fetch('/api/random-surprise-box');
+    var d=await r.json();
+    if(!d.ok){if(box)box.innerHTML='<div style="color:#fca5a5;padding:8px">❌ '+d.error+'</div>';return;}
+    selectedSurpriseBoxes[qi]=d.url;
+    if(box)box.innerHTML='<img src="'+d.url+'" style="max-height:110px;max-width:100%;object-fit:contain;border-radius:8px">';
+  }catch(e){
+    if(box)box.innerHTML='<div style="color:#fca5a5;padding:8px">❌ '+e.message+'</div>';
+  }
 }
 
 async function submit_(level, applyEdits){
@@ -548,6 +596,7 @@ async function submit_(level, applyEdits){
             surprise_is_good:chk("q"+i+"_sg"),
           },
           jess_reaction:val("q"+i+"_jr"),
+          surprise_box_image_url:selectedSurpriseBoxes[i]||null,
           regen_visible_image:chk("q"+i+"_rv"),
           regen_surprise_image:chk("q"+i+"_rs"),
           custom_visible_image:customImages["cv"+i]||null,
@@ -737,7 +786,7 @@ function buildWyrCard(q, i) {
       <div style="font-size:.72em;color:#f59e0b;font-weight:700;margin-bottom:4px">🎁 Sürpriz Seçenek</div>
       <div style="font-size:.68em;color:#9ca3af;margin-bottom:3px">📦 Kutu görseli (video'da soru sırasında görünür)</div>
       <div class="img-box" id="q${i}_sbimg" style="height:120px;margin-bottom:4px">${sbImgContent}</div>
-      ${sbUrls.length > 1 ? `<button type="button" class="btn-sm" style="margin-bottom:8px;border-color:#a78bfa;color:#c4b5fd" onclick="changeBox(${i},${sbUrlsJson})">🔄 Başka kutu</button>` : ""}
+      <button type="button" class="btn-sm" style="margin-bottom:8px;border-color:#a78bfa;color:#c4b5fd" onclick="changeBoxApi(${i})">🔄 Başka kutu</button>
       <div style="font-size:.68em;color:#9ca3af;margin-bottom:3px">🖼 Reveal görseli (açılınca görünür)</div>
       <div class="img-box" id="q${i}_simg">${sImgContent}</div>
       <input type="text" id="q${i}_sl" value="${esc(sLabel)}" placeholder="Kapalı etiket" style="margin-top:6px;width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 8px;font-size:.85em">

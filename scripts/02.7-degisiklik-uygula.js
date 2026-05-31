@@ -1,4 +1,4 @@
-// REV 000/25MAY26 - OAuth ile dosya sil+update + approval_level routing
+// REV 001/01JUN26 - WYR question_type dali: audio text bypass + WYR alan guncellemeleri
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -170,7 +170,26 @@ async function main() {
       if (typeof edit.image_prompt === "string") q.image_prompt = edit.image_prompt;
       if (typeof edit.fun_fact_image_prompt === "string") q.fun_fact_image_prompt = edit.fun_fact_image_prompt;
       if (Array.isArray(edit.option_flags) && edit.option_flags.length === 3) q.option_flags = edit.option_flags;
-      
+
+      // WYR: ayrı alanlar + audio text'i atla
+      if (edit.question_type === "would_you_rather") {
+        if (edit.visible_option) {
+          if (!q.visible_option) q.visible_option = {};
+          if (typeof edit.visible_option.label === "string") q.visible_option.label = edit.visible_option.label;
+          if (typeof edit.visible_option.image_prompt === "string") q.visible_option.image_prompt = edit.visible_option.image_prompt;
+        }
+        if (edit.surprise_option) {
+          if (!q.surprise_option) q.surprise_option = {};
+          if (typeof edit.surprise_option.label === "string") q.surprise_option.label = edit.surprise_option.label;
+          if (typeof edit.surprise_option.surprise_outcome === "string") q.surprise_option.surprise_outcome = edit.surprise_option.surprise_outcome;
+          if (typeof edit.surprise_option.surprise_image_prompt === "string") q.surprise_option.surprise_image_prompt = edit.surprise_option.surprise_image_prompt;
+          if (typeof edit.surprise_option.surprise_is_good === "boolean") q.surprise_option.surprise_is_good = edit.surprise_option.surprise_is_good;
+        }
+        if (typeof edit.jess_reaction === "string") q.jess_reaction = edit.jess_reaction;
+        if (typeof edit.surprise_box_image_url === "string") q.surprise_box_image_url = edit.surprise_box_image_url;
+        continue;
+      }
+
       // Audio text yeniden hesapla (cevap/şıklar değişmiş olabilir)
       const letters = ["A", "B", "C"];
       const correctLetter = letters[q.correct_answer];
