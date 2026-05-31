@@ -1,4 +1,4 @@
-// REV 010/30MAY26 - 05-Surprise-Box: GDRIVE_SURPRISE_BOX_FOLDER_ID ile direkt erişim
+// REV 011/01JUN26 - Telegram bildirim: tahminToplam WYR fix, jobGuncelle hata engellemesin
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -753,15 +753,24 @@ async function main() {
     const toplamSureSec = ((Date.now() - toplamBaslangic) / 1000).toFixed(0);
     
     // Toplam video süresi tahmini
-    const tahminToplam = inputProps.intro_audio_duration + 
-      questions.reduce((s, q) => s + q.question_audio_duration + 5 + 2 + q.answer_audio_duration + 1, 0) +
+    const tahminToplam = inputProps.intro_audio_duration +
+      questions.reduce((s, q) => {
+        const answerDur = q.question_type === "would_you_rather"
+          ? (q.reveal_audio_duration || 0)
+          : (q.answer_audio_duration || 0);
+        return s + (q.question_audio_duration || 0) + 5 + 2 + answerDur + 1;
+      }, 0) +
       inputProps.outro_audio_duration;
     const videoSureDk = Math.floor(tahminToplam / 60);
     const videoSureSn = Math.floor(tahminToplam % 60);
 
-    await jobGuncelle(JOB_ID, {
-      video_status: `completed:${(finalStats.size / 1024 / 1024).toFixed(1)}MB`,
-    });
+    try {
+      await jobGuncelle(JOB_ID, {
+        video_status: `completed:${(finalStats.size / 1024 / 1024).toFixed(1)}MB`,
+      });
+    } catch (e) {
+      console.warn(`jobGuncelle hatası (devam): ${e.message}`);
+    }
 
     // Onay sayfası linki (render sonrası değişiklik için)
     const workerUrl = (process.env.WORKER_URL || "").replace(/\/+$/, "");

@@ -1,4 +1,4 @@
-// REV 005/30MAY26 - surpriseBoxSrc prop: Drive'dan random kutu görseli (yoksa 🎁 fallback)
+// REV 006/01JUN26 - kutu gorseli kart dolduruyor, Jess kart kapatmiyor
 import React from "react";
 import {
   AbsoluteFill,
@@ -292,8 +292,8 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
                 <Img
                   src={surpriseBoxSrc}
                   style={{
-                    width: giftBoxSize,
-                    height: giftBoxSize,
+                    width: "88%",
+                    height: "88%",
                     objectFit: "contain",
                     filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.6))",
                   }}
@@ -423,13 +423,18 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         </div>
       )}
 
-      {/* JESS */}
+      {/* JESS - bottom: -20 ile kartın altında peek yapar, overflow hidden ile kadar gösterilir */}
       <JessCharacter
         pose={currentJessPose}
         poses={jessPoses}
         position="bottom-center"
         size={isVertical ? 230 : 280}
         animate
+        customStyle={{
+          bottom: -20,
+          maxHeight: isVertical ? 178 : 218,
+          overflow: "hidden",
+        }}
       />
 
       {/* BRAND TAG */}
