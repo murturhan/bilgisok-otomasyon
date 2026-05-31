@@ -1,4 +1,4 @@
-// REV 006/01JUN26 - kutu gorseli kart dolduruyor, Jess kart kapatmiyor
+// REV 007/01JUN26 - Jess sol tarafa (shorts), telegram tek mesaj
 import React from "react";
 import {
   AbsoluteFill,
@@ -423,16 +423,20 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         </div>
       )}
 
-      {/* JESS - bottom: -20 ile kartın altında peek yapar, overflow hidden ile kadar gösterilir */}
+      {/* JESS - shorts: sol tarafa kaydır (progress bar yüzü kapatmasın), long: bottom-center */}
       <JessCharacter
         pose={currentJessPose}
         poses={jessPoses}
-        position="bottom-center"
+        position={isVertical ? "bottom-left" : "bottom-center"}
         size={isVertical ? 230 : 280}
         animate
-        customStyle={{
+        customStyle={isVertical ? {
+          bottom: 10,
+          maxHeight: 190,
+          overflow: "hidden",
+        } : {
           bottom: -20,
-          maxHeight: isVertical ? 178 : 218,
+          maxHeight: 218,
           overflow: "hidden",
         }}
       />

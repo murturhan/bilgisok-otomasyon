@@ -1,4 +1,4 @@
-// REV 011/01JUN26 - Telegram bildirim: tahminToplam WYR fix, jobGuncelle hata engellemesin
+// REV 012/01JUN26 - Telegram mesaj: sade tek mesaj (video URL + onay linki)
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -776,27 +776,16 @@ async function main() {
     const workerUrl = (process.env.WORKER_URL || "").replace(/\/+$/, "");
     const onayLink = workerUrl ? `${workerUrl}/?job=${JOB_ID}` : "";
 
-    // Markdown'sız düz mesaj (Telegram 400 hatasını önlemek için)
+    // Sade tek mesaj: video URL + onay linki
     const msgParts = [
-      `🎬 Kids Quiz video ready! 🦊`,
-      ``,
-      `📌 ${job.baslik}`,
-      `📺 ${format}`,
-      `❓ ${soruSayisi} questions`,
-      `📦 ${(finalStats.size / 1024 / 1024).toFixed(1)} MB`,
-      `⏱ ~${videoSureDk}:${String(videoSureSn).padStart(2, "0")}`,
-      `⚡ Render: ${renderSure}s (Total: ${toplamSureSec}s)`,
-      ``,
-      `📂 Drive: ${yuklenen.link}`,
+      `🎬 Video hazır!`,
+      yuklenen.link,
     ];
-    if (onayLink) msgParts.push(`👉 Edit & re-render: ${onayLink}`);
-    msgParts.push(``);
-    msgParts.push(`━━━━━━━━━━━━━━━`);
-    msgParts.push(``);
-    msgParts.push(`▶️ Upload to YouTube:`);
-    msgParts.push(`/yukle ${JOB_ID}  (private)`);
-    msgParts.push(`/yukle ${JOB_ID} unlisted  (unlisted)`);
-    msgParts.push(`/yukle ${JOB_ID} public  (public)`);
+    if (onayLink) {
+      msgParts.push(``);
+      msgParts.push(`📝 Değişiklik yapmak için onay sayfasını tıklayınız:`);
+      msgParts.push(onayLink);
+    }
 
     try {
       await telegram(job.chat_id, msgParts.join("\n"));
