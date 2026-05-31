@@ -1,0 +1,109 @@
+# REV 001/01JUN26 - Drive SA permissions diagnoz (tek kullanim, sil sonra)
+name: 99 - GDrive SA Diagnoz 2
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnoz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install googleapis
+        run: npm install googleapis
+
+      - name: Drive SA Permissions Diagnoz
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          node --input-type=module << 'EOF'
+          import { google } from 'googleapis';
+
+          const saJson = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT_JSON);
+          const SA_EMAIL = saJson.client_email;
+          const ANA_KLASOR_ID = '10ilPk1DdRcBxuMrMR593Khf5oTQw8Deg';
+          const SURPRISE_BOX_ID = '1WKEoJLtcVeuZPVAP3ME8lRcdr4Ta65Tz';
+
+          const auth = new google.auth.GoogleAuth({
+            credentials: saJson,
+            scopes: ['https://www.googleapis.com/auth/drive.readonly']
+          });
+          const drive = google.drive({ version: 'v3', auth: await auth.getClient() });
+
+          // 1) JESS_QUIZ_YOUTUBE_ altindaki tum alt klasorler (permissions dahil)
+          console.log('\n=== 1) JESS_QUIZ_YOUTUBE_ ALT KLASORLER ===');
+          try {
+            const altlar = await drive.files.list({
+              q: `'${ANA_KLASOR_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+              fields: 'files(id,name)',
+              pageSize: 100
+            });
+            console.log('Alt klasor sayisi:', altlar.data.files.length);
+            console.log(JSON.stringify(altlar.data.files, null, 2));
+
+            // 04-Emoji ID'sini bul
+            const emoji = altlar.data.files.find(f => f.name.includes('04-Emoji') || f.name.includes('Emoji'));
+            if (emoji) {
+              console.log('\n04-Emoji bulundu:', emoji.id, emoji.name);
+              global._emojiId = emoji.id;
+            } else {
+              console.log('\n04-Emoji bulunamadi! Mevcut isimler:', altlar.data.files.map(f => f.name));
+            }
+          } catch (e) {
+            console.log('Alt klasorler ERROR:', e.message);
+          }
+
+          // 2) 05-Surprise-Box permissions
+          console.log('\n=== 2) 05-Surprise-Box PERMISSIONS ===');
+          try {
+            const perms = await drive.permissions.list({
+              fileId: SURPRISE_BOX_ID,
+              fields: 'permissions(id,type,role,emailAddress)'
+            });
+            console.log(JSON.stringify(perms.data.permissions, null, 2));
+            const saFound = perms.data.permissions?.some(p => p.emailAddress === SA_EMAIL);
+            console.log(`SA (${SA_EMAIL}) bu klasorde var mi: ${saFound}`);
+          } catch (e) {
+            console.log('Surprise-Box permissions ERROR:', e.message);
+          }
+
+          // 3) 04-Emoji permissions (karsilastirma icin)
+          console.log('\n=== 3) 04-Emoji PERMISSIONS ===');
+          if (global._emojiId) {
+            try {
+              const emojiPerms = await drive.permissions.list({
+                fileId: global._emojiId,
+                fields: 'permissions(id,type,role,emailAddress)'
+              });
+              console.log(JSON.stringify(emojiPerms.data.permissions, null, 2));
+              const saFound = emojiPerms.data.permissions?.some(p => p.emailAddress === SA_EMAIL);
+              console.log(`SA (${SA_EMAIL}) bu klasorde var mi: ${saFound}`);
+            } catch (e) {
+              console.log('04-Emoji permissions ERROR:', e.message);
+            }
+          } else {
+            console.log('04-Emoji ID bulunamadi, atlanıyor.');
+          }
+
+          // 4) Ana klasor JESS_QUIZ_YOUTUBE_ permissions
+          console.log('\n=== 4) JESS_QUIZ_YOUTUBE_ ANA KLASOR PERMISSIONS ===');
+          try {
+            const anaPerms = await drive.permissions.list({
+              fileId: ANA_KLASOR_ID,
+              fields: 'permissions(id,type,role,emailAddress)'
+            });
+            console.log(JSON.stringify(anaPerms.data.permissions, null, 2));
+            const saFound = anaPerms.data.permissions?.some(p => p.emailAddress === SA_EMAIL);
+            console.log(`SA (${SA_EMAIL}) ana klasorde var mi: ${saFound}`);
+          } catch (e) {
+            console.log('Ana klasor permissions ERROR:', e.message);
+          }
+
+          EOF
