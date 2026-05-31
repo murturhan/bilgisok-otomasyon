@@ -1,4 +1,4 @@
-// REV 007/01JUN26 - Jess sol tarafa (shorts), telegram tek mesaj
+// REV 008/01JUN26 - Jess bottom=180px (progress bar ustu, gercek pixel hesabi)
 import React from "react";
 import {
   AbsoluteFill,
@@ -423,7 +423,7 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         </div>
       )}
 
-      {/* JESS - shorts: sol tarafa kaydır (progress bar yüzü kapatmasın), long: bottom-center */}
+      {/* JESS - shorts: sol tarafa, bottom=180 (progress bar TOP=160px+20px buffer), long: bottom-center */}
       <JessCharacter
         pose={currentJessPose}
         poses={jessPoses}
@@ -431,7 +431,7 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         size={isVertical ? 230 : 280}
         animate
         customStyle={isVertical ? {
-          bottom: 10,
+          bottom: 180,
           maxHeight: 190,
           overflow: "hidden",
         } : {

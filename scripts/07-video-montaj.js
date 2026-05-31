@@ -1,4 +1,4 @@
-// REV 012/01JUN26 - Telegram mesaj: sade tek mesaj (video URL + onay linki)
+// REV 013/01JUN26 - Telegram: Markdown link syntax (bare URL underscore parse hatasi gideriyor)
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -776,19 +776,15 @@ async function main() {
     const workerUrl = (process.env.WORKER_URL || "").replace(/\/+$/, "");
     const onayLink = workerUrl ? `${workerUrl}/?job=${JOB_ID}` : "";
 
-    // Sade tek mesaj: video URL + onay linki
-    const msgParts = [
-      `🎬 Video hazır!`,
-      yuklenen.link,
-    ];
-    if (onayLink) {
-      msgParts.push(``);
-      msgParts.push(`📝 Değişiklik yapmak için onay sayfasını tıklayınız:`);
-      msgParts.push(onayLink);
-    }
+    // Markdown link syntax — bare URL with underscores (JOB_ID) causes Telegram parse errors
+    const msg = onayLink
+      ? `🎬 Video hazır!\n[Drive linki](${yuklenen.link})\n\n📝 Değişiklik yapmak için onay sayfasını tıklayınız:\n[Onay sayfası](${onayLink})`
+      : `🎬 Video hazır!\n[Drive linki](${yuklenen.link})`;
+
+    console.log(`📨 Telegram mesajı:\n${msg}`);
 
     try {
-      await telegram(job.chat_id, msgParts.join("\n"));
+      await telegram(job.chat_id, msg);
       console.log("📨 Telegram'a gönderildi");
     } catch (tgErr) {
       console.error(`❌ Telegram gönderilemedi: ${tgErr.message}`);
