@@ -1,4 +1,4 @@
-// REV 009/01JUN26 - jessAreaH: kart kisalt, Jess kart-progressbar arasina sığsın
+// REV 010/01JUN26 - Jess tam boy, ayaklar progress bar seviyesinde (bottom=100)
 import React from "react";
 import {
   AbsoluteFill,
@@ -425,17 +425,15 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         </div>
       )}
 
-      {/* JESS - shorts: sol alt, kart alt(y=1620) ile progress bar üst(y=1760) arasında y=1630-1750 */}
+      {/* JESS - shorts: sol alt, ayaklar progress bar seviyesinde (y=1820), bar ayakları kapatır */}
       <JessCharacter
         pose={currentJessPose}
         poses={jessPoses}
         position={isVertical ? "bottom-left" : "bottom-center"}
-        size={isVertical ? 138 : 280}
+        size={isVertical ? 230 : 280}
         animate
         customStyle={isVertical ? {
-          bottom: 170,
-          maxHeight: 120,
-          overflow: "hidden",
+          bottom: 100,
         } : {
           bottom: -20,
           maxHeight: 218,
