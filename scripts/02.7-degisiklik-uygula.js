@@ -1,4 +1,4 @@
-// REV 001/01JUN26 - WYR question_type dali: audio text bypass + WYR alan guncellemeleri
+// REV 002/01JUN26 - WYR regen/custom gorsel: visible=question slot, surprise=fact slot
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -187,6 +187,48 @@ async function main() {
         }
         if (typeof edit.jess_reaction === "string") q.jess_reaction = edit.jess_reaction;
         if (typeof edit.surprise_box_image_url === "string") q.surprise_box_image_url = edit.surprise_box_image_url;
+
+        // WYR custom image upload (aynı slotlar: visible=question, surprise=fact)
+        if (edit.custom_visible_image) {
+          const decoded = base64ToBuffer(edit.custom_visible_image);
+          if (decoded) {
+            const slot = slotForQuestion(idx, "question");
+            const slotStr = String(slot).padStart(2, "0");
+            await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
+            const filename = `gorsel-${slotStr}-${Date.now()}.${decoded.ext}`;
+            const filepath = `/tmp/${filename}`;
+            fs.writeFileSync(filepath, decoded.buffer);
+            try {
+              await driveDosyaYukle({ filename, filepath }, gorselKlasorId, `image/${decoded.ext === "jpg" ? "jpeg" : decoded.ext}`);
+              customUploadedCount++;
+            } finally {
+              try { fs.unlinkSync(filepath); } catch (e) {}
+            }
+          }
+        } else if (edit.regen_visible_image) {
+          regenQuestionImages.push({ index: idx, prompt: q.visible_option?.image_prompt || "" });
+        }
+
+        if (edit.custom_surprise_image) {
+          const decoded = base64ToBuffer(edit.custom_surprise_image);
+          if (decoded) {
+            const slot = slotForQuestion(idx, "fact");
+            const slotStr = String(slot).padStart(2, "0");
+            await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
+            const filename = `gorsel-${slotStr}-${Date.now()}.${decoded.ext}`;
+            const filepath = `/tmp/${filename}`;
+            fs.writeFileSync(filepath, decoded.buffer);
+            try {
+              await driveDosyaYukle({ filename, filepath }, gorselKlasorId, `image/${decoded.ext === "jpg" ? "jpeg" : decoded.ext}`);
+              customUploadedCount++;
+            } finally {
+              try { fs.unlinkSync(filepath); } catch (e) {}
+            }
+          }
+        } else if (edit.regen_surprise_image) {
+          regenFactImages.push({ index: idx, prompt: q.surprise_option?.surprise_image_prompt || "" });
+        }
+
         continue;
       }
 

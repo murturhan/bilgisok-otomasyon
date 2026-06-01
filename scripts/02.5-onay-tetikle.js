@@ -1,4 +1,4 @@
-// REV 004/30MAY26 - 05-Surprise-Box: GDRIVE_SURPRISE_BOX_FOLDER_ID ile direkt erişim
+// REV 005/01JUN26 - Telegram: sadece ilk onay (video yokken), post-render tekrar atma
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -279,12 +279,17 @@ async function main() {
     });
     
     console.log(`✅ Onay sayfası hazır: ${onayUrl}`);
-    
-    // Telegram'a link gönder
-    await telegram(
-      job.chat_id,
-      `📋 *Onay sayfası hazır*\n\n🆔 Job: \`${JOB_ID}\`\n📝 ${payload.questions.length} soru\n\n👉 [Onay sayfasını aç](${onayUrl})\n\nİncele, düzenle, gönder.`
-    );
+
+    // Video render tamamlanmışsa (07'den tetiklendi), telegram atma — 07 zaten "Video hazır + onay" gönderdi
+    // İlk onay (henüz render yok) ise gönder
+    if (!String(job.video_status || "").startsWith("completed:")) {
+      await telegram(
+        job.chat_id,
+        `📋 *Onay sayfası hazır*\n\n🆔 Job: \`${JOB_ID}\`\n📝 ${payload.questions.length} soru\n\n👉 [Onay sayfasını aç](${onayUrl})\n\nİncele, düzenle, gönder.`
+      );
+    } else {
+      console.log("ℹ️ Video zaten hazır, telegram atlandı");
+    }
     
     process.exit(0);
     

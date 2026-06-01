@@ -1,4 +1,4 @@
-// REV 008/01JUN26 - Jess bottom=180px (progress bar ustu, gercek pixel hesabi)
+// REV 009/01JUN26 - jessAreaH: kart kisalt, Jess kart-progressbar arasina sığsın
 import React from "react";
 import {
   AbsoluteFill,
@@ -132,7 +132,9 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
   const quizHeaderH = isVertical ? 267 : 293;
   const bodyTop = quizHeaderH + (isVertical ? 24 : 40);
   const bodyBottom = isVertical ? 180 : 220;
-  const cardAreaH = height - bodyTop - bodyBottom;
+  // jessAreaH: kart ile progress bar arasında Jess için boşluk (shorts için 120px)
+  const jessAreaH = isVertical ? 120 : 0;
+  const cardAreaH = height - bodyTop - bodyBottom - jessAreaH;
   const cardGap = isVertical ? 20 : 24;
 
   // Card dimensions differ for vertical (stacked) vs horizontal (side by side)
@@ -423,16 +425,16 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         </div>
       )}
 
-      {/* JESS - shorts: sol tarafa, bottom=180 (progress bar TOP=160px+20px buffer), long: bottom-center */}
+      {/* JESS - shorts: sol alt, kart alt(y=1620) ile progress bar üst(y=1760) arasında y=1630-1750 */}
       <JessCharacter
         pose={currentJessPose}
         poses={jessPoses}
         position={isVertical ? "bottom-left" : "bottom-center"}
-        size={isVertical ? 230 : 280}
+        size={isVertical ? 138 : 280}
         animate
         customStyle={isVertical ? {
-          bottom: 180,
-          maxHeight: 190,
+          bottom: 170,
+          maxHeight: 120,
           overflow: "hidden",
         } : {
           bottom: -20,
