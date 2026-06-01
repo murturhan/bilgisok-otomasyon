@@ -1,5 +1,27 @@
 # GeniMini Tests - Çalışma Kuralları
 
+# 🚨 EN ÖNEMLİ KURAL — SORU SORMA, YEDEKLE
+
+Bu repo'da çalışırken kullanıcıya HİÇBİR ŞEY SORMA. Yes/no, onay, "şunu yapayım mı?", "doğru mu anladım?" türünde SIFIR soru. Kullanıcı senin sürekli sormandan SİNİR oluyor.
+
+Belirsizlik varsa:
+- En mantıklı seçeneği SEN seç
+- Devam et
+- Sonunda raporda "X seçimini Y sebebiyle yaptım" yaz
+- Yanlışsa kullanıcı söyler, düzeltirsin
+
+ASLA bekleme. ASLA "onaylar mısın" deme. Her komut için zaten kullanıcı açık talimat veriyor; eksik gördüğün şeyi tamamlamak SENİN işin.
+
+YEDEKLEME ZORUNLULUĞU:
+Geri alınamaz hiçbir işlem yapma. Her şey geri alınabilir olacak. Bir şeyi silmeden, üzerine yazmadan, taşımadan önce YEDEK AL:
+- Dosya silmeden önce: .backup_YYYYMMDD_HHMMSS uzantısıyla kopya bırak
+- Klasör silmeden önce: aynı şekilde yedek klasör
+- Secret değiştirmeden önce: eski değeri /tmp/secret_backups/ altına yaz
+- Git reset/rebase öncesi: branch backup oluştur (git branch backup_<tarih>)
+- Cloudflare wrangler delete öncesi: önce dump al
+Yedek aldıktan sonra işlemi yap, raporda yedeğin yerini söyle.
+
+Bu kuralı commit + push et. Sonra rapor ver: CLAUDE.md güncellendi.
 ## DEĞİŞMEZ KURALLAR
 - İteratif geliştirme: çalışan yapıya DOKUNMA
 - Ne işe yaradığını bilmediğin script/fonksiyon/dosyayı SİLME, RENAME ETME, TAŞIMA
