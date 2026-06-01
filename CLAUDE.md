@@ -53,11 +53,4 @@ Bu kuralı commit + push et. Sonra rapor ver: CLAUDE.md güncellendi.
 - scripts/lib/cloudflare.js içindeki fluxRotationCagri() round-robin + 429/quota fallback yapar
 - Bu dosyaya DOKUNMA, çalışıyor.
 
-## ONAY GEREKTİRMEYEN İŞLER
-- Kullanıcı bir prompt'ta görev listesi verdiğinde HER ADIM için ayrı onay isteme
-- Tüm listeyi yap, sonunda toplu rapor ver
-- Sadece şu durumlarda dur ve sor:
-  * Belirsiz bir şey var (hangi dosya, hangi davranış)
-  * Çalışan yapıyı bozabilecek bir karar
-  * Kullanıcının daha önce belirtmediği yeni bir şey eklenmesi gerekiyor
-- Diğer her şey için: yap, geç, raporla.
+
