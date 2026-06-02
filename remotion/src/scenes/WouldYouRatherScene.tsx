@@ -1,4 +1,4 @@
-// REV 010/01JUN26 - Jess tam boy, ayaklar progress bar seviyesinde (bottom=100)
+// REV 011/02JUN26 - video_url desteği: OffthreadVideo visible+surprise slotlarda
 import React from "react";
 import {
   AbsoluteFill,
@@ -10,6 +10,7 @@ import {
   staticFile,
   Sequence,
   Img,
+  OffthreadVideo,
 } from "remotion";
 import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor, highlightPalette } from "../styles/theme";
 import { WouldYouRatherQuestion, JessPoses } from "../types/schemas";
@@ -24,6 +25,8 @@ interface WouldYouRatherSceneProps {
   question: WouldYouRatherQuestion;
   visibleImageSrc: string;
   surpriseImageSrc: string;
+  visibleVideoSrc?: string;
+  surpriseVideoSrc?: string;
   questionNumber: number;
   totalQuestions: number;
   theme: ThemeColor;
@@ -43,6 +46,8 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
   question,
   visibleImageSrc,
   surpriseImageSrc,
+  visibleVideoSrc,
+  surpriseVideoSrc,
   questionNumber,
   totalQuestions,
   theme,
@@ -228,7 +233,14 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
           boxShadow: `0 4px 24px rgba(0,0,0,0.4), 0 0 0 3px rgba(0,0,0,0.2)`,
         }}>
           <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-            {visibleImageSrc && (
+            {visibleVideoSrc ? (
+              <OffthreadVideo
+                src={visibleVideoSrc}
+                muted
+                loop
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : visibleImageSrc ? (
               <Img
                 src={visibleImageSrc}
                 style={{
@@ -309,12 +321,21 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
               )}
             </div>
             {/* Revealed face */}
-            {surpriseImageSrc && (
+            {(surpriseVideoSrc || surpriseImageSrc) && (
               <div style={{ position: "absolute", inset: 0, opacity: surpriseOpacity }}>
-                <Img
-                  src={surpriseImageSrc}
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
+                {surpriseVideoSrc ? (
+                  <OffthreadVideo
+                    src={surpriseVideoSrc}
+                    muted
+                    loop
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <Img
+                    src={surpriseImageSrc}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                )}
               </div>
             )}
           </div>

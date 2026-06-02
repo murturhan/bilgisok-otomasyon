@@ -1,4 +1,4 @@
-// REV 016/01JUN26 - /api/random-surprise-box endpoint + changeBoxApi + WYR submit fix
+// REV 017/02JUN26 - video yükleme desteği: customVideos + uploadVideoAndPreview + 4 slot
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -420,6 +420,7 @@ const CHAT_ID = ${JSON.stringify(String(chat_id))};
 const N = ${questions.length};
 const QUESTIONS = ${JSON.stringify(questions)};
 const customImages = {};
+const customVideos = {};
 
 function val(id){const e=document.getElementById(id);return e?e.value:"";}
 function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
@@ -433,6 +434,22 @@ function uploadAndPreview(fileInputId,previewId,key){
       customImages[key]=e.target.result;
       var box=document.getElementById(previewId);
       box.innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span>';
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+
+function uploadVideoAndPreview(fileInputId,previewId,key){
+  var inp=document.getElementById(fileInputId);
+  inp.onchange=function(){
+    var file=inp.files[0];if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(e){
+      customVideos[key]=e.target.result;
+      var box=document.getElementById(previewId);
+      var mb=(file.size/1024/1024).toFixed(1);
+      box.innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span>';
     };
     reader.readAsDataURL(file);
   };
@@ -601,6 +618,8 @@ async function submit_(level, applyEdits){
           regen_surprise_image:chk("q"+i+"_rs"),
           custom_visible_image:customImages["cv"+i]||null,
           custom_surprise_image:customImages["cs"+i]||null,
+          custom_visible_video:customVideos["cvv"+i]||null,
+          custom_surprise_video:customVideos["csv"+i]||null,
         };
       } else {
         edits[String(i)]={
@@ -616,6 +635,8 @@ async function submit_(level, applyEdits){
           regen_fact_image:chk("q"+i+"_rf"),
           custom_question_image:customImages["cq"+i]||null,
           custom_fact_image:customImages["cf"+i]||null,
+          custom_question_video:customVideos["cqv"+i]||null,
+          custom_fact_video:customVideos["cfv"+i]||null,
         };
       }
     }
@@ -718,6 +739,8 @@ function buildQuestionCard(q, i) {
       <div class="img-actions">
         <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cq_file','q${i}_qimg','cq${i}')">⬆ Yükle</button>
         <input type="file" id="q${i}_cq_file" accept="image/*">
+        <button type="button" class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" onclick="uploadVideoAndPreview('q${i}_cqv_file','q${i}_qimg','cqv${i}')">🎬 Video</button>
+        <input type="file" id="q${i}_cqv_file" accept=".mp4,.mov,.webm">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rq_btn" onclick="toggleRegen('q${i}_rq','q${i}_rq_btn','cq${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rq" style="display:none">
       </div>
@@ -738,6 +761,8 @@ function buildQuestionCard(q, i) {
       <div class="img-actions">
         <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cf_file','q${i}_fimg','cf${i}')">⬆ Yükle</button>
         <input type="file" id="q${i}_cf_file" accept="image/*">
+        <button type="button" class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" onclick="uploadVideoAndPreview('q${i}_cfv_file','q${i}_fimg','cfv${i}')">🎬 Video</button>
+        <input type="file" id="q${i}_cfv_file" accept=".mp4,.mov,.webm">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rf_btn" onclick="toggleRegen('q${i}_rf','q${i}_rf_btn','cf${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rf" style="display:none">
       </div>
@@ -778,6 +803,8 @@ function buildWyrCard(q, i) {
       <div class="img-actions">
         <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cv_file','q${i}_vimg','cv${i}')">⬆ Yükle</button>
         <input type="file" id="q${i}_cv_file" accept="image/*">
+        <button type="button" class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" onclick="uploadVideoAndPreview('q${i}_cvv_file','q${i}_vimg','cvv${i}')">🎬 Video</button>
+        <input type="file" id="q${i}_cvv_file" accept=".mp4,.mov,.webm">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rv_btn" onclick="toggleRegen('q${i}_rv','q${i}_rv_btn','cv${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rv" style="display:none">
       </div>
@@ -800,6 +827,8 @@ function buildWyrCard(q, i) {
       <div class="img-actions">
         <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cs_file','q${i}_simg','cs${i}')">⬆ Yükle</button>
         <input type="file" id="q${i}_cs_file" accept="image/*">
+        <button type="button" class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" onclick="uploadVideoAndPreview('q${i}_csv_file','q${i}_simg','csv${i}')">🎬 Video</button>
+        <input type="file" id="q${i}_csv_file" accept=".mp4,.mov,.webm">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rs_btn" onclick="toggleRegen('q${i}_rs','q${i}_rs_btn','cs${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rs" style="display:none">
       </div>

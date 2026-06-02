@@ -1,4 +1,4 @@
-// REV 004/30MAY26 - WouldYouRatherQuestion: surprise_box_image_path/url eklendi
+// REV 005/02JUN26 - video_url alanları eklendi (question/fact/wyr visible+surprise)
 import { z } from "zod";
 
 export const questionSchema = z.object({
@@ -35,6 +35,8 @@ export const questionSchema = z.object({
   question_audio_duration: z.number().default(8.0),
   answer_audio_duration: z.number().default(8.0),
   question_type: z.string().optional(),
+  question_video_url: z.string().optional(),
+  fun_fact_video_url: z.string().optional(),
 }).passthrough();
 
 export type Question = z.infer<typeof questionSchema>;
@@ -44,6 +46,7 @@ export interface WyrVisibleOption {
   image_path?: string;
   image_url?: string;
   image_prompt?: string;
+  video_url?: string;
 }
 
 export interface WyrSurpriseOption {
@@ -53,6 +56,7 @@ export interface WyrSurpriseOption {
   surprise_image_url?: string;
   surprise_image_prompt?: string;
   surprise_is_good: boolean;
+  surprise_video_url?: string;
 }
 
 export interface WouldYouRatherQuestion {

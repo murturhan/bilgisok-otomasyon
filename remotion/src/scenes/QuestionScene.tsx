@@ -1,4 +1,4 @@
-// REV 016/30MAY26 - ImageCard cerceve kalin + highlightPalette renk
+// REV 017/02JUN26 - video_url desteği: OffthreadVideo ImageCard'da
 import React from "react";
 import {
   AbsoluteFill,
@@ -10,6 +10,7 @@ import {
   staticFile,
   Sequence,
   Img,
+  OffthreadVideo,
 } from "remotion";
 import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor, highlightPalette } from "../styles/theme";
 import { Question, JessPoses } from "../types/schemas";
@@ -28,6 +29,8 @@ interface QuestionSceneProps {
   imageSrc: string;
   revealImageSrc?: string;
   funFactImageSrc?: string;
+  videoSrc?: string;
+  funFactVideoSrc?: string;
   questionNumber: number;
   totalQuestions: number;
   theme: ThemeColor;
@@ -47,6 +50,8 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
   imageSrc,
   revealImageSrc,
   funFactImageSrc,
+  videoSrc,
+  funFactVideoSrc,
   questionNumber,
   totalQuestions,
   theme,
@@ -266,6 +271,8 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           question={question}
           imageSrc={currentImageSrc}
           funFactImageSrc={funFactImageSrc}
+          videoSrc={videoSrc}
+          funFactVideoSrc={funFactVideoSrc}
           theme={theme}
           phases={phases}
           inFunFact={inFunFact}
@@ -284,6 +291,8 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           question={question}
           imageSrc={currentImageSrc}
           funFactImageSrc={funFactImageSrc}
+          videoSrc={videoSrc}
+          funFactVideoSrc={funFactVideoSrc}
           theme={theme}
           phases={phases}
           inFunFact={inFunFact}
@@ -350,6 +359,8 @@ interface LayoutProps {
   question: Question;
   imageSrc: string;
   funFactImageSrc?: string;
+  videoSrc?: string;
+  funFactVideoSrc?: string;
   theme: ThemeColor;
   phases: ReturnType<typeof computeQuestionPhases>;
   inFunFact: boolean;
@@ -368,7 +379,7 @@ interface LayoutProps {
 }
 
 const LongLayout: React.FC<LayoutProps> = ({
-  question, imageSrc, funFactImageSrc, phases,
+  question, imageSrc, funFactImageSrc, videoSrc, funFactVideoSrc, phases,
   inFunFact, isRevealed, revealImageTransition, width, height,
   localFrame, borderColor = BRAND.white,
 }) => {
@@ -427,6 +438,7 @@ const LongLayout: React.FC<LayoutProps> = ({
           >
             <ImageCard
               src={imageSrc}
+              videoSrc={videoSrc}
               width={leftWidth}
               height={imageHeight}
               isReveal={isRevealed}
@@ -484,11 +496,12 @@ const LongLayout: React.FC<LayoutProps> = ({
               {/* SOL: Resim */}
               <ImageCard
                 src={funFactImageSrc || imageSrc}
+                videoSrc={funFactVideoSrc || videoSrc}
                 width={factColWidth}
                 height={factColHeight}
                 isReveal={false}
                 revealTransition={1}
-                showAsPlaceholder={question.show_image === false && !funFactImageSrc}
+                showAsPlaceholder={question.show_image === false && !funFactImageSrc && !funFactVideoSrc}
                 borderColor={borderColor}
               />
 
@@ -523,7 +536,7 @@ const LongLayout: React.FC<LayoutProps> = ({
 };
 
 const ShortsLayout: React.FC<LayoutProps> = ({
-  question, imageSrc, funFactImageSrc, phases, inDrumRoll, inSilentPause, inCountdown,
+  question, imageSrc, funFactImageSrc, videoSrc, funFactVideoSrc, phases, inDrumRoll, inSilentPause, inCountdown,
   inFunFact, isRevealed, revealImageTransition, width, height, localFrame, borderColor = BRAND.white,
 }) => {
   const bodyTop = 320;  // shorts header 267 + 53 padding (resim biraz daha aşağı)
@@ -575,6 +588,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
           {/* RESİM */}
           <ImageCard
             src={imageSrc}
+            videoSrc={videoSrc}
             width={contentWidth}
             height={imageHeight}
             isReveal={isRevealed}
@@ -626,17 +640,19 @@ const ShortsLayout: React.FC<LayoutProps> = ({
           const factBoxWidth = contentWidth;
           const factBoxHeight = Math.floor(height * 0.43);
           const factImageSrc = funFactImageSrc || imageSrc;
+          const factVideoSrc = funFactVideoSrc || videoSrc;
           
           return (
             <>
               {/* Resim üstte */}
               <ImageCard
                 src={factImageSrc}
+                videoSrc={factVideoSrc}
                 width={factBoxWidth}
                 height={factBoxHeight}
                 isReveal={false}
                 revealTransition={1}
-                showAsPlaceholder={question.show_image === false && !funFactImageSrc}
+                showAsPlaceholder={question.show_image === false && !funFactImageSrc && !factVideoSrc}
                 borderColor={borderColor}
               />
               
@@ -732,6 +748,7 @@ const AnswerStack: React.FC<AnswerStackProps> = ({
 
 interface ImageCardProps {
   src: string;
+  videoSrc?: string;
   width: number;
   height: number;
   isReveal?: boolean;
@@ -751,7 +768,7 @@ interface ImageCardProps {
 }
 
 const ImageCard: React.FC<ImageCardProps> = ({
-  src, width, height, isReveal = false, revealTransition = 0,
+  src, videoSrc, width, height, isReveal = false, revealTransition = 0,
   blurAmount = 0, fusePhase = 0, burstActive = false, burstLocalFrame = 0,
   showAsPlaceholder = false, borderColor = BRAND.white,
 }) => {
@@ -762,7 +779,7 @@ const ImageCard: React.FC<ImageCardProps> = ({
     ? interpolate(revealTransition, [0, 0.5, 1], [0.5, 0.8, 1])
     : 1;
   
-  if (!src && !showAsPlaceholder) return null;
+  if (!src && !videoSrc && !showAsPlaceholder) return null;
   
   // Fitil için SVG path: dikdörtgen çerçeve (saat yönünde, üst-orta'dan başlar)
   // fusePhase 0..1 → strokeDashoffset ile ilerle
@@ -845,6 +862,17 @@ const ImageCard: React.FC<ImageCardProps> = ({
               zIndex: 2,
             }}>?</div>
           </div>
+        ) : videoSrc ? (
+          <OffthreadVideo
+            src={videoSrc}
+            muted
+            loop
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
         ) : src ? (
           <Img
             src={src}

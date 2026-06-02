@@ -1,4 +1,4 @@
-// REV 002/01JUN26 - WYR regen/custom gorsel: visible=question slot, surprise=fact slot
+// REV 003/02JUN26 - custom_video upload: MC question/fact + WYR visible/surprise
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -79,6 +79,47 @@ function base64ToBuffer(dataUrl) {
   const match = String(dataUrl || "").match(/^data:image\/(\w+);base64,(.+)$/);
   if (!match) return null;
   return { ext: match[1] === "jpeg" ? "jpg" : match[1], buffer: Buffer.from(match[2], "base64") };
+}
+
+/**
+ * Base64 video data URL → Buffer
+ */
+function base64ToVideoBuffer(dataUrl) {
+  const match = String(dataUrl || "").match(/^data:(video\/[\w+.-]+);base64,(.+)$/);
+  if (!match) return null;
+  const mime = match[1]; // "video/mp4", "video/quicktime", "video/webm"
+  let ext = mime.split("/")[1];
+  if (ext === "quicktime") ext = "mov";
+  return { ext, mime, buffer: Buffer.from(match[2], "base64") };
+}
+
+/**
+ * Drive'a video yükle, public yap, download URL dön
+ */
+async function driveVideoYukle(slot, decoded, gorselKlasorId) {
+  const slotStr = String(slot).padStart(2, "0");
+  const filename = `video-${slotStr}-${Date.now()}.${decoded.ext}`;
+  const filepath = `/tmp/${filename}`;
+  fs.writeFileSync(filepath, decoded.buffer);
+  try {
+    const uploaded = await driveDosyaYukle({ filename, filepath }, gorselKlasorId, decoded.mime);
+    // Public yap
+    const driveOAuth = google.drive({ version: "v3", auth: getOAuthClient() });
+    try {
+      await driveOAuth.permissions.create({
+        fileId: uploaded.drive_id,
+        requestBody: { role: "reader", type: "anyone" },
+        fields: "id",
+      });
+    } catch (e) {
+      if (!String(e.message || "").includes("already exists")) {
+        console.warn(`Video permission hata: ${e.message}`);
+      }
+    }
+    return `https://drive.google.com/uc?export=download&id=${uploaded.drive_id}`;
+  } finally {
+    try { fs.unlinkSync(filepath); } catch (e) {}
+  }
 }
 
 async function main() {
@@ -188,6 +229,31 @@ async function main() {
         if (typeof edit.jess_reaction === "string") q.jess_reaction = edit.jess_reaction;
         if (typeof edit.surprise_box_image_url === "string") q.surprise_box_image_url = edit.surprise_box_image_url;
 
+        // WYR custom VIDEO upload (görsel yerine video)
+        if (edit.custom_visible_video) {
+          const decoded = base64ToVideoBuffer(edit.custom_visible_video);
+          if (decoded) {
+            const slot = slotForQuestion(idx, "question");
+            const videoUrl = await driveVideoYukle(slot, decoded, gorselKlasorId);
+            if (!q.visible_option) q.visible_option = {};
+            q.visible_option.video_url = videoUrl;
+            customUploadedCount++;
+            console.log(`WYR visible video yuklendi: slot ${slot}`);
+          }
+        }
+
+        if (edit.custom_surprise_video) {
+          const decoded = base64ToVideoBuffer(edit.custom_surprise_video);
+          if (decoded) {
+            const slot = slotForQuestion(idx, "fact");
+            const videoUrl = await driveVideoYukle(slot, decoded, gorselKlasorId);
+            if (!q.surprise_option) q.surprise_option = {};
+            q.surprise_option.surprise_video_url = videoUrl;
+            customUploadedCount++;
+            console.log(`WYR surprise video yuklendi: slot ${slot}`);
+          }
+        }
+
         // WYR custom image upload (aynı slotlar: visible=question, surprise=fact)
         if (edit.custom_visible_image) {
           const decoded = base64ToBuffer(edit.custom_visible_image);
@@ -239,6 +305,29 @@ async function main() {
       q.question_audio_text = `Question ${idx + 1}. ${q.question_text} Is it A: ${q.options[0]}, B: ${q.options[1]}, or C: ${q.options[2]}?`;
       q.answer_audio_text = `The correct answer is ${correctLetter}: ${correctOption}! ${q.fun_fact}`;
       
+      // Custom VIDEO upload (görsel yerine video)
+      if (edit.custom_question_video) {
+        const decoded = base64ToVideoBuffer(edit.custom_question_video);
+        if (decoded) {
+          const slot = slotForQuestion(idx, "question");
+          const videoUrl = await driveVideoYukle(slot, decoded, gorselKlasorId);
+          q.question_video_url = videoUrl;
+          customUploadedCount++;
+          console.log(`Custom question video yuklendi: slot ${slot}`);
+        }
+      }
+
+      if (edit.custom_fact_video) {
+        const decoded = base64ToVideoBuffer(edit.custom_fact_video);
+        if (decoded) {
+          const slot = slotForQuestion(idx, "fact");
+          const videoUrl = await driveVideoYukle(slot, decoded, gorselKlasorId);
+          q.fun_fact_video_url = videoUrl;
+          customUploadedCount++;
+          console.log(`Custom fact video yuklendi: slot ${slot}`);
+        }
+      }
+
       // Custom image upload (öncelikli: FLUX'a gitmeden direkt upload)
       if (edit.custom_question_image) {
         const decoded = base64ToBuffer(edit.custom_question_image);

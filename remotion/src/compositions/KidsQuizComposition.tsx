@@ -1,4 +1,4 @@
-// REV 012/30MAY26 - WYR: surpriseBoxSrc Drive'dan random kutu görseli
+// REV 013/02JUN26 - video_url desteği: videoSrc/funFactVideoSrc/visibleVideoSrc/surpriseVideoSrc
 import React from "react";
 import {
   AbsoluteFill,
@@ -185,6 +185,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           const surpriseBoxSrc = wyrQ.surprise_box_image_path
             ? staticFile(wyrQ.surprise_box_image_path)
             : wyrQ.surprise_box_image_url || "";
+          const visibleVideoSrc = wyrQ.visible_option?.video_url || "";
+          const surpriseVideoSrc = wyrQ.surprise_option?.surprise_video_url || "";
           return (
             <React.Fragment key={idx}>
               <Sequence from={startFrame} durationInFrames={wyrPhases.end}>
@@ -192,6 +194,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
                   question={wyrQ}
                   visibleImageSrc={visibleSrc}
                   surpriseImageSrc={surpriseSrc}
+                  visibleVideoSrc={visibleVideoSrc}
+                  surpriseVideoSrc={surpriseVideoSrc}
                   surpriseBoxSrc={surpriseBoxSrc}
                   questionNumber={idx + 1}
                   totalQuestions={questions.length}
@@ -218,6 +222,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         const funFactImageSrc = (q as any).fun_fact_image_path
           ? staticFile((q as any).fun_fact_image_path)
           : imageSrc;
+        const videoSrc: string = (q as any).question_video_url || "";
+        const funFactVideoSrc: string = (q as any).fun_fact_video_url || "";
         const revealImageSrc = (q as any).reveal_image_path
           ? staticFile((q as any).reveal_image_path)
           : undefined;
@@ -230,6 +236,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
                 imageSrc={imageSrc}
                 revealImageSrc={revealImageSrc}
                 funFactImageSrc={funFactImageSrc}
+                videoSrc={videoSrc}
+                funFactVideoSrc={funFactVideoSrc}
                 questionNumber={idx + 1}
                 totalQuestions={questions.length}
                 theme={theme}

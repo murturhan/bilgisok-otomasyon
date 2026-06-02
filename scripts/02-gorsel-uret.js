@@ -1,4 +1,4 @@
-// REV 000/25MAY26 - 02 sonrasi 02.5-onay-tetikle otomatik dispatch
+// REV 001/02JUN26 - video_url olan slotları FLUX'tan atla
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -76,13 +76,54 @@ async function main() {
     console.log("📂 Drive'da mevcut görseller taranıyor (resume modu)...");
     const mevcutIndexler = await mevcutGorselIndexleri(gorselKlasorId);
     console.log(`   ${mevcutIndexler.size}/${toplam} görsel zaten mevcut`);
-    
+
+    // Video URL olan slotları tespit et (video varsa FLUX atla)
+    const videoSlotlar = new Set();
+    try {
+      const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
+      let qData = null;
+      const sesRes = await drive.files.list({
+        q: `'${job.drive_folder_id}' in parents and name='02-ses' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: "files(id)", pageSize: 1,
+      });
+      if (sesRes.data.files?.length) {
+        const jr = await drive.files.list({
+          q: `'${sesRes.data.files[0].id}' in parents and name='questions.json' and trashed=false`,
+          fields: "files(id)", pageSize: 1,
+        });
+        if (jr.data.files?.length) {
+          const r = await drive.files.get({ fileId: jr.data.files[0].id, alt: "media" }, { responseType: "text" });
+          qData = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
+        }
+      }
+      if (!qData) {
+        const ar = await drive.files.list({
+          q: `'${job.drive_folder_id}' in parents and name='questions.json' and trashed=false`,
+          fields: "files(id)", pageSize: 1,
+        });
+        if (ar.data.files?.length) {
+          const r = await drive.files.get({ fileId: ar.data.files[0].id, alt: "media" }, { responseType: "text" });
+          qData = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
+        }
+      }
+      if (qData?.questions) {
+        qData.questions.forEach((q, i) => {
+          const isWyr = q.question_type === "would_you_rather";
+          if (isWyr ? q.visible_option?.video_url : q.question_video_url) videoSlotlar.add(2 * i + 1);
+          if (isWyr ? q.surprise_option?.surprise_video_url : q.fun_fact_video_url) videoSlotlar.add(2 * i + 2);
+        });
+        if (videoSlotlar.size > 0) console.log(`   ${videoSlotlar.size} slot video ile dolu, FLUX atlanacak`);
+      }
+    } catch (e) {
+      console.warn(`questions.json video kontrolü atlandı: ${e.message}`);
+    }
+
     // Sadece eksik prompt'ları üret - orijinal index'i de tut
     const eksikPromptlar = [];
     const eksikOrijinalIndexler = [];
     for (let i = 0; i < job.ai_gorsel_prompts.length; i++) {
       const oneBased = i + 1;
-      if (!mevcutIndexler.has(oneBased)) {
+      if (!mevcutIndexler.has(oneBased) && !videoSlotlar.has(oneBased)) {
         eksikPromptlar.push(job.ai_gorsel_prompts[i]);
         eksikOrijinalIndexler.push(i);
       }
