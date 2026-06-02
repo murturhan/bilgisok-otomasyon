@@ -250,7 +250,7 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
                   filter: "none",  // her zaman net, asla blur yok
                 }}
               />
-            )}
+            ) : null}
           </div>
           <div style={{
             padding: isVertical ? "10px 14px" : "12px 18px",
