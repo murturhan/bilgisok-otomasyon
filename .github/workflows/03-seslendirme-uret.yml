@@ -1,6 +1,5 @@
-# REV 000/25MAY26 - WORKFLOW_DISPATCH_TOKEN eklendi
+# REV 001/04JUN26 - stage input eklendi (Parça 3/4: skip_stage2 akışı için)
 name: 03 - Seslendirme Üret
-# REVISION: WORKFLOW_DISPATCH_TOKEN eklendi (03 bitince 07 tetikleyebilsin) 2026-05-25
 
 on:
   repository_dispatch:
@@ -10,6 +9,10 @@ on:
       job_id:
         description: 'Job ID (run_id)'
         required: true
+      stage:
+        description: 'Aşama (skipped=02 atlandı, normal=02 tamamlandı)'
+        required: false
+        default: 'normal'
 jobs:
   seslendirme-uret:
     runs-on: ubuntu-latest
@@ -37,13 +40,15 @@ jobs:
             googleapis \
             axios
       
-      - name: Job ID belirle
+      - name: Parametreleri belirle
         id: params
         run: |
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             echo "job_id=${{ github.event.client_payload.job_id }}" >> $GITHUB_OUTPUT
+            echo "stage=${{ github.event.client_payload.stage || 'normal' }}" >> $GITHUB_OUTPUT
           else
             echo "job_id=${{ github.event.inputs.job_id }}" >> $GITHUB_OUTPUT
+            echo "stage=${{ github.event.inputs.stage || 'normal' }}" >> $GITHUB_OUTPUT
           fi
       
       - name: Seslendirme üret (Google Cloud TTS)
@@ -59,4 +64,5 @@ jobs:
           GITHUB_REPO_OWNER: ${{ github.repository_owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
+          STAGE: ${{ steps.params.outputs.stage }}
         run: node scripts/03-seslendirme-uret.js

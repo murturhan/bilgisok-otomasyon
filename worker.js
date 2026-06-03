@@ -1,4 +1,4 @@
-// REV 020/04JUN26 - Parça 2/4: stage=1 içerik onay sayfası + /api/icerik-onay + /api/upload-medya
+// REV 021/04JUN26 - Parça 3/4: dispatch partial_regen+stage, gorsel-NN upload naming, collectSorular extra fields
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1170,15 +1170,18 @@ async function uploadFile(i,slotKey,input,isVideo){
 
 function collectSorular(){
   const result=[];
+  const letters=['A','B','C'];
   QUESTIONS.forEach((q,i)=>{
     if(deletedIdx.has(i))return;
     const isWyr=q.question_type==='would_you_rather';
+    const qNum=result.length+1;
     if(isWyr){
       result.push({
+        ...q, // preserve original fields (jess_speech, question_audio_text, etc.)
         question_type:'would_you_rather',
         question_text:'Pick One!',
-        visible_option:{label:val('q'+i+'_vl'),image_prompt:val('q'+i+'_p_visible_image')},
-        surprise_option:{label:val('q'+i+'_sl'),surprise_outcome:val('q'+i+'_so'),surprise_image_prompt:val('q'+i+'_p_surprise_image'),surprise_is_good:chk('q'+i+'_sg')},
+        visible_option:{...(q.visible_option||{}),label:val('q'+i+'_vl'),image_prompt:val('q'+i+'_p_visible_image')},
+        surprise_option:{...(q.surprise_option||{}),label:val('q'+i+'_sl'),surprise_outcome:val('q'+i+'_so'),surprise_image_prompt:val('q'+i+'_p_surprise_image'),surprise_is_good:chk('q'+i+'_sg')},
         jess_reaction:val('q'+i+'_jr'),
         flux_visible_image:chk('q'+i+'_flux_visible_image'),
         flux_surprise_image:chk('q'+i+'_flux_surprise_image'),
@@ -1186,14 +1189,24 @@ function collectSorular(){
         uploaded_surprise_url:uploadedUrls[i+'_surprise_image']||null,
       });
     }else{
+      const qt=val('q'+i+'_qt');
+      const opts=[val('q'+i+'_o0'),val('q'+i+'_o1'),val('q'+i+'_o2')];
+      const ca=parseInt(val('q'+i+'_ca'))||0;
+      const ff=val('q'+i+'_ff');
+      // Regenerate audio texts based on edited content
+      const qaText='Question '+qNum+'. '+qt+' Is it '+opts.map((o,j)=>letters[j]+': '+o).join(', ')+'?';
+      const aaText='The correct answer is '+letters[ca]+': '+opts[ca]+'! '+ff;
       result.push({
+        ...q, // preserve: difficulty, show_image, option_flags, topic_emojis etc.
         question_type:'multiple_choice',
-        question_text:val('q'+i+'_qt'),
-        options:[val('q'+i+'_o0'),val('q'+i+'_o1'),val('q'+i+'_o2')],
-        correct_answer:parseInt(val('q'+i+'_ca'))||0,
-        fun_fact:val('q'+i+'_ff'),
+        question_text:qt,
+        options:opts,
+        correct_answer:ca,
+        fun_fact:ff,
         image_prompt:val('q'+i+'_p_image'),
         fun_fact_image_prompt:val('q'+i+'_p_fact_image'),
+        question_audio_text:qaText,
+        answer_audio_text:aaText,
         flux_image:chk('q'+i+'_flux_image'),
         flux_fact_image:chk('q'+i+'_flux_fact_image'),
         uploaded_image_url:uploadedUrls[i+'_image']||null,
@@ -1253,10 +1266,21 @@ async function handleIcerikOnay(request, env, url, ctx) {
   }
 
   // Workflow dispatch
+  const jobFormat = mevcut?.data?.job?.format || "long";
   if (action === "stage2_flux") {
-    ctx.waitUntil(githubDispatch("gorsel_uret", { job_id: jobId, chat_id: String(chat_id) }, env));
+    ctx.waitUntil(githubDispatch("gorsel_uret", {
+      job_id: jobId,
+      chat_id: String(chat_id),
+      format: jobFormat,
+      partial_regen: true,
+      stage: "2",
+    }, env));
   } else if (action === "skip_stage2") {
-    ctx.waitUntil(githubDispatch("seslendirme_uret", { job_id: jobId, chat_id: String(chat_id) }, env));
+    ctx.waitUntil(githubDispatch("seslendirme_uret", {
+      job_id: jobId,
+      chat_id: String(chat_id),
+      stage: "skipped",
+    }, env));
   }
 
   return json({ ok: true });
@@ -1377,7 +1401,10 @@ async function handleUploadMedya(request, env, url) {
     const fileBuffer = await file.arrayBuffer();
     const mimeType = file.type || "application/octet-stream";
     const ext = file.name ? file.name.split(".").pop() : "bin";
-    const filename = `gorsel-stage1-${soruIdx}-${slotKey}.${ext}`;
+    // gorsel-NN naming so 02.5 can discover via /^gorsel-(\d+)-/ pattern
+    const soruIdxInt = parseInt(soruIdx) || 0;
+    const gorselNum = (slotKey === "image" || slotKey === "visible_image") ? (2 * soruIdxInt + 1) : (2 * soruIdxInt + 2);
+    const filename = `gorsel-${String(gorselNum).padStart(2, "0")}-stage1-${Date.now()}.${ext}`;
 
     const boundary2 = "upload-boundary-123456";
     const metaJson = JSON.stringify({ name: filename, parents: [gorselFolderId] });

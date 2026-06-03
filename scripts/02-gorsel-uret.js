@@ -1,4 +1,4 @@
-// REV 001/02JUN26 - video_url olan slotları FLUX'tan atla
+// REV 002/04JUN26 - partial_regen modu: stage=1 editlerinden sadece işaretli slotları üret
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -22,7 +22,13 @@ import {
 import { fluxRotationCagri } from "./lib/cloudflare.js";
 import { telegram } from "./lib/telegram.js";
 
-const { JOB_ID } = process.env;
+const {
+  JOB_ID,
+  PARTIAL_REGEN,
+  STAGE: STAGE_ENV,
+} = process.env;
+
+const IS_PARTIAL_REGEN = PARTIAL_REGEN === "true" || PARTIAL_REGEN === "1";
 
 /**
  * Drive'daki klasörde mevcut "gorsel-NN-*" dosyalarını listele.
@@ -240,4 +246,181 @@ async function main() {
   }
 }
 
-main();
+// ─── PARTIAL REGEN: stage=1 editlerinden sadece flux_isaretli slotları üret ────
+
+async function questionsJsonOkuFromDrive(driveFolderId) {
+  const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
+  // 02-ses klasöründe ara
+  const sesRes = await drive.files.list({
+    q: `'${driveFolderId}' in parents and name='02-ses' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: "files(id)", pageSize: 1,
+  });
+  if (sesRes.data.files?.length) {
+    const jr = await drive.files.list({
+      q: `'${sesRes.data.files[0].id}' in parents and name='questions.json' and trashed=false`,
+      fields: "files(id, name)", pageSize: 1,
+    });
+    if (jr.data.files?.length) {
+      const r = await drive.files.get({ fileId: jr.data.files[0].id, alt: "media" }, { responseType: "text" });
+      return { data: typeof r.data === "string" ? JSON.parse(r.data) : r.data, fileId: jr.data.files[0].id };
+    }
+  }
+  // Ana klasörde ara (fallback)
+  const ar = await drive.files.list({
+    q: `'${driveFolderId}' in parents and name='questions.json' and trashed=false`,
+    fields: "files(id, name)", pageSize: 1,
+  });
+  if (ar.data.files?.length) {
+    const r = await drive.files.get({ fileId: ar.data.files[0].id, alt: "media" }, { responseType: "text" });
+    return { data: typeof r.data === "string" ? JSON.parse(r.data) : r.data, fileId: ar.data.files[0].id };
+  }
+  throw new Error("questions.json Drive'da bulunamadı");
+}
+
+async function questionsJsonKaydet(fileId, qData) {
+  const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
+  const content = JSON.stringify(qData, null, 2);
+  // Drive'a yaz - SA drive scope ile (read-only SA, write için OAuth ile deneme)
+  // Burada tmpFile yolu: fs.writeFile + driveDosyaYukle pattern kullanılamaz (aynı fileId güncelleme gerekir)
+  // google.js drive.files.update ile güncelle
+  await drive.files.update({
+    fileId,
+    media: {
+      mimeType: "application/json",
+      body: content,
+    },
+  });
+  console.log(`✓ questions.json güncellendi (fileId: ${fileId})`);
+}
+
+async function dispatch02_5(job) {
+  try {
+    const repoOwner = process.env.GITHUB_REPO_OWNER || "murturhan";
+    const repoName = process.env.GITHUB_REPO_NAME || "bilgisok-otomasyon";
+    const token = process.env.WORKFLOW_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
+    if (!token) { console.warn("⚠ WORKFLOW_DISPATCH_TOKEN yok, 02.5 manuel tetiklenmeli"); return; }
+    const r = await fetch(
+      `https://api.github.com/repos/${repoOwner}/${repoName}/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Authorization": `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "geniminitests-gorsel-uret",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ event_type: "onay_tetikle", client_payload: { job_id: JOB_ID, chat_id: job.chat_id } }),
+      }
+    );
+    if (r.ok) { console.log("✅ 02.5-onay-tetikle dispatch edildi"); }
+    else { const t = await r.text(); console.warn(`⚠ 02.5 dispatch hatası: ${r.status} ${t.substring(0,200)}`); }
+  } catch (e) { console.warn(`⚠ 02.5 dispatch hatası: ${e.message}`); }
+}
+
+async function partialRegenMain() {
+  console.log(`Job: ${JOB_ID} [PARTIAL_REGEN mode, stage=${STAGE_ENV || "2"}]`);
+  const job = await jobOku(JOB_ID);
+  if (!job.drive_folder_id) throw new Error("drive_folder_id yok");
+
+  const { data: qData, fileId: qFileId } = await questionsJsonOkuFromDrive(job.drive_folder_id);
+  const questions = qData.questions || [];
+  console.log(`questions.json okundu: ${questions.length} soru`);
+
+  // 01-gorseller klasörünü bul
+  const altKlasorler = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
+  if (!altKlasorler.length) throw new Error("01-gorseller klasörü bulunamadı");
+  const gorselKlasorId = altKlasorler[0].id;
+
+  await jobGuncelle(JOB_ID, { gorsel_status: "running_partial" });
+
+  // FLUX üretilecek slotları belirle
+  const fluxSlots = [];
+  questions.forEach((q, i) => {
+    const isWyr = q.question_type === "would_you_rather";
+    if (isWyr) {
+      if (q.flux_visible_image !== false && !q.uploaded_visible_url) {
+        const prompt = q.visible_option?.image_prompt;
+        if (prompt) fluxSlots.push({ questionIdx: i, slotType: "visible", prompt, gorselNum: 2 * i + 1 });
+      }
+      if (q.flux_surprise_image !== false && !q.uploaded_surprise_url) {
+        const prompt = q.surprise_option?.surprise_image_prompt;
+        if (prompt) fluxSlots.push({ questionIdx: i, slotType: "surprise", prompt, gorselNum: 2 * i + 2 });
+      }
+    } else {
+      if (q.flux_image !== false && !q.uploaded_image_url) {
+        if (q.image_prompt) fluxSlots.push({ questionIdx: i, slotType: "question", prompt: q.image_prompt, gorselNum: 2 * i + 1 });
+      }
+      if (q.flux_fact_image !== false && !q.uploaded_fact_image_url) {
+        if (q.fun_fact_image_prompt) fluxSlots.push({ questionIdx: i, slotType: "fact", prompt: q.fun_fact_image_prompt, gorselNum: 2 * i + 2 });
+      }
+    }
+  });
+
+  let uretilen = 0;
+  if (fluxSlots.length === 0) {
+    console.log("✅ FLUX üretilecek slot yok (tümü yüklü veya işaretsiz).");
+  } else {
+    console.log(`🎨 ${fluxSlots.length} slot FLUX üretilecek: ${fluxSlots.map(s => `gorsel-${String(s.gorselNum).padStart(2,"0")} (${s.slotType})`).join(", ")}`);
+    const prompts = fluxSlots.map(s => s.prompt);
+    await fluxRotationCagri(prompts, {
+      width: 1280, height: 720,
+      onSuccess: async (filteredIdx, buffer) => {
+        const slot = fluxSlots[filteredIdx];
+        const filename = `gorsel-${String(slot.gorselNum).padStart(2, "0")}-${Date.now()}.jpg`;
+        const filepath = `/tmp/${filename}`;
+        fs.writeFileSync(filepath, buffer);
+        try {
+          const result = await driveDosyaYukle({ filename, filepath }, gorselKlasorId, "image/jpeg");
+          const driveUrl = `https://drive.google.com/thumbnail?id=${result.drive_id}&sz=w800`;
+          // questions.json'daki ilgili alana URL yaz
+          const q = questions[slot.questionIdx];
+          if (slot.slotType === "question") q.question_image_url = driveUrl;
+          else if (slot.slotType === "fact") q.fun_fact_image_url = driveUrl;
+          else if (slot.slotType === "visible") { q.visible_option = q.visible_option || {}; q.visible_option.image_url = driveUrl; }
+          else if (slot.slotType === "surprise") { q.surprise_option = q.surprise_option || {}; q.surprise_option.surprise_image_url = driveUrl; }
+          uretilen++;
+        } catch (e) {
+          console.error(`Drive yükleme hatası (gorsel-${slot.gorselNum}): ${e.message}`);
+        } finally {
+          try { fs.unlinkSync(filepath); } catch (e) {}
+        }
+      },
+    });
+  }
+
+  // questions.json'ı güncellenmiş haliyle Drive'a kaydet
+  try {
+    qData.questions = questions;
+    await questionsJsonKaydet(qFileId, qData);
+  } catch (e) {
+    console.warn(`⚠ questions.json Drive güncelleme hatası (devam): ${e.message}`);
+  }
+
+  const toplamYuklu = fluxSlots.length === 0
+    ? questions.length * 2 // tümü yüklü sayılır
+    : uretilen + (questions.length * 2 - fluxSlots.length); // üretilen + zaten yüklü
+  const status = uretilen === fluxSlots.length ? "completed" : "partial";
+  await jobGuncelle(JOB_ID, { gorsel_status: `${status}:partial_regen` });
+  console.log(`✅ Partial regen tamamlandı: ${uretilen}/${fluxSlots.length} FLUX üretildi.`);
+
+  await telegram(job.chat_id, `🖼 *Görseller hazır* (aşama 1 seçimi)\n\n⏳ Onay sayfası hazırlanıyor...`);
+  await dispatch02_5(job);
+
+  process.exit(0);
+}
+
+// Entry point: partial veya tam mod
+if (IS_PARTIAL_REGEN) {
+  partialRegenMain().catch(async (error) => {
+    console.error("HATA (partial):", error.message);
+    try {
+      const job = await jobOku(JOB_ID);
+      await jobGuncelle(JOB_ID, { gorsel_status: `error: ${error.message.substring(0, 100)}` });
+      await telegram(job.chat_id, `❌ *02-Görsel partial hatası:* ${error.message.substring(0, 300)}`);
+    } catch (e) {}
+    process.exit(1);
+  });
+} else {
+  main();
+}
