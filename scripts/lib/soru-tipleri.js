@@ -1,4 +1,4 @@
-// REV 001/04JUN26 - soru tipi registry (Parça 1/4 refactor)
+// REV 002/04JUN26 - validateSoru + migrateSchema eklendi (Parça 4/4)
 
 export const SORU_TIPLERI = {
   multiple_choice: {
@@ -76,3 +76,27 @@ export function getBosSablon(type) {
 
 // JSON-serializable copy for worker/non-module environments
 export const SORU_TIPLERI_JSON = JSON.parse(JSON.stringify(SORU_TIPLERI));
+
+export function validateSoru(soru) {
+  const tip = getSoruTipi(soru?.question_type);
+  const errors = [];
+  if (!soru?.question_type) errors.push("question_type");
+
+  if (soru?.question_type === "multiple_choice") {
+    if (!soru.question_text?.trim()) errors.push("question_text");
+    if (!Array.isArray(soru.options) || soru.options.length !== 3 || soru.options.some(o => !o?.trim())) errors.push("options");
+    if (typeof soru.correct_answer !== "number" || soru.correct_answer < 0 || soru.correct_answer > 2) errors.push("correct_answer");
+    if (!soru.fun_fact?.trim()) errors.push("fun_fact");
+  } else if (soru?.question_type === "would_you_rather") {
+    if (!soru.visible_option?.label?.trim()) errors.push("visible_option.label");
+    if (!soru.surprise_option?.surprise_outcome?.trim()) errors.push("surprise_option.surprise_outcome");
+    if (!soru.jess_reaction?.trim()) errors.push("jess_reaction");
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+export function migrateSchema(eski, yeni_tip) {
+  // Tip değişiminde: kullanıcı isteğiyle içerik tamamen sıfırlanır
+  return getBosSablon(yeni_tip);
+}

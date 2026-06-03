@@ -1,4 +1,4 @@
-// REV 021/04JUN26 - Parça 3/4: dispatch partial_regen+stage, gorsel-NN upload naming, collectSorular extra fields
+// REV 022/04JUN26 - Parça 4/4: handleIcerikOnay → 02.7 üzerinden dispatch, stage1Edits yapısı, silinen_original_indices
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1222,10 +1222,11 @@ async function submitAction(action){
   st.style.display='block';st.className='';
   st.textContent='⏳ Kaydediliyor ve '+(action==='stage2_flux'?'FLUX görsel üretimi başlatılıyor...':'ses+render başlatılıyor...');
   const sorular=collectSorular();
+  const silineenOriginalIndices=[...deletedIdx]; // deleted original question indices
   try{
     const r=await fetch('/api/icerik-onay/'+JOB_ID,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({video_baslik:val('video_baslik'),sorular,action,chat_id:CHAT_ID}),
+      body:JSON.stringify({video_baslik:val('video_baslik'),sorular,action,chat_id:CHAT_ID,silinen_original_indices:silineenOriginalIndices}),
     });
     const d=await r.json();
     if(d.ok){st.className='ok';st.textContent='✅ Gönderildi! Telegram\'da bildirim alacaksın.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
@@ -1246,42 +1247,44 @@ async function handleIcerikOnay(request, env, url, ctx) {
   const jobId = url.pathname.split("/").pop();
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
-  const { video_baslik = "", sorular = [], action = "stage2_flux", chat_id = "" } = body;
+  const {
+    video_baslik = "",
+    sorular = [],
+    action = "stage2_flux",
+    chat_id = "",
+    silinen_original_indices = [],
+  } = body;
 
-  // GitHub Issue'ya güncel soruları yaz
   const mevcut = await issueVeriOku(jobId, env);
   if (mevcut) {
+    // Structured stage=1 edits (02.7 okuyacak)
+    const stage1Edits = {
+      _stage1_meta: { stage: "1", action, video_baslik },
+      sorular,
+      silinen_original_indices,
+    };
     const updated = {
       job: {
         ...(mevcut.data?.job || {}),
         baslik: video_baslik,
         questions: sorular,
       },
-      edits: mevcut.data?.edits || {},
+      edits: stage1Edits,
     };
     await issueGuncelle(mevcut.number, updated, env);
 
-    // Drive'da questions.json güncelle (SA ile)
+    // Drive questions.json ön-güncelleme (02.7'den önce)
     ctx.waitUntil(driveQuestionsGuncelle(mevcut.data?.job?.drive_folder_id, jobId, video_baslik, sorular, env));
   }
 
-  // Workflow dispatch
-  const jobFormat = mevcut?.data?.job?.format || "long";
-  if (action === "stage2_flux") {
-    ctx.waitUntil(githubDispatch("gorsel_uret", {
-      job_id: jobId,
-      chat_id: String(chat_id),
-      format: jobFormat,
-      partial_regen: true,
-      stage: "2",
-    }, env));
-  } else if (action === "skip_stage2") {
-    ctx.waitUntil(githubDispatch("seslendirme_uret", {
-      job_id: jobId,
-      chat_id: String(chat_id),
-      stage: "skipped",
-    }, env));
-  }
+  // 02.7 üzerinden dispatch — 02.7 edits'i okur, uygular, sonraki workflow'u başlatır
+  const chatIdStr = String(chat_id || mevcut?.data?.job?.chat_id || "");
+  ctx.waitUntil(githubDispatch("degisiklik_uygula", {
+    job_id: jobId,
+    chat_id: chatIdStr,
+    stage1_action: action,
+    stage: "1",
+  }, env));
 
   return json({ ok: true });
 }

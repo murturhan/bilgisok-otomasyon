@@ -1,4 +1,4 @@
-// REV 003/02JUN26 - custom_video upload: MC question/fact + WYR visible/surprise
+// REV 004/04JUN26 - stage=1 desteği: soru ekle/sil/tip_değiş, video başlık, silinen medya yedekleme (Parça 4/4)
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -27,14 +27,18 @@ import { telegram } from "./lib/telegram.js";
 const {
   JOB_ID,
   APPROVAL_LEVEL,
+  STAGE,
+  STAGE1_ACTION,
   WORKER_URL: WORKER_URL_RAW,
   GITHUB_TOKEN,
   GITHUB_REPO_OWNER,
   GITHUB_REPO_NAME,
+  GDRIVE_FOLDER_ID,
 } = process.env;
 
 const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
-const APPROVAL = APPROVAL_LEVEL || "full"; // default
+const APPROVAL = APPROVAL_LEVEL || "full"; // default (stage=2)
+const IS_STAGE1 = STAGE === "1";
 
 /**
  * Drive klasöründen belirli pattern'e uyan dosyaları sil.
@@ -122,9 +126,66 @@ async function driveVideoYukle(slot, decoded, gorselKlasorId) {
   }
 }
 
+/**
+ * Silinen soruların Drive görsellerini silinen-medya/<JOB_ID>/ klasörüne kopyala.
+ */
+async function yedekSilinenleri(silinenIndices, gorselKlasorId) {
+  if (!silinenIndices?.length) return;
+  if (!GDRIVE_FOLDER_ID) { console.warn("GDRIVE_FOLDER_ID yok, silinen görsel yedekleme atlandı"); return; }
+  const driveOAuth = google.drive({ version: "v3", auth: getOAuthClient() });
+  try {
+    // silinen-medya klasörünü bul/oluştur
+    let smId;
+    const smRes = await driveOAuth.files.list({
+      q: `'${GDRIVE_FOLDER_ID}' in parents and name='silinen-medya' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id)", pageSize: 1,
+    });
+    if (smRes.data.files?.length) {
+      smId = smRes.data.files[0].id;
+    } else {
+      const c = await driveOAuth.files.create({ requestBody: { name: "silinen-medya", mimeType: "application/vnd.google-apps.folder", parents: [GDRIVE_FOLDER_ID] }, fields: "id" });
+      smId = c.data.id;
+    }
+    // <JOB_ID> alt klasörü
+    let backupId;
+    const jbRes = await driveOAuth.files.list({
+      q: `'${smId}' in parents and name='${JOB_ID}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id)", pageSize: 1,
+    });
+    if (jbRes.data.files?.length) {
+      backupId = jbRes.data.files[0].id;
+    } else {
+      const c = await driveOAuth.files.create({ requestBody: { name: JOB_ID, mimeType: "application/vnd.google-apps.folder", parents: [smId] }, fields: "id" });
+      backupId = c.data.id;
+    }
+    // Her silinen soru için gorsel-NN dosyalarını kopyala
+    for (const idx of silinenIndices) {
+      const slotNums = [2 * idx + 1, 2 * idx + 2];
+      for (const slotNum of slotNums) {
+        const slotStr = String(slotNum).padStart(2, "0");
+        try {
+          const filesRes = await driveOAuth.files.list({
+            q: `'${gorselKlasorId}' in parents and name contains 'gorsel-${slotStr}-' and trashed=false`,
+            fields: "files(id, name)", pageSize: 10,
+          });
+          for (const f of filesRes.data.files || []) {
+            await driveOAuth.files.copy({ fileId: f.id, requestBody: { name: f.name, parents: [backupId] }, fields: "id" });
+            console.log(`  Yedeklendi: ${f.name} → silinen-medya/${JOB_ID}/`);
+          }
+        } catch (e) {
+          console.warn(`  Görsel yedeklenemedi (slot ${slotNum}): ${e.message}`);
+        }
+      }
+    }
+    console.log(`✓ Silinen ${silinenIndices.length} sorunun görselleri yedeklendi.`);
+  } catch (e) {
+    console.warn(`yedekSilinenleri hata (devam): ${e.message}`);
+  }
+}
+
 async function main() {
   try {
-    console.log(`Job: ${JOB_ID}, Approval: ${APPROVAL}`);
+    console.log(`Job: ${JOB_ID}, Approval: ${APPROVAL}, Stage: ${STAGE || "2"}`);
     
     if (!WORKER_URL) throw new Error("WORKER_URL eksik");
     if (!GITHUB_TOKEN) throw new Error("GITHUB_TOKEN eksik");
@@ -186,12 +247,62 @@ async function main() {
     }
     
     if (!questionsData) throw new Error("questions.json bulunamadi");
-    
+
     // 4. 01-gorseller klasör id
     const altKlasorler = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
     if (altKlasorler.length === 0) throw new Error("01-gorseller klasoru yok");
     const gorselKlasorId = altKlasorler[0].id;
-    
+
+    // ── STAGE=1 BLOCK (içerik onayı) ────────────────────────────────────────
+    if (IS_STAGE1) {
+      const meta = edits._stage1_meta || {};
+      const sorular = edits.sorular || [];
+      const silinenIndices = edits.silinen_original_indices || [];
+      const videoBaslik = meta.video_baslik || "";
+      const action = STAGE1_ACTION || meta.action || "skip_stage2";
+
+      console.log(`Stage=1: ${sorular.length} soru, ${silinenIndices.length} silinen, action=${action}`);
+
+      // a) Video başlığı güncelle
+      if (videoBaslik) {
+        questionsData.baslik = videoBaslik;
+        console.log(`Video başlığı güncellendi: "${videoBaslik}"`);
+      }
+
+      // b) Silinen soruların Drive görsellerini yedekle
+      await yedekSilinenleri(silinenIndices, gorselKlasorId);
+
+      // c) Questions array'i yeni sorularla değiştir (eklenmiş, silinmiş, tip değişmiş dahil)
+      questionsData.questions = sorular;
+      console.log(`questions.json güncellendi: ${sorular.length} soru`);
+
+      // d) Drive'a yaz
+      await driveWrite.files.update({
+        fileId: questionsFileId,
+        media: { mimeType: "application/json", body: Readable.from(JSON.stringify(questionsData, null, 2)) },
+      });
+      console.log("questions.json Drive'a yazıldı (stage=1)");
+
+      await jobGuncelle(JOB_ID, { onay_status: "completed:stage1" });
+
+      await telegram(
+        job.chat_id,
+        `✅ *İçerik güncellendi!*\n\n📌 ${videoBaslik || questionsData.baslik}\n❓ ${sorular.length} soru\n\n⏳ ${action === "stage2_flux" ? "FLUX görsel üretimi başlatılıyor..." : "Ses üretimi başlatılıyor..."}`
+      );
+
+      // e) Sonraki adımı dispatch et
+      if (action === "stage2_flux") {
+        await tetikle("gorsel_uret", { job_id: JOB_ID, chat_id: job.chat_id, partial_regen: true, stage: "2" });
+        console.log("✅ 02-gorsel-uret (partial_regen) dispatch edildi");
+      } else {
+        await tetikle("seslendirme_uret", { job_id: JOB_ID, chat_id: job.chat_id, stage: "skipped" });
+        console.log("✅ 03-seslendirme-uret dispatch edildi (stage2 atlandı)");
+      }
+
+      process.exit(0);
+    }
+    // ── END STAGE=1 BLOCK ────────────────────────────────────────────────────
+
     // 5. Her edit için: text uygula, regen mark, custom image upload
     const regenQuestionImages = []; // FLUX ile üretilecek
     const regenFactImages = [];
