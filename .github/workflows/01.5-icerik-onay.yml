@@ -1,4 +1,4 @@
-# REV 001/04JUN26 - içerik onay aşaması workflow (Parça 1/4 refactor)
+# REV 002/04JUN26 - googleapis eklendi, GITHUB_TOKEN (Worker auth) + WORKER_URL geçiliyor (Parça 2)
 name: 01.5 - İçerik Onay
 
 on:
@@ -77,6 +77,7 @@ jobs:
           GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
           JOB_ID: ${{ steps.params.outputs.job_id }}
           CHAT_ID: ${{ steps.params.outputs.chat_id }}
           TARIH: ${{ steps.params.outputs.tarih }}

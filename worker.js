@@ -1,18 +1,21 @@
-// REV 019/03JUN26 - onay sayfası tüm butonlar: label tabanlı upload, Cache-Control, hata gösterimi
+// REV 020/04JUN26 - Parça 2/4: stage=1 içerik onay sayfası + /api/icerik-onay + /api/upload-medya
 /**
  * Cloudflare Worker — telegram-to-github
  *
  * Storage: GitHub Issues (GITHUB_TOKEN kullanır, KV gerekmez)
  *
  * Rotalar:
- *   POST /                  → Telegram webhook
- *   POST /api/job/:id       → Job verisini GitHub Issue'ya yaz
- *   GET  /?job=ID           → Onay sayfası HTML
- *   POST /api/submit/:id    → Form submit → edits yaz + GitHub dispatch
- *   GET  /api/edits/:id     → Editleri dön (02.7 için)
- *   GET  /api/random-surprise-box → WYR için random kutu PNG URL'si
+ *   POST /                         → Telegram webhook
+ *   POST /api/job/:id              → Job verisini GitHub Issue'ya yaz
+ *   GET  /?job=ID&stage=1          → İçerik Onay sayfası (YENİ Parça 2)
+ *   GET  /?job=ID                  → Görsel Onay sayfası (mevcut, stage=2)
+ *   POST /api/icerik-onay/:id      → İçerik onay kaydet + dispatch (YENİ)
+ *   POST /api/upload-medya/:id/... → Medya Drive'a yükle (YENİ)
+ *   POST /api/submit/:id           → Görsel form submit → edits yaz + dispatch
+ *   GET  /api/edits/:id            → Editleri dön (02.7 için)
+ *   GET  /api/random-surprise-box  → WYR için random kutu PNG URL'si
  *
- * Secrets: GITHUB_TOKEN, TELEGRAM_BOT_TOKEN
+ * Secrets: GITHUB_TOKEN, TELEGRAM_BOT_TOKEN, GDRIVE_SERVICE_ACCOUNT_JSON
  */
 
 const REPO_OWNER = "murturhan";
@@ -39,7 +42,15 @@ export default {
     if (method === "POST" && path.startsWith("/api/submit/")) {
       return handleSubmit(request, env, url, ctx);
     }
+    if (method === "POST" && path.startsWith("/api/icerik-onay/")) {
+      return handleIcerikOnay(request, env, url, ctx);
+    }
+    if (method === "POST" && path.startsWith("/api/upload-medya/")) {
+      return handleUploadMedya(request, env, url);
+    }
     if (method === "GET" && url.searchParams.has("job")) {
+      const stage = url.searchParams.get("stage");
+      if (stage === "1") return handleContentApprovalPage(request, env, url);
       return handleApprovalPage(request, env, url);
     }
     if (method === "POST") {
@@ -897,6 +908,552 @@ async function githubDispatch(eventType, payload, env) {
   } else {
     console.log(`✓ Dispatched: ${eventType}`, JSON.stringify(payload));
   }
+}
+
+// ─── GET /?job=ID&stage=1 — İçerik Onay Sayfası (Parça 2) ────
+async function handleContentApprovalPage(request, env, url) {
+  const jobId = url.searchParams.get("job") || "";
+  if (!jobId) return new Response("job parametresi eksik", { status: 400 });
+
+  const mevcut = await issueVeriOku(jobId, env);
+  if (!mevcut || !mevcut.data?.job) {
+    return new Response(
+      `<!DOCTYPE html><html><body style="font-family:system-ui;background:#1a1a2e;color:#eee;padding:32px">
+      <h2>❌ Job bulunamadı</h2><p>Job ID: <code>${esc(jobId)}</code></p>
+      <p>01.5-icerik-onay henüz çalışmadı veya veri yok.</p>
+      </body></html>`,
+      { headers: { "Content-Type": "text/html;charset=utf-8" } }
+    );
+  }
+
+  const job = mevcut.data.job;
+  const { baslik = "", format = "", chat_id = "", topic_emojis = [], questions = [], konu = "" } = job;
+
+  const REGISTRY_JS = JSON.stringify({
+    multiple_choice: {
+      label: "Çoktan Seçmeli",
+      template: { question_type: "multiple_choice", question_text: "", options: ["","",""], correct_answer: 0, fun_fact: "", image_prompt: "", fun_fact_image_prompt: "" }
+    },
+    would_you_rather: {
+      label: "Hangisini Tercih Edersin",
+      template: { question_type: "would_you_rather", question_text: "Pick One!", visible_option: { label: "", image_prompt: "" }, surprise_option: { label: "Surprise Box", surprise_outcome: "", surprise_image_prompt: "", surprise_is_good: true }, jess_reaction: "" }
+    }
+  });
+
+  const html = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>İçerik Onayı: ${esc(jobId)}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#111827;color:#f3f4f6;padding:0 0 60px}
+.topbar{background:#1f2937;padding:12px 16px;position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #374151;flex-wrap:wrap}
+.topbar-left{display:flex;flex-direction:column;gap:4px;min-width:200px;flex:1}
+.topbar h1{font-size:.95em;font-weight:700;color:#a78bfa}
+.topbar .meta{font-size:.72em;color:#9ca3af}
+.title-inp{width:100%;background:#111827;color:#f3f4f6;border:1px solid #4b5563;border-radius:6px;padding:5px 9px;font-size:.88em}
+.sticky-btns{display:flex;gap:6px;flex-wrap:wrap}
+.sticky-btns button{padding:7px 12px;border:none;border-radius:6px;font-weight:700;font-size:.78em;cursor:pointer;line-height:1.3}
+.ba{background:#8b5cf6;color:#fff}.bb{background:#0ea5e9;color:#fff}
+button:hover{opacity:.88}
+.cards{padding:12px 16px}
+.card{background:#1f2937;border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid #374151}
+.card-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.card-num{background:#8b5cf6;color:#fff;border-radius:6px;padding:2px 10px;font-size:.8em;font-weight:700;flex-shrink:0}
+.card-num.wyr{background:#f59e0b}
+.type-sel{background:#111827;color:#f3f4f6;border:1px solid #4b5563;border-radius:5px;padding:4px 8px;font-size:.8em;cursor:pointer}
+.del-btn{margin-left:auto;padding:4px 10px;background:#7f1d1d;color:#fca5a5;border:none;border-radius:5px;font-size:.75em;cursor:pointer}
+.del-btn:hover{background:#991b1b}
+.deleted-card{opacity:.4;pointer-events:none}
+.deleted-banner{background:#7f1d1d;color:#fca5a5;padding:4px 10px;border-radius:4px;font-size:.75em;text-align:center;margin-bottom:6px}
+label.lbl{display:block;color:#9ca3af;font-size:.74em;margin:7px 0 3px}
+textarea,input[type=text],input[type=number]{width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 9px;font-size:.86em;resize:vertical;font-family:inherit}
+textarea{min-height:52px}
+.opts-list{display:flex;flex-direction:row;gap:5px;margin-bottom:6px}
+.opt-row{flex:1;min-width:0;display:flex;align-items:center;gap:5px;padding:5px 6px;border-radius:6px;background:#111827;border:1px solid #374151}
+.opt-row.opt-correct{border-color:#10b981;background:#022c22}
+.opt-lbl{font-weight:700;color:#9ca3af;font-size:.85em;min-width:16px;text-align:center;flex-shrink:0}
+.opt-row input[type=text]{flex:1;margin:0;min-width:0}
+.correct-btn{padding:3px 6px;border:1px solid #374151;background:#374151;color:#6b7280;border-radius:4px;font-size:.72em;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.correct-btn.is-correct{background:#064e3b;color:#6ee7b7;border-color:#10b981;font-weight:700}
+.img-slot{background:#0f172a;border-radius:8px;padding:10px;margin-top:8px;border:1px solid #1e293b}
+.img-slot-title{font-size:.76em;color:#a78bfa;font-weight:700;margin-bottom:6px}
+.flux-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+.flux-row label{font-size:.78em;color:#fcd34d;cursor:pointer;display:flex;align-items:center;gap:5px}
+.upload-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.btn-sm{padding:4px 9px;border:1px solid #4b5563;background:#374151;color:#d1d5db;border-radius:5px;font-size:.76em;cursor:pointer}
+.btn-sm:hover{background:#4b5563}
+.btn-upload{border-color:#3b82f6;color:#93c5fd}
+.btn-video{border-color:#6366f1;color:#a5b4fc}
+input[type=file]{position:absolute;width:0;height:0;opacity:0;overflow:hidden;pointer-events:none}
+.preview-box{min-height:60px;background:#111827;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-top:5px;overflow:hidden;font-size:.74em;color:#6b7280}
+.preview-box img,.preview-box video{max-height:90px;max-width:100%;border-radius:5px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#status{margin:10px 16px;padding:10px 14px;border-radius:8px;display:none;font-weight:600;font-size:.88em}
+.ok{background:#064e3b;color:#6ee7b7}.err{background:#7f1d1d;color:#fca5a5}
+.add-q-row{text-align:center;margin-top:10px}
+.add-q-btn{padding:10px 24px;background:#374151;color:#d1d5db;border:2px dashed #4b5563;border-radius:8px;font-size:.9em;cursor:pointer}
+.add-q-btn:hover{border-color:#8b5cf6;color:#a78bfa}
+#type-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center}
+.type-modal-inner{background:#1f2937;border-radius:12px;padding:20px;width:90%;max-width:340px;border:1px solid #374151}
+.type-modal-inner h3{font-size:.95em;color:#f3f4f6;margin-bottom:12px}
+.type-option-btn{display:block;width:100%;padding:10px 14px;margin-bottom:8px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:8px;cursor:pointer;text-align:left;font-size:.86em}
+.type-option-btn:hover{border-color:#8b5cf6;background:#1a1a2e}
+.section-title{font-size:.75em;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 5px}
+.wyr-side{border:1px solid #1e293b;border-radius:8px;padding:10px;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar h1">🦊 GeniMini — İçerik Onayı (Aşama 1)</div>
+    <div class="topbar meta">${esc(jobId)} · ${esc(format)} · ${esc(konu)}</div>
+    <input type="text" id="video_baslik" class="title-inp" value="${esc(baslik)}" placeholder="Video başlığı...">
+  </div>
+  <div class="sticky-btns">
+    <button type="button" class="ba" onclick="submitAction('stage2_flux')">🎨 Aşama 2'ye geç<br>(FLUX üret)</button>
+    <button type="button" class="bb" onclick="submitAction('skip_stage2')">⏭️ Aşama 2'yi atla<br>(direkt ses+render)</button>
+  </div>
+</div>
+<div id="status"></div>
+<div class="cards" id="cards-container"></div>
+<div class="add-q-row"><button type="button" class="add-q-btn" onclick="openTypeModal()">➕ Yeni soru ekle</button></div>
+<div id="type-modal">
+  <div class="type-modal-inner">
+    <h3>Soru tipi seç</h3>
+    <div id="type-modal-options"></div>
+    <button type="button" onclick="closeTypeModal()" style="margin-top:4px;width:100%;padding:8px;background:#374151;color:#9ca3af;border:none;border-radius:6px;cursor:pointer">İptal</button>
+  </div>
+</div>
+<script>
+const JOB_ID = ${JSON.stringify(jobId)};
+const CHAT_ID = ${JSON.stringify(String(chat_id))};
+const REGISTRY = ${REGISTRY_JS};
+let QUESTIONS = ${JSON.stringify(questions).replace(/<\//g, '<\\/')};
+const deletedIdx = new Set();
+const uploadedUrls = {}; // key: "i_slot" → url
+
+function esc1(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function val(id){const e=document.getElementById(id);return e?e.value:'';}
+function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
+
+function renderAllCards(){
+  const c=document.getElementById('cards-container');
+  c.innerHTML='';
+  QUESTIONS.forEach((q,i)=>{
+    const div=document.createElement('div');
+    div.innerHTML=buildCard(q,i);
+    c.appendChild(div);
+  });
+}
+
+function buildCard(q,i){
+  const isWyr=q.question_type==='would_you_rather';
+  const isDel=deletedIdx.has(i);
+  const numBadge=isWyr?'<span class="card-num wyr">🤔 WYR '+(i+1)+'</span>':'<span class="card-num">Soru '+(i+1)+'</span>';
+  const typeOpts=Object.entries(REGISTRY).map(([k,v])=>'<option value="'+k+'"'+(q.question_type===k?' selected':'')+'>'+esc1(v.label)+'</option>').join('');
+  const header='<div class="card-header">'+numBadge+'<select class="type-sel" id="q'+i+'_type" onchange="changeType('+i+',this.value)">'+typeOpts+'</select><button type="button" class="del-btn" onclick="deleteQ('+i+')">🗑️ Sil</button></div>';
+  const delBanner=isDel?'<div class="deleted-banner">🗑️ Bu soru silindi (kaydet butonu ile kalıcı olur)</div>':'';
+  const cardCls='card'+(isDel?' deleted-card':'');
+  const inner=isWyr?buildWyrFields(q,i):buildMcFields(q,i);
+  return '<div class="'+cardCls+'" id="card'+i+'">'+delBanner+header+inner+'</div>';
+}
+
+function buildMcFields(q,i){
+  const opts=(q.options||['','','']).map((o,j)=>'<div class="opt-row'+(q.correct_answer===j?' opt-correct':'')+'" id="q'+i+'_row'+j+'"><span class="opt-lbl">'+['A','B','C'][j]+'</span><input type="text" id="q'+i+'_o'+j+'" value="'+esc1(o)+'" placeholder="Şık '+['A','B','C'][j]+'"><button type="button" class="correct-btn'+(q.correct_answer===j?' is-correct':'')+'" id="q'+i+'_cb'+j+'" onclick="setCorrect1('+i+','+j+')">'+(q.correct_answer===j?'✓ doğru':'○')+'</button></div>').join('');
+  return '<label class="lbl">Soru metni</label>'
+    +'<textarea id="q'+i+'_qt">'+esc1(q.question_text)+'</textarea>'
+    +'<label class="lbl" style="margin-top:8px">Şıklar</label><div class="opts-list">'+opts+'</div>'
+    +'<input type="hidden" id="q'+i+'_ca" value="'+(q.correct_answer||0)+'">'
+    +'<label class="lbl">Fun Fact</label>'
+    +'<textarea id="q'+i+'_ff">'+esc1(q.fun_fact)+'</textarea>'
+    +buildImgSlot(i,'image','Soru Görseli',q.image_prompt)
+    +buildImgSlot(i,'fact_image','Fact Görseli',q.fun_fact_image_prompt);
+}
+
+function buildWyrFields(q,i){
+  const vis=q.visible_option||{};
+  const sur=q.surprise_option||{};
+  return '<div class="row2">'
+    +'<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>'
+    +'<label class="lbl">Etiket</label><input type="text" id="q'+i+'_vl" value="'+esc1(vis.label||'')+'" placeholder="Görünür seçenek">'
+    +buildImgSlot(i,'visible_image','Görünür Görsel',vis.image_prompt)+'</div>'
+    +'<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>'
+    +'<label class="lbl">Kapalı etiket</label><input type="text" id="q'+i+'_sl" value="'+esc1(sur.label||'Surprise Box')+'">'
+    +'<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q'+i+'_so" value="'+esc1(sur.surprise_outcome||'')+'">'
+    +'<label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:.8em"><input type="checkbox" id="q'+i+'_sg"'+(sur.surprise_is_good!==false?' checked':'')+' style="accent-color:#10b981"> İyi sürpriz</label>'
+    +buildImgSlot(i,'surprise_image','Sürpriz Reveal Görseli',sur.surprise_image_prompt)+'</div></div>'
+    +'<label class="lbl">Jess Reaksiyon</label><textarea id="q'+i+'_jr">'+esc1(q.jess_reaction||'')+'</textarea>';
+}
+
+function buildImgSlot(i,slotKey,slotLabel,prompt){
+  const uploadKey=i+'_'+slotKey;
+  const previewHtml=uploadedUrls[uploadKey]?'<img src="'+uploadedUrls[uploadKey]+'" style="max-height:80px;border-radius:5px">':'<span>Önizleme yok</span>';
+  return '<div class="img-slot"><div class="img-slot-title">🖼 '+esc1(slotLabel)+'</div>'
+    +'<label class="lbl">Görsel Prompt (FLUX için)</label>'
+    +'<textarea id="q'+i+'_p_'+slotKey+'">'+esc1(prompt||'')+'</textarea>'
+    +'<div class="flux-row"><label><input type="checkbox" id="q'+i+'_flux_'+slotKey+'" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>'
+    +'<div class="upload-row">'
+    +'<label class="btn-sm btn-upload" for="q'+i+'_file_'+slotKey+'">📁 Resim yükle</label>'
+    +'<input type="file" id="q'+i+'_file_'+slotKey+'" accept="image/*" onchange="uploadFile('+i+',\''+slotKey+'\',this,false)">'
+    +'<label class="btn-sm btn-video" for="q'+i+'_filev_'+slotKey+'">🎬 Video yükle</label>'
+    +'<input type="file" id="q'+i+'_filev_'+slotKey+'" accept=".mp4,.mov,.webm" onchange="uploadFile('+i+',\''+slotKey+'\',this,true)">'
+    +'</div>'
+    +'<div class="preview-box" id="q'+i+'_prev_'+slotKey+'">'+previewHtml+'</div>'
+    +'</div>';
+}
+
+function setCorrect1(qi,j){
+  for(let k=0;k<3;k++){
+    const r=document.getElementById('q'+qi+'_row'+k);const b=document.getElementById('q'+qi+'_cb'+k);
+    if(r)r.classList.remove('opt-correct');if(b){b.classList.remove('is-correct');b.textContent='○';}
+  }
+  const row=document.getElementById('q'+qi+'_row'+j);const btn=document.getElementById('q'+qi+'_cb'+j);
+  if(row)row.classList.add('opt-correct');if(btn){btn.classList.add('is-correct');btn.textContent='✓ doğru';}
+  const inp=document.getElementById('q'+qi+'_ca');if(inp)inp.value=j;
+}
+
+function changeType(i,newType){
+  if(QUESTIONS[i].question_type===newType)return;
+  if(!confirm('Bu sorunun içeriği silinecek ve yeni şablon yüklenecek. Onaylıyor musun?')){
+    document.getElementById('q'+i+'_type').value=QUESTIONS[i].question_type;return;
+  }
+  const tmpl=JSON.parse(JSON.stringify(REGISTRY[newType].template));
+  tmpl.question_type=newType;
+  QUESTIONS[i]=tmpl;
+  deletedIdx.delete(i);
+  renderAllCards();
+}
+
+function deleteQ(i){
+  if(!confirm('Bu soru silinecek. Onaylıyor musun?'))return;
+  deletedIdx.add(i);
+  renderAllCards();
+}
+
+function openTypeModal(){
+  const opts=document.getElementById('type-modal-options');
+  opts.innerHTML=Object.entries(REGISTRY).map(([k,v])=>'<button type="button" class="type-option-btn" onclick="addQuestion(\''+k+'\')">'+(k==='multiple_choice'?'📝':'🤔')+' '+esc1(v.label)+'</button>').join('');
+  document.getElementById('type-modal').style.display='flex';
+}
+function closeTypeModal(){document.getElementById('type-modal').style.display='none';}
+function addQuestion(type){
+  const tmpl=JSON.parse(JSON.stringify(REGISTRY[type].template));
+  tmpl.question_type=type;
+  QUESTIONS.push(tmpl);
+  closeTypeModal();
+  renderAllCards();
+  setTimeout(()=>{const cards=document.getElementById('cards-container');if(cards)cards.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
+}
+
+async function uploadFile(i,slotKey,input,isVideo){
+  const file=input.files[0];if(!file)return;
+  const prevId='q'+i+'_prev_'+slotKey;
+  const prev=document.getElementById(prevId);
+  if(prev)prev.innerHTML='<span>⏳ Yükleniyor...</span>';
+  const fd=new FormData();fd.append('file',file);
+  try{
+    const r=await fetch('/api/upload-medya/'+JOB_ID+'/'+i+'/'+slotKey,{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.ok){
+      uploadedUrls[i+'_'+slotKey]=d.url;
+      const cb=document.getElementById('q'+i+'_flux_'+slotKey);if(cb)cb.checked=false;
+      if(prev){
+        if(isVideo)prev.innerHTML='<div style="color:#10b981;padding:8px;font-size:.8em">🎬 Video yüklendi</div>';
+        else prev.innerHTML='<img src="'+d.url+'" style="max-height:80px;border-radius:5px">';
+      }
+    }else{if(prev)prev.innerHTML='<span style="color:#fca5a5">❌ '+esc1(d.error)+'</span>';}
+  }catch(e){if(prev)prev.innerHTML='<span style="color:#fca5a5">❌ '+esc1(e.message)+'</span>';}
+  input.value='';
+}
+
+function collectSorular(){
+  const result=[];
+  QUESTIONS.forEach((q,i)=>{
+    if(deletedIdx.has(i))return;
+    const isWyr=q.question_type==='would_you_rather';
+    if(isWyr){
+      result.push({
+        question_type:'would_you_rather',
+        question_text:'Pick One!',
+        visible_option:{label:val('q'+i+'_vl'),image_prompt:val('q'+i+'_p_visible_image')},
+        surprise_option:{label:val('q'+i+'_sl'),surprise_outcome:val('q'+i+'_so'),surprise_image_prompt:val('q'+i+'_p_surprise_image'),surprise_is_good:chk('q'+i+'_sg')},
+        jess_reaction:val('q'+i+'_jr'),
+        flux_visible_image:chk('q'+i+'_flux_visible_image'),
+        flux_surprise_image:chk('q'+i+'_flux_surprise_image'),
+        uploaded_visible_url:uploadedUrls[i+'_visible_image']||null,
+        uploaded_surprise_url:uploadedUrls[i+'_surprise_image']||null,
+      });
+    }else{
+      result.push({
+        question_type:'multiple_choice',
+        question_text:val('q'+i+'_qt'),
+        options:[val('q'+i+'_o0'),val('q'+i+'_o1'),val('q'+i+'_o2')],
+        correct_answer:parseInt(val('q'+i+'_ca'))||0,
+        fun_fact:val('q'+i+'_ff'),
+        image_prompt:val('q'+i+'_p_image'),
+        fun_fact_image_prompt:val('q'+i+'_p_fact_image'),
+        flux_image:chk('q'+i+'_flux_image'),
+        flux_fact_image:chk('q'+i+'_flux_fact_image'),
+        uploaded_image_url:uploadedUrls[i+'_image']||null,
+        uploaded_fact_image_url:uploadedUrls[i+'_fact_image']||null,
+      });
+    }
+  });
+  return result;
+}
+
+async function submitAction(action){
+  const st=document.getElementById('status');
+  st.style.display='block';st.className='';
+  st.textContent='⏳ Kaydediliyor ve '+(action==='stage2_flux'?'FLUX görsel üretimi başlatılıyor...':'ses+render başlatılıyor...');
+  const sorular=collectSorular();
+  try{
+    const r=await fetch('/api/icerik-onay/'+JOB_ID,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({video_baslik:val('video_baslik'),sorular,action,chat_id:CHAT_ID}),
+    });
+    const d=await r.json();
+    if(d.ok){st.className='ok';st.textContent='✅ Gönderildi! Telegram\'da bildirim alacaksın.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
+    else{st.className='err';st.textContent='❌ Hata: '+JSON.stringify(d);}
+  }catch(e){st.className='err';st.textContent='❌ '+e.message;}
+}
+
+renderAllCards();
+</script>
+</body>
+</html>`;
+
+  return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8", "Cache-Control": "no-store" } });
+}
+
+// ─── POST /api/icerik-onay/:id ──────────────────────────────────
+async function handleIcerikOnay(request, env, url, ctx) {
+  const jobId = url.pathname.split("/").pop();
+  let body;
+  try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
+  const { video_baslik = "", sorular = [], action = "stage2_flux", chat_id = "" } = body;
+
+  // GitHub Issue'ya güncel soruları yaz
+  const mevcut = await issueVeriOku(jobId, env);
+  if (mevcut) {
+    const updated = {
+      job: {
+        ...(mevcut.data?.job || {}),
+        baslik: video_baslik,
+        questions: sorular,
+      },
+      edits: mevcut.data?.edits || {},
+    };
+    await issueGuncelle(mevcut.number, updated, env);
+
+    // Drive'da questions.json güncelle (SA ile)
+    ctx.waitUntil(driveQuestionsGuncelle(mevcut.data?.job?.drive_folder_id, jobId, video_baslik, sorular, env));
+  }
+
+  // Workflow dispatch
+  if (action === "stage2_flux") {
+    ctx.waitUntil(githubDispatch("gorsel_uret", { job_id: jobId, chat_id: String(chat_id) }, env));
+  } else if (action === "skip_stage2") {
+    ctx.waitUntil(githubDispatch("seslendirme_uret", { job_id: jobId, chat_id: String(chat_id) }, env));
+  }
+
+  return json({ ok: true });
+}
+
+// Drive questions.json güncelle (SA ile, hata loglama, worker devam eder)
+async function driveQuestionsGuncelle(driveFolderId, jobId, baslik, sorular, env) {
+  if (!driveFolderId) { console.warn("driveQuestionsGuncelle: drive_folder_id yok"); return; }
+  const saJson = env.GDRIVE_SERVICE_ACCOUNT_JSON;
+  if (!saJson) { console.warn("driveQuestionsGuncelle: GDRIVE_SERVICE_ACCOUNT_JSON yok"); return; }
+  try {
+    const token = await getGDriveTokenRW(saJson);
+    // 02-ses klasörünü bul
+    const sesFolderRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("'" + driveFolderId + "' in parents and name='02-ses' and mimeType='application/vnd.google-apps.folder' and trashed=false")}&fields=files(id)&pageSize=1`,
+      { headers: { "Authorization": `Bearer ${token}` } }
+    );
+    const sesData = await sesFolderRes.json();
+    const sesFolderId = sesData.files?.[0]?.id;
+    if (!sesFolderId) { console.warn("driveQuestionsGuncelle: 02-ses klasörü bulunamadı"); return; }
+
+    // questions.json dosyasını bul
+    const jsonRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("'" + sesFolderId + "' in parents and name='questions.json' and trashed=false")}&fields=files(id)&pageSize=1`,
+      { headers: { "Authorization": `Bearer ${token}` } }
+    );
+    const jsonData = await jsonRes.json();
+    const fileId = jsonData.files?.[0]?.id;
+    if (!fileId) { console.warn("driveQuestionsGuncelle: questions.json bulunamadı"); return; }
+
+    // Mevcut içeriği oku, questions + baslik güncelle
+    const readRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      { headers: { "Authorization": `Bearer ${token}` } }
+    );
+    const existing = await readRes.json().catch(() => ({}));
+    const updated = { ...existing, baslik, questions: sorular };
+
+    // Dosyayı güncelle
+    const boundary = "-------314159265358979323846";
+    const meta = JSON.stringify({ name: "questions.json", mimeType: "application/json" });
+    const content = JSON.stringify(updated, null, 2);
+    const body2 = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+
+    const updateRes = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`,
+      {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": `multipart/related; boundary=${boundary}`,
+        },
+        body: body2,
+      }
+    );
+    if (!updateRes.ok) {
+      const txt = await updateRes.text();
+      console.warn(`driveQuestionsGuncelle: güncelleme hatası ${updateRes.status}: ${txt.substring(0, 200)}`);
+    } else {
+      console.log(`✓ Drive questions.json güncellendi: ${fileId}`);
+    }
+  } catch (e) {
+    console.error("driveQuestionsGuncelle hata:", e.message);
+  }
+}
+
+// ─── POST /api/upload-medya/:job_id/:soru_idx/:slot_key ──────────
+async function handleUploadMedya(request, env, url) {
+  const parts = url.pathname.split("/").filter(Boolean);
+  // /api/upload-medya/:job_id/:soru_idx/:slot_key
+  const jobId = parts[2];
+  const soruIdx = parts[3];
+  const slotKey = parts[4];
+  if (!jobId || soruIdx === undefined || !slotKey) {
+    return json({ ok: false, error: "Geçersiz path" }, 400);
+  }
+
+  const saJson = env.GDRIVE_SERVICE_ACCOUNT_JSON;
+  if (!saJson) return json({ ok: false, error: "GDRIVE_SERVICE_ACCOUNT_JSON secret eksik" }, 500);
+
+  let formData;
+  try { formData = await request.formData(); } catch { return json({ ok: false, error: "multipart form parse hatası" }, 400); }
+  const file = formData.get("file");
+  if (!file) return json({ ok: false, error: "file alanı yok" }, 400);
+
+  // Job'dan drive_folder_id al
+  const mevcut = await issueVeriOku(jobId, env);
+  if (!mevcut?.data?.job?.drive_folder_id) {
+    return json({ ok: false, error: "Job bulunamadı veya drive_folder_id yok" }, 404);
+  }
+  const driveFolderId = mevcut.data.job.drive_folder_id;
+
+  try {
+    const token = await getGDriveTokenRW(saJson);
+
+    // 01-gorseller alt klasörünü bul
+    const gorselRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("'" + driveFolderId + "' in parents and name='01-gorseller' and mimeType='application/vnd.google-apps.folder' and trashed=false")}&fields=files(id)&pageSize=1`,
+      { headers: { "Authorization": `Bearer ${token}` } }
+    );
+    const gorselData = await gorselRes.json();
+    let gorselFolderId = gorselData.files?.[0]?.id;
+
+    // Klasör yoksa oluştur
+    if (!gorselFolderId) {
+      const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "01-gorseller", mimeType: "application/vnd.google-apps.folder", parents: [driveFolderId] }),
+      });
+      const createData = await createRes.json();
+      gorselFolderId = createData.id;
+    }
+
+    if (!gorselFolderId) return json({ ok: false, error: "01-gorseller klasörü oluşturulamadı" }, 500);
+
+    // Dosyayı yükle
+    const fileBuffer = await file.arrayBuffer();
+    const mimeType = file.type || "application/octet-stream";
+    const ext = file.name ? file.name.split(".").pop() : "bin";
+    const filename = `gorsel-stage1-${soruIdx}-${slotKey}.${ext}`;
+
+    const boundary2 = "upload-boundary-123456";
+    const metaJson = JSON.stringify({ name: filename, parents: [gorselFolderId] });
+    const enc = new TextEncoder();
+    const metaPart = enc.encode(`--${boundary2}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metaJson}\r\n--${boundary2}\r\nContent-Type: ${mimeType}\r\n\r\n`);
+    const endPart = enc.encode(`\r\n--${boundary2}--`);
+    const combined = new Uint8Array(metaPart.byteLength + fileBuffer.byteLength + endPart.byteLength);
+    combined.set(metaPart, 0);
+    combined.set(new Uint8Array(fileBuffer), metaPart.byteLength);
+    combined.set(endPart, metaPart.byteLength + fileBuffer.byteLength);
+
+    const uploadRes = await fetch(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id",
+      {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary2}` },
+        body: combined,
+      }
+    );
+    if (!uploadRes.ok) {
+      const txt = await uploadRes.text();
+      return json({ ok: false, error: `Drive yükleme hatası ${uploadRes.status}: ${txt.substring(0, 200)}` }, 500);
+    }
+    const uploadData = await uploadRes.json();
+    const fileId = uploadData.id;
+
+    // Public yap
+    await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "reader", type: "anyone" }),
+    });
+
+    const driveUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+    return json({ ok: true, url: driveUrl, file_id: fileId });
+
+  } catch (e) {
+    return json({ ok: false, error: e.message }, 500);
+  }
+}
+
+// SA token — write scope (drive full)
+async function getGDriveTokenRW(saJson) {
+  const sa  = JSON.parse(saJson);
+  const now = Math.floor(Date.now() / 1000);
+  const b64url = s => btoa(s).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const header  = b64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const payload = b64url(JSON.stringify({
+    iss:   sa.client_email,
+    scope: "https://www.googleapis.com/auth/drive",
+    aud:   "https://oauth2.googleapis.com/token",
+    exp:   now + 3600,
+    iat:   now,
+  }));
+  const sigInput = `${header}.${payload}`;
+  const pem    = sa.private_key.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
+  const derBuf = Uint8Array.from(atob(pem), c => c.charCodeAt(0)).buffer;
+  const cryptoKey = await crypto.subtle.importKey(
+    "pkcs8", derBuf, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sigBuf = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, new TextEncoder().encode(sigInput));
+  let sigStr = "";
+  new Uint8Array(sigBuf).forEach(b => { sigStr += String.fromCharCode(b); });
+  const jwt = `${sigInput}.${b64url(sigStr)}`;
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=" + jwt,
+  });
+  if (!tokenRes.ok) {
+    const t = await tokenRes.text();
+    throw new Error(`${tokenRes.status} ${t.substring(0, 200)}`);
+  }
+  const td = await tokenRes.json();
+  if (!td.access_token) throw new Error("access_token yok (RW): " + JSON.stringify(td).substring(0, 200));
+  return td.access_token;
 }
 
 function json(data, status = 200) {
