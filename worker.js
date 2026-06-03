@@ -1,4 +1,4 @@
-// REV 018/03JUN26 - handleFileUpload undefined çağrısı kaldırıldı
+// REV 019/03JUN26 - onay sayfası tüm butonlar: label tabanlı upload, Cache-Control, hata gösterimi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -349,7 +349,7 @@ button:hover{opacity:.88}
 .btn-sm:hover{background:#4b5563}
 .btn-upload{border-color:#3b82f6;color:#93c5fd}
 .btn-regen{border-color:#f59e0b;color:#fcd34d}
-input[type=file]{display:none}
+input[type=file]{position:absolute;width:0;height:0;opacity:0;overflow:hidden;pointer-events:none}
 label.lbl{display:block;color:#9ca3af;font-size:.75em;margin:8px 0 3px}
 textarea,input[type=text],select{width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 9px;font-size:.88em;resize:vertical;font-family:inherit}
 textarea{min-height:56px}
@@ -385,11 +385,11 @@ textarea{min-height:56px}
     <div class="topbar meta">${esc(jobId)} · ${esc(format)} · ${questions.length} soru · ${esc(topic)}</div>
   </div>
   <div class="sticky-btns">
-    <button class="b1" onclick="submit_('full',true)">✅ Değiştir<br>+ Ses + Render</button>
-    <button class="b2" onclick="submit_('render_only',true)">🎬 Değiştir<br>+ Sadece Render</button>
-    <button class="b3" onclick="submit_('full',false)">▶ Ses + Render<br>(değişiklik yok)</button>
-    <button class="b4" onclick="submit_('render_only',false)">⚡ Sadece Render<br>(değişiklik yok)</button>
-    <button class="b5" onclick="submit_('regen_only',true)">🔄 Değiştir<br>+ Tekrar Göster</button>
+    <button type="button" class="b1" onclick="submit_('full',true)">✅ Değiştir<br>+ Ses + Render</button>
+    <button type="button" class="b2" onclick="submit_('render_only',true)">🎬 Değiştir<br>+ Sadece Render</button>
+    <button type="button" class="b3" onclick="submit_('full',false)">▶ Ses + Render<br>(değişiklik yok)</button>
+    <button type="button" class="b4" onclick="submit_('render_only',false)">⚡ Sadece Render<br>(değişiklik yok)</button>
+    <button type="button" class="b5" onclick="submit_('regen_only',true)">🔄 Değiştir<br>+ Tekrar Göster</button>
   </div>
 </div>
 <div id="status"></div>
@@ -414,46 +414,32 @@ ${qCards}
     <div id="picker-drive" style="display:none;overflow-y:auto;max-height:48vh"></div>
   </div>
 </div>
+<script>window.addEventListener('error',function(e){var s=document.getElementById('status');if(s){s.style.display='block';s.className='err';s.textContent='JS Hatası: '+e.message+' (satır:'+e.lineno+')';}});</script>
 <script>
 const JOB_ID = ${JSON.stringify(jobId)};
 const CHAT_ID = ${JSON.stringify(String(chat_id))};
 const N = ${questions.length};
-const QUESTIONS = ${JSON.stringify(questions)};
+const QUESTIONS = ${JSON.stringify(questions).replace(/<\//g, '<\\/')};
 const customImages = {};
 const customVideos = {};
 
 function val(id){const e=document.getElementById(id);return e?e.value:"";}
 function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
 
-function uploadAndPreview(fileInputId,previewId,key){
-  var inp=document.getElementById(fileInputId);
-  inp.onchange=function(){
-    var file=inp.files[0];if(!file)return;
-    var reader=new FileReader();
-    reader.onload=function(e){
-      customImages[key]=e.target.result;
-      var box=document.getElementById(previewId);
-      box.innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span>';
-    };
-    reader.readAsDataURL(file);
-  };
-  inp.click();
-}
-
-function uploadVideoAndPreview(fileInputId,previewId,key){
-  var inp=document.getElementById(fileInputId);
-  inp.onchange=function(){
-    var file=inp.files[0];if(!file)return;
-    var reader=new FileReader();
-    reader.onload=function(e){
+function handleFileChange(inp,previewId,key,isVideo){
+  var file=inp.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    if(isVideo){
       customVideos[key]=e.target.result;
-      var box=document.getElementById(previewId);
       var mb=(file.size/1024/1024).toFixed(1);
-      box.innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span>';
-    };
-    reader.readAsDataURL(file);
+      document.getElementById(previewId).innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span>';
+    }else{
+      customImages[key]=e.target.result;
+      document.getElementById(previewId).innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span>';
+    }
   };
-  inp.click();
+  reader.readAsDataURL(file);
 }
 
 function toggleRegen(checkId, btnId, key){
@@ -677,7 +663,7 @@ async function submit_(level, applyEdits){
 </body>
 </html>`;
 
-  return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8" } });
+  return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 function buildQuestionCard(q, i) {
@@ -733,10 +719,10 @@ function buildQuestionCard(q, i) {
       <label class="lbl" style="margin:0">Soru görseli prompt</label>
       <textarea id="q${i}_ip" style="min-height:52px;flex:1">${esc(image_prompt)}</textarea>
       <div class="img-actions">
-        <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cq_file','q${i}_qimg','cq${i}')">⬆ Yükle</button>
-        <input type="file" id="q${i}_cq_file" accept="image/*">
-        <button type="button" class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" onclick="uploadVideoAndPreview('q${i}_cqv_file','q${i}_qimg','cqv${i}')">🎬 Video</button>
-        <input type="file" id="q${i}_cqv_file" accept=".mp4,.mov,.webm">
+        <label class="btn-sm btn-upload" for="q${i}_cq_file">⬆ Yükle</label>
+        <input type="file" id="q${i}_cq_file" accept="image/*" onchange="handleFileChange(this,'q${i}_qimg','cq${i}',false)">
+        <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_cqv_file">🎬 Video</label>
+        <input type="file" id="q${i}_cqv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_qimg','cqv${i}',true)">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rq_btn" onclick="toggleRegen('q${i}_rq','q${i}_rq_btn','cq${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rq" style="display:none">
       </div>
@@ -755,10 +741,10 @@ function buildQuestionCard(q, i) {
       <label class="lbl" style="margin:0">Fact görseli prompt</label>
       <textarea id="q${i}_fp" style="min-height:52px;flex:1">${esc(fun_fact_image_prompt)}</textarea>
       <div class="img-actions">
-        <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cf_file','q${i}_fimg','cf${i}')">⬆ Yükle</button>
-        <input type="file" id="q${i}_cf_file" accept="image/*">
-        <button type="button" class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" onclick="uploadVideoAndPreview('q${i}_cfv_file','q${i}_fimg','cfv${i}')">🎬 Video</button>
-        <input type="file" id="q${i}_cfv_file" accept=".mp4,.mov,.webm">
+        <label class="btn-sm btn-upload" for="q${i}_cf_file">⬆ Yükle</label>
+        <input type="file" id="q${i}_cf_file" accept="image/*" onchange="handleFileChange(this,'q${i}_fimg','cf${i}',false)">
+        <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_cfv_file">🎬 Video</label>
+        <input type="file" id="q${i}_cfv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_fimg','cfv${i}',true)">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rf_btn" onclick="toggleRegen('q${i}_rf','q${i}_rf_btn','cf${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rf" style="display:none">
       </div>
@@ -797,10 +783,10 @@ function buildWyrCard(q, i) {
       <label class="lbl" style="margin-top:8px;margin-bottom:0">Görsel prompt</label>
       <textarea id="q${i}_vp" style="min-height:42px">${esc(vPrompt)}</textarea>
       <div class="img-actions">
-        <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cv_file','q${i}_vimg','cv${i}')">⬆ Yükle</button>
-        <input type="file" id="q${i}_cv_file" accept="image/*">
-        <button type="button" class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" onclick="uploadVideoAndPreview('q${i}_cvv_file','q${i}_vimg','cvv${i}')">🎬 Video</button>
-        <input type="file" id="q${i}_cvv_file" accept=".mp4,.mov,.webm">
+        <label class="btn-sm btn-upload" for="q${i}_cv_file">⬆ Yükle</label>
+        <input type="file" id="q${i}_cv_file" accept="image/*" onchange="handleFileChange(this,'q${i}_vimg','cv${i}',false)">
+        <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_cvv_file">🎬 Video</label>
+        <input type="file" id="q${i}_cvv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_vimg','cvv${i}',true)">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rv_btn" onclick="toggleRegen('q${i}_rv','q${i}_rv_btn','cv${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rv" style="display:none">
       </div>
@@ -821,10 +807,10 @@ function buildWyrCard(q, i) {
       <label class="lbl" style="margin-top:8px;margin-bottom:0">Görsel prompt</label>
       <textarea id="q${i}_sp" style="min-height:42px">${esc(sPrompt)}</textarea>
       <div class="img-actions">
-        <button type="button" class="btn-sm btn-upload" onclick="uploadAndPreview('q${i}_cs_file','q${i}_simg','cs${i}')">⬆ Yükle</button>
-        <input type="file" id="q${i}_cs_file" accept="image/*">
-        <button type="button" class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" onclick="uploadVideoAndPreview('q${i}_csv_file','q${i}_simg','csv${i}')">🎬 Video</button>
-        <input type="file" id="q${i}_csv_file" accept=".mp4,.mov,.webm">
+        <label class="btn-sm btn-upload" for="q${i}_cs_file">⬆ Yükle</label>
+        <input type="file" id="q${i}_cs_file" accept="image/*" onchange="handleFileChange(this,'q${i}_simg','cs${i}',false)">
+        <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_csv_file">🎬 Video</label>
+        <input type="file" id="q${i}_csv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_simg','csv${i}',true)">
         <button type="button" class="btn-sm btn-regen" id="q${i}_rs_btn" onclick="toggleRegen('q${i}_rs','q${i}_rs_btn','cs${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rs" style="display:none">
       </div>
