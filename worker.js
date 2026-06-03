@@ -1,4 +1,4 @@
-// REV 017/02JUN26 - video yükleme desteği: customVideos + uploadVideoAndPreview + 4 slot
+// REV 018/03JUN26 - handleFileUpload undefined çağrısı kaldırıldı
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -672,11 +672,7 @@ async function submit_(level, applyEdits){
   }catch(e){st.className="err";st.textContent="❌ "+e.message;}
 }
 
-// File upload listener'larını bağla
-for(let i=0;i<N;i++){
-  handleFileUpload("q"+i+"_cq_file","q"+i+"_qimg","cq"+i);
-  handleFileUpload("q"+i+"_cf_file","q"+i+"_fimg","cf"+i);
-}
+
 </script>
 </body>
 </html>`;
