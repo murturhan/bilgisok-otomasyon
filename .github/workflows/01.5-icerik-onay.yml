@@ -1,0 +1,85 @@
+# REV 001/04JUN26 - içerik onay aşaması workflow (Parça 1/4 refactor)
+name: 01.5 - İçerik Onay
+
+on:
+  repository_dispatch:
+    types: [icerik_onay]
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Job ID'
+        required: true
+      chat_id:
+        description: 'Telegram chat ID'
+        required: false
+        default: '6090600843'
+      tarih:
+        description: 'Tarih (örn: 13.05.2026)'
+        required: false
+      video_format:
+        description: 'Format: shorts veya long'
+        required: false
+        default: 'long'
+      question_type:
+        description: 'Soru tipi: multiple_choice veya would_you_rather'
+        required: false
+        default: 'multiple_choice'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  icerik-onay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: NPM dependencies
+        run: |
+          npm init -y
+          npm pkg set type=module
+          npm install --no-save \
+            googleapis \
+            axios
+
+      - name: Parametreleri belirle
+        id: params
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "job_id=${{ github.event.client_payload.job_id }}" >> $GITHUB_OUTPUT
+            echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
+            echo "tarih=${{ github.event.client_payload.tarih }}" >> $GITHUB_OUTPUT
+            echo "video_format=${{ github.event.client_payload.video_format || 'long' }}" >> $GITHUB_OUTPUT
+            echo "question_type=${{ github.event.client_payload.question_type || 'multiple_choice' }}" >> $GITHUB_OUTPUT
+          else
+            echo "job_id=${{ github.event.inputs.job_id }}" >> $GITHUB_OUTPUT
+            echo "chat_id=${{ github.event.inputs.chat_id }}" >> $GITHUB_OUTPUT
+            echo "tarih=${{ github.event.inputs.tarih }}" >> $GITHUB_OUTPUT
+            echo "video_format=${{ github.event.inputs.video_format || 'long' }}" >> $GITHUB_OUTPUT
+            echo "question_type=${{ github.event.inputs.question_type || 'multiple_choice' }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: İçerik onay linki gönder
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+          GSHEETS_SPREADSHEET_ID: ${{ secrets.GSHEETS_SPREADSHEET_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          JOB_ID: ${{ steps.params.outputs.job_id }}
+          CHAT_ID: ${{ steps.params.outputs.chat_id }}
+          TARIH: ${{ steps.params.outputs.tarih }}
+          VIDEO_FORMAT: ${{ steps.params.outputs.video_format }}
+          QUESTION_TYPE: ${{ steps.params.outputs.question_type }}
+        run: node scripts/01.5-icerik-onay.js

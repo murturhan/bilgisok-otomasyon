@@ -1,4 +1,4 @@
-// REV 008/30MAY26 - is_test_mode questions.json'a yaziliyor (07-montaj okuyabilsin)
+// REV 009/04JUN26 - 02-gorsel-uret dispatch kaldirildi, 01.5-icerik-onay'a devredildi
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -629,46 +629,11 @@ async function main() {
       `❓ ${icerik.questions.length} questions (2 audio per question)\n` +
       `🦊 Mascot: Jess the Fox\n\n` +
       `📂 [Drive folder](${anaKlasor.link})\n\n` +
-      `⏳ Görsel üretim otomatik başlatılıyor...`
+      `⏳ İçerik onay aşamasına geçiliyor...`
     );
-    
-    // 02-gorsel-uret'i otomatik tetikle
-    try {
-      const repoOwner = process.env.GITHUB_REPO_OWNER || "murturhan";
-      const repoName = process.env.GITHUB_REPO_NAME || "bilgisok-otomasyon";
-      const token = process.env.WORKFLOW_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
-      if (token) {
-        const dispatchRes = await fetch(
-          `https://api.github.com/repos/${repoOwner}/${repoName}/dispatches`,
-          {
-            method: "POST",
-            headers: {
-              "Accept": "application/vnd.github+json",
-              "Authorization": `Bearer ${token}`,
-              "X-GitHub-Api-Version": "2022-11-28",
-              "User-Agent": "geniminitests-icerik-uret",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              event_type: "gorsel_uret",
-              client_payload: { job_id: JOB_ID, chat_id: CHAT_ID },
-            }),
-          }
-        );
-        if (dispatchRes.ok) {
-          console.log("✅ 02-gorsel-uret tetiklendi");
-        } else {
-          const txt = await dispatchRes.text();
-          console.warn(`⚠ 02 dispatch hatası: ${dispatchRes.status} ${txt.substring(0, 200)}`);
-        }
-      } else {
-        console.warn("⚠ WORKFLOW_DISPATCH_TOKEN yok, 02 manuel tetiklenmeli");
-      }
-    } catch (e) {
-      console.warn(`⚠ 02 dispatch hatası (devam): ${e.message}`);
-    }
-    
-    console.log("✅ İçerik üretimi tamam.");
+
+    // 01.5-icerik-onay workflow'u YAML step'i tarafından tetiklenecek (bu scriptten değil)
+    console.log("✅ İçerik üretimi tamam. 01.5-icerik-onay workflow YAML'dan tetiklenecek.");
     process.exit(0);
     
   } catch (error) {

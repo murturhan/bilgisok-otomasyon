@@ -1,4 +1,4 @@
-# REV 002/29MAY26 - question_type input eklendi
+# REV 003/04JUN26 - 01.5-icerik-onay tetikleme eklendi (02-gorsel-uret yerini aldı)
 name: 01 - İçerik Üret
 # REVISION: paralel dispatch'ler kaldırıldı, akış sıralı (01→02 kod tetikler) 2026-05-25
 
@@ -103,7 +103,18 @@ jobs:
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}
         run: node scripts/01-icerik-uret.js
       
-      # 05-Thumbnail tetikle (paralel - 01 sonrası, 02 ile aynı zamanda)
+      # 01.5-İçerik Onay tetikle (02-gorsel-uret artık kullanıcı onayından sonra tetiklenecek)
+      - name: 01.5-İçerik Onay tetikle
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/01.5-icerik-onay.yml/dispatches" \
+            -d "{\"ref\":\"main\",\"inputs\":{\"job_id\":\"${{ steps.params.outputs.job_id }}\",\"chat_id\":\"${{ steps.params.outputs.chat_id }}\",\"tarih\":\"${{ steps.params.outputs.tarih }}\",\"video_format\":\"${{ steps.params.outputs.video_format }}\",\"question_type\":\"${{ steps.params.outputs.question_type }}\"}}"
+
+      # 05-Thumbnail tetikle (paralel - 01 sonrası, onaydan bağımsız)
       - name: 05-Thumbnail tetikle
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
