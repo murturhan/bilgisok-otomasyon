@@ -1,4 +1,4 @@
-// REV 002/29MAY26 - WYR format butonları eklendi (8 buton/konu)
+// REV 003/04JUN26 - Gemini 503 için exponential backoff retry (5 deneme)
 /**
  * 00 - KONU ÖNERİ SCRIPT'I
  *
@@ -85,17 +85,28 @@ Generate 3 DIFFERENT category topics. Be creative and educational!`;
     },
   };
   
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  
-  if (!response.ok) {
+  // 503/429 için exponential backoff retry
+  let response;
+  const MAX_RETRY = 5;
+  for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (response.ok) break;
+    const is503 = response.status === 503;
+    const is429 = response.status === 429;
+    if ((is503 || is429) && attempt < MAX_RETRY) {
+      const bekle = attempt * 15000; // 15s, 30s, 45s, 60s
+      console.log(`⚠ Gemini ${response.status} (deneme ${attempt}/${MAX_RETRY}), ${bekle/1000}s bekleniyor...`);
+      await new Promise(r => setTimeout(r, bekle));
+      continue;
+    }
     const errText = await response.text();
     throw new Error(`Gemini API ${response.status}: ${errText.substring(0, 500)}`);
   }
-  
+
   const data = await response.json();
   const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
   if (!rawText) throw new Error("Gemini boş yanıt verdi");
