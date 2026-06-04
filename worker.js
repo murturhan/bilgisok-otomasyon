@@ -1,4 +1,4 @@
-// REV 031/04JUN26 - Telegram'da apostrof template literal icinde string kiriyordu, duzeltildi
+// REV 032/04JUN26 - Tum Turkce apostroflar duzeltildi: Drive'a, Telegram'da vs template literal kiriyordu
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1338,7 +1338,7 @@ function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVid
     }else{
       prev.innerHTML='<img src="'+objUrl+'" style="max-width:100%;max-height:120px;border-radius:6px;display:block">';
     }
-    if(st){st.className='ok';st.textContent='Onizleme hazir: '+file.name+' — Drive\'a yukleniyor...';}
+    if(st){st.className='ok';st.textContent='Onizleme hazir: '+file.name+' (Drive upload devam ediyor...)';}
     prev.scrollIntoView({behavior:'smooth',block:'nearest'});
   } catch(objErr) {
     if(st){st.className='err';st.textContent='createObjectURL hatasi: '+objErr.message;}
@@ -1356,9 +1356,9 @@ function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVid
         // Sadece video için metni güncelle (video'nun yerel önizlemesi yok).
         if(isVideo){
           var prev2=document.getElementById(previewId);
-          if(prev2) prev2.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,24))+'<br><span style="color:#6b7280">✓ Drive\'a yüklendi</span></div>';
+          if(prev2) prev2.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,24))+'<br><span style="color:#6b7280">Drive upload tamam</span></div>';
         }
-        if(st){st.className='ok';st.textContent='✓ Drive\'a yüklendi: '+file.name;}
+        if(st){st.className='ok';st.textContent='Drive upload tamam: '+file.name;}
       }else{
         if(st){st.className='err';st.textContent='Drive yükleme hatası: '+(d.error||'bilinmeyen');}
       }
