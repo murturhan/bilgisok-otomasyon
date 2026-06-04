@@ -46,8 +46,8 @@ export default {
       return new Response(`<!DOCTYPE html><html><head><meta charset=UTF-8><title>Upload Test</title></head><body style="background:#111827;color:#f3f4f6;font-family:system-ui;padding:40px">
 <h2>📁 FileReader Önizleme Testi</h2>
 <p style="color:#9ca3af;margin:8px 0 20px">Resim seç — anında önizleme görünmeli:</p>
-<input type="file" id="tf" accept="image/*" style="display:none" onchange="go(this)">
-<label for="tf" style="display:inline-block;padding:8px 16px;background:#3b82f6;color:#fff;border-radius:6px;cursor:pointer">📁 Dosya Seç</label>
+<input type="file" id="tf" accept="image/*" style="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px" onchange="go(this)">
+<button onclick="document.getElementById('tf').click()" style="display:inline-block;padding:8px 16px;background:#3b82f6;color:#fff;border-radius:6px;cursor:pointer;border:none">📁 Dosya Seç</button>
 <div id="prev" style="margin-top:16px;min-height:100px;background:#1f2937;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:.85em">Buraya önizleme gelecek</div>
 <div id="log" style="margin-top:12px;font-size:.8em;color:#9ca3af"></div>
 <script>
@@ -1030,10 +1030,10 @@ async function handleContentApprovalPage(request, env, url) {
     `<textarea id="q${i}_p_${slotKey}">${esc(prompt || '')}</textarea>` +
     `<div class="flux-row"><label><input type="checkbox" id="q${i}_flux_${slotKey}" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>` +
     `<div class="upload-row">` +
-    `<label class="btn-sm btn-upload" for="q${i}_file_${slotKey}">📁 Resim yükle</label>` +
-    `<input type="file" id="q${i}_file_${slotKey}" accept="image/*" onchange="s1FileChange(this,'q${i}_prev_${slotKey}','q${i}_flux_${slotKey}','${i}_${slotKey}',${i},'${slotKey}',false)">` +
-    `<label class="btn-sm btn-video" for="q${i}_filev_${slotKey}">🎬 Video yükle</label>` +
-    `<input type="file" id="q${i}_filev_${slotKey}" accept=".mp4,.mov,.webm" onchange="s1FileChange(this,'q${i}_prev_${slotKey}','q${i}_flux_${slotKey}','${i}_${slotKey}',${i},'${slotKey}',true)">` +
+    `<button type="button" class="btn-sm btn-upload" onclick="document.getElementById('q${i}_fi_${slotKey}').click()">📁 Resim yükle</button>` +
+    `<input type="file" id="q${i}_fi_${slotKey}" class="s1-file-inp" accept="image/*" onchange="s1FileChange(this,'q${i}_prev_${slotKey}','q${i}_flux_${slotKey}','${i}_${slotKey}',${i},'${slotKey}',false)">` +
+    `<button type="button" class="btn-sm btn-video" onclick="document.getElementById('q${i}_fiv_${slotKey}').click()">🎬 Video yükle</button>` +
+    `<input type="file" id="q${i}_fiv_${slotKey}" class="s1-file-inp" accept=".mp4,.mov,.webm" onchange="s1FileChange(this,'q${i}_prev_${slotKey}','q${i}_flux_${slotKey}','${i}_${slotKey}',${i},'${slotKey}',true)">` +
     `</div><div class="preview-box" id="q${i}_prev_${slotKey}"><span>Önizleme yok</span></div></div>`;
   };
 
@@ -1141,7 +1141,7 @@ textarea{min-height:52px}
 .btn-sm:hover{background:#4b5563}
 .btn-upload{border-color:#3b82f6;color:#93c5fd}
 .btn-video{border-color:#6366f1;color:#a5b4fc}
-input[type=file]{position:absolute;width:0;height:0;opacity:0;overflow:hidden;pointer-events:none}
+.s1-file-inp{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0}
 .preview-box{min-height:60px;background:#111827;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-top:5px;overflow:hidden;font-size:.74em;color:#6b7280}
 .preview-box img,.preview-box video{max-height:90px;max-width:100%;border-radius:5px}
 .mode-row{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
@@ -1265,10 +1265,10 @@ function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode){
     +'<textarea id="q'+i+'_p_'+slotKey+'">'+esc1(prompt||'')+'</textarea>'
     +'<div class="flux-row"><label><input type="checkbox" id="q'+i+'_flux_'+slotKey+'" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>'
     +'<div class="upload-row">'
-    +'<label class="btn-sm btn-upload" for="q'+i+'_file_'+slotKey+'">📁 Resim yükle</label>'
-    +'<input type="file" id="q'+i+'_file_'+slotKey+'" accept="image/*" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',false)">'
-    +'<label class="btn-sm btn-video" for="q'+i+'_filev_'+slotKey+'">🎬 Video yükle</label>'
-    +'<input type="file" id="q'+i+'_filev_'+slotKey+'" accept=".mp4,.mov,.webm" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',true)">'
+    +'<button type="button" class="btn-sm btn-upload" onclick="document.getElementById(\'q'+i+'_fi_'+slotKey+'\').click()">📁 Resim yükle</button>'
+    +'<input type="file" id="q'+i+'_fi_'+slotKey+'" class="s1-file-inp" accept="image/*" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',false)">'
+    +'<button type="button" class="btn-sm btn-video" onclick="document.getElementById(\'q'+i+'_fiv_'+slotKey+'\').click()">🎬 Video yükle</button>'
+    +'<input type="file" id="q'+i+'_fiv_'+slotKey+'" class="s1-file-inp" accept=".mp4,.mov,.webm" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',true)">'
     +'</div>'
     +'<div class="preview-box" id="q'+i+'_prev_'+slotKey+'">'+previewHtml+'</div>'
     +'</div>';
