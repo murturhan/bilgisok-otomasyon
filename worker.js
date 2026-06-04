@@ -1295,38 +1295,42 @@ function addQuestion(type){
   setTimeout(()=>{const cards=document.getElementById('cards-container');if(cards)cards.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
 }
 
-async function uploadFile(i,slotKey,input,isVideo){
-  const file=input.files[0];if(!file)return;
-  const prev=document.getElementById('q'+i+'_prev_'+slotKey);
+function uploadFile(i,slotKey,input,isVideo){
+  var file=input.files[0];if(!file)return;
+  var prev=document.getElementById('q'+i+'_prev_'+slotKey);
 
-  // Yerel önizleme hemen göster (Drive URL bekleme)
+  // FileReader ile yerel önizleme — en güvenilir yöntem
   if(prev){
     if(isVideo){
-      prev.innerHTML='<div style="background:#0a1f12;border-radius:6px;padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,28))+'<br><span style="color:#6b7280">'+( file.size/1024/1024).toFixed(1)+'MB</span></div>';
+      prev.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,28))+'</div>';
     }else{
-      const objUrl=URL.createObjectURL(file);
-      prev.innerHTML='<img src="'+objUrl+'" style="max-height:80px;border-radius:5px" alt="önizleme">';
+      var reader=new FileReader();
+      reader.onload=function(ev){
+        if(prev)prev.innerHTML='<img src="'+ev.target.result+'" style="max-width:100%;max-height:80px;display:block;margin:auto;border-radius:5px">';
+      };
+      reader.onerror=function(){if(prev)prev.innerHTML='<span style="color:#fca5a5">Önizleme hatası</span>';};
+      reader.readAsDataURL(file);
     }
   }
 
-  // FLUX checkbox'ı kaldır
-  const cb=document.getElementById('q'+i+'_flux_'+slotKey);if(cb)cb.checked=false;
+  // FLUX checkbox kaldır
+  var cb=document.getElementById('q'+i+'_flux_'+slotKey);if(cb)cb.checked=false;
 
-  // Arkaplanda Drive'a yükle (URL'yi submission için sakla)
-  const fd=new FormData();fd.append('file',file);
-  try{
-    const r=await fetch('/api/upload-medya/'+JOB_ID+'/'+i+'/'+slotKey,{method:'POST',body:fd});
-    const d=await r.json();
-    if(d.ok){
-      uploadedUrls[i+'_'+slotKey]=d.url;
-      // Yerel önizleme kalır, Drive bağlantısını köşeye ekle
-      if(prev&&!isVideo){const badge=document.createElement('span');badge.style.cssText='position:absolute;bottom:3px;right:3px;background:#10b981;color:#fff;font-size:.65em;padding:1px 5px;border-radius:3px';badge.textContent='✓ Drive';prev.style.position='relative';prev.appendChild(badge);}
-    }else{
-      if(prev){const err=document.createElement('div');err.style.cssText='color:#fca5a5;font-size:.7em;margin-top:3px';err.textContent='⚠ '+d.error;prev.after(err);}
-    }
-  }catch(e){
-    if(prev){const err=document.createElement('div');err.style.cssText='color:#fca5a5;font-size:.7em;margin-top:3px';err.textContent='⚠ '+e.message;prev.after(err);}
-  }
+  // Arkaplanda Drive'a yükle
+  var fd=new FormData();fd.append('file',file);
+  fetch('/api/upload-medya/'+JOB_ID+'/'+i+'/'+slotKey,{method:'POST',body:fd})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.ok){
+        uploadedUrls[i+'_'+slotKey]=d.url;
+        if(prev){var ok=document.createElement('div');ok.style.cssText='color:#10b981;font-size:.7em;margin-top:2px;text-align:center';ok.textContent='✓ Drive\'a yüklendi';prev.after(ok);}
+      }else{
+        if(prev){var er=document.createElement('div');er.style.cssText='color:#fca5a5;font-size:.7em;margin-top:2px';er.textContent='⚠ Drive: '+d.error;prev.after(er);}
+      }
+    })
+    .catch(function(e){
+      if(prev){var el=document.createElement('div');el.style.cssText='color:#fca5a5;font-size:.7em;margin-top:2px';el.textContent='⚠ '+e.message;prev.after(el);}
+    });
   input.value='';
 }
 
