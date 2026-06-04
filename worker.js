@@ -1,4 +1,4 @@
-// REV 032/04JUN26 - Tum Turkce apostroflar duzeltildi: Drive'a, Telegram'da vs template literal kiriyordu
+// REV 033/04JUN26 - buildImgSlot+openTypeModal: \' template literal hatasi, String.fromCharCode(39) kullanildi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1253,25 +1253,28 @@ function buildWyrFields(q,i){
 
 function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode){
   const uploadKey=i+'_'+slotKey;
-  const previewHtml=uploadedUrls[uploadKey]?'<img src="'+uploadedUrls[uploadKey]+'" style="max-height:80px;border-radius:5px">':'<span>Önizleme yok</span>';
+  const previewHtml=uploadedUrls[uploadKey]?'<img src="'+uploadedUrls[uploadKey]+'" style="max-height:80px;border-radius:5px">':'<span>Onizleme yok</span>';
   const sizeHtml=size?'<span style="font-size:.72em;color:#6b7280;font-weight:400;margin-left:6px">'+esc1(size)+'</span>':'';
   const sm=showMode||'flu';
   const rn='q'+i+'_mode_'+slotKey;
-  const modeLabels={net:'🖼️ Net göster',flu:'🌫️ Flu göster',surpriz:'❓ Sürpriz kutu'};
+  const modeLabels={net:'Net goster',flu:'Flu goster',surpriz:'Surpriz kutu'};
   const radios=['net','flu','surpriz'].map(v=>'<label class="mode-lbl"><input type="radio" name="'+rn+'" value="'+v+'"'+(sm===v?' checked':'')+'>'+esc1(modeLabels[v])+'</label>').join('');
   var prevId='q'+i+'_prev_'+slotKey;
   var fluxId='q'+i+'_flux_'+slotKey;
-  return '<div class="img-slot"><div class="img-slot-title">🖼 '+esc1(slotLabel)+sizeHtml+'</div>'+
+  var sq=String.fromCharCode(39);
+  var onchgImg='s1FileChange(this,'+sq+prevId+sq+','+sq+fluxId+sq+','+sq+uploadKey+sq+','+i+','+sq+slotKey+sq+',false)';
+  var onchgVid='s1FileChange(this,'+sq+prevId+sq+','+sq+fluxId+sq+','+sq+uploadKey+sq+','+i+','+sq+slotKey+sq+',true)';
+  return '<div class="img-slot"><div class="img-slot-title">Gorsel: '+esc1(slotLabel)+sizeHtml+'</div>'+
     '<div class="mode-row">'+radios+'</div>'
-    +'<label class="lbl">Görsel Prompt (FLUX için)</label>'
+    +'<label class="lbl">Gorsel Prompt (FLUX icin)</label>'
     +'<textarea id="q'+i+'_p_'+slotKey+'">'+esc1(prompt||'')+'</textarea>'
-    +'<div class="flux-row"><label><input type="checkbox" id="q'+i+'_flux_'+slotKey+'" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>'
+    +'<div class="flux-row"><label><input type="checkbox" id="q'+i+'_flux_'+slotKey+'" checked style="accent-color:#f59e0b"> FLUX ile uret</label></div>'
     +'<div class="preview-box" id="q'+i+'_prev_'+slotKey+'">'+previewHtml+'</div>'
     +'<div class="upload-row">'
-    +'<label for="q'+i+'_fi_'+slotKey+'" class="btn-sm btn-upload" style="cursor:pointer">📁 Resim yükle</label>'
-    +'<input type="file" id="q'+i+'_fi_'+slotKey+'" class="s1-file-inp" accept="image/*" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',false)">'
-    +'<label for="q'+i+'_fiv_'+slotKey+'" class="btn-sm btn-video" style="cursor:pointer">🎬 Video yükle</label>'
-    +'<input type="file" id="q'+i+'_fiv_'+slotKey+'" class="s1-file-inp" accept=".mp4,.mov,.webm" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',true)">'
+    +'<label for="q'+i+'_fi_'+slotKey+'" class="btn-sm btn-upload" style="cursor:pointer">Resim yukle</label>'
+    +'<input type="file" id="q'+i+'_fi_'+slotKey+'" class="s1-file-inp" accept="image/*" onchange="'+onchgImg+'">'
+    +'<label for="q'+i+'_fiv_'+slotKey+'" class="btn-sm btn-video" style="cursor:pointer">Video yukle</label>'
+    +'<input type="file" id="q'+i+'_fiv_'+slotKey+'" class="s1-file-inp" accept=".mp4,.mov,.webm" onchange="'+onchgVid+'">'
     +'</div>'
     +'</div>';
 }
@@ -1306,7 +1309,8 @@ function deleteQ(i){
 
 function openTypeModal(){
   const opts=document.getElementById('type-modal-options');
-  opts.innerHTML=Object.entries(REGISTRY).map(([k,v])=>'<button type="button" class="type-option-btn" onclick="addQuestion(\''+k+'\')">'+(k==='multiple_choice'?'📝':'🤔')+' '+esc1(v.label)+'</button>').join('');
+  var sq=String.fromCharCode(39);
+  opts.innerHTML=Object.entries(REGISTRY).map(([k,v])=>'<button type="button" class="type-option-btn" onclick="addQuestion('+sq+k+sq+')">'+(k==='multiple_choice'?'📝':'🤔')+' '+esc1(v.label)+'</button>').join('');
   document.getElementById('type-modal').style.display='flex';
 }
 function closeTypeModal(){document.getElementById('type-modal').style.display='none';}
