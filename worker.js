@@ -1,4 +1,4 @@
-// REV 029/04JUN26 - status bar sayfa yuklenince gozukuyor, FileReader→URL.createObjectURL
+// REV 030/04JUN26 - KRITIK: buildImgSlot'ta const+var uploadKey çift tanım syntax error düzeltildi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1261,7 +1261,6 @@ function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode){
   const radios=['net','flu','surpriz'].map(v=>'<label class="mode-lbl"><input type="radio" name="'+rn+'" value="'+v+'"'+(sm===v?' checked':'')+'>'+esc1(modeLabels[v])+'</label>').join('');
   var prevId='q'+i+'_prev_'+slotKey;
   var fluxId='q'+i+'_flux_'+slotKey;
-  var uploadKey=i+'_'+slotKey;
   return '<div class="img-slot"><div class="img-slot-title">🖼 '+esc1(slotLabel)+sizeHtml+'</div>'+
     '<div class="mode-row">'+radios+'</div>'
     +'<label class="lbl">Görsel Prompt (FLUX için)</label>'
