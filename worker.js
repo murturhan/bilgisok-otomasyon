@@ -1,4 +1,4 @@
-// REV 026/04JUN26 - s1FileChange: Drive URL upload sonrası preview box'a yazılıyor
+// REV 027/04JUN26 - s1FileChange: Drive URL img tag'e yazılmıyor (auth gerekiyor), yerel preview korunuyor
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1351,13 +1351,12 @@ function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVid
     .then(function(d){
       if(d.ok){
         uploadedUrls[uploadKey]=d.url;
-        var prev2=document.getElementById(previewId);
-        if(prev2){
-          if(isVideo){
-            prev2.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,24))+'<br><span style="color:#6b7280">✓ Drive\'a yüklendi</span></div>';
-          }else{
-            prev2.innerHTML='<img src="'+d.url+'" style="width:100%;max-height:80px;border-radius:6px"><span class="preview-badge">✓ Drive</span>';
-          }
+        // Resim için: Drive thumbnail URL başka origin'den img tag'e yüklenmiyor.
+        // Yerel FileReader önizlemesi (data URL) zaten görünüyor — onu bozma.
+        // Sadece video için metni güncelle (video'nun yerel önizlemesi yok).
+        if(isVideo){
+          var prev2=document.getElementById(previewId);
+          if(prev2) prev2.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,24))+'<br><span style="color:#6b7280">✓ Drive\'a yüklendi</span></div>';
         }
         if(st){st.className='ok';st.textContent='✓ Drive\'a yüklendi: '+file.name;}
       }else{
