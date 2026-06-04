@@ -1,4 +1,4 @@
-// REV 028/04JUN26 - button+.click()→label, JS error listener, preview daha büyük + scrollIntoView
+// REV 029/04JUN26 - status bar sayfa yuklenince gozukuyor, FileReader→URL.createObjectURL
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1189,7 +1189,8 @@ ${serverCards}
   </div>
 </div>
 <script>
-window.addEventListener('error',function(e){var s=document.getElementById('status');if(s){s.style.display='block';s.className='err';s.textContent='JS Hatası: '+e.message+' (satır:'+e.lineno+')';}});
+window.addEventListener('error',function(e){var s=document.getElementById('status');if(s){s.style.display='block';s.className='err';s.textContent='JS Hatasi: '+e.message+' (satir:'+e.lineno+')';}});
+window.addEventListener('DOMContentLoaded',function(){var s=document.getElementById('status');if(s){s.style.display='block';s.className='ok';s.textContent='JS calisiyor. Resim yuklemek icin asagidaki "Resim yukle" butonuna tiklayin.';}});
 const JOB_ID = ${JSON.stringify(jobId)};
 const CHAT_ID = ${JSON.stringify(String(chat_id))};
 const REGISTRY = ${REGISTRY_JS};
@@ -1330,22 +1331,19 @@ function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVid
     if(st){st.className='err';st.textContent='HATA: element bulunamadı id='+previewId;}
     return;
   }
-  // ADIM 2: FileReader
-  if(isVideo){
-    prev.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em">🎬 '+esc1(file.name.substring(0,28))+'</div>';
-  }else{
-    prev.innerHTML='<span style="color:#a78bfa">⏳ Okunuyor...</span>';
-    var reader=new FileReader();
-    reader.onload=function(e){
-      if(st){st.className='ok';st.textContent='✓ Önizleme hazır: '+file.name;}
-      prev.innerHTML='<img src="'+e.target.result+'" style="max-width:100%;max-height:120px;border-radius:6px;display:block">';
-      prev.scrollIntoView({behavior:'smooth',block:'nearest'});
-    };
-    reader.onerror=function(){
-      if(st){st.className='err';st.textContent='FileReader hatası!';}
-      prev.innerHTML='<span style="color:#fca5a5">FileReader hatası</span>';
-    };
-    reader.readAsDataURL(file);
+  // ADIM 2: URL.createObjectURL — senkron, callback yok
+  try {
+    var objUrl=URL.createObjectURL(file);
+    if(isVideo){
+      prev.innerHTML='<video src="'+objUrl+'" controls style="max-width:100%;max-height:120px;border-radius:6px"></video>';
+    }else{
+      prev.innerHTML='<img src="'+objUrl+'" style="max-width:100%;max-height:120px;border-radius:6px;display:block">';
+    }
+    if(st){st.className='ok';st.textContent='Onizleme hazir: '+file.name+' — Drive\'a yukleniyor...';}
+    prev.scrollIntoView({behavior:'smooth',block:'nearest'});
+  } catch(objErr) {
+    if(st){st.className='err';st.textContent='createObjectURL hatasi: '+objErr.message;}
+    prev.innerHTML='<span style="color:#fca5a5">Onizleme hatasi</span>';
   }
   var cb=document.getElementById(fluxId);if(cb)cb.checked=false;
   var fd=new FormData();fd.append('file',file);
