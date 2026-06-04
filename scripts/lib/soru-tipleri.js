@@ -13,7 +13,7 @@ export const SORU_TIPLERI = {
     },
     image_slots: [
       { key: "question_image", label: "Soru Görseli", size: "1920x1080", prompt_key: "image_prompt" },
-      { key: "fact_image", label: "Fact Görseli", size: "1024x1024", prompt_key: "fun_fact_image_prompt" }
+      { key: "fact_image", label: "Fact Görseli", size: "1920x1080", prompt_key: "fun_fact_image_prompt" }
     ],
     emoji_slots: [
       { key: "option_emojis", label: "Şık Emojileri", count: 3 }
@@ -50,8 +50,8 @@ export const SORU_TIPLERI = {
       jess_speech: { type: "string", editable: true, required: true }
     },
     image_slots: [
-      { key: "visible_image", label: "Görünür Seçenek Görseli", size: "1024x1024", prompt_key: "visible_option.image_prompt" },
-      { key: "surprise_image", label: "Sürpriz Açılış Görseli", size: "1024x1024", prompt_key: "surprise_option.surprise_image_prompt" }
+      { key: "visible_image", label: "Görünür Seçenek Görseli", size: "1920x1080", prompt_key: "visible_option.image_prompt" },
+      { key: "surprise_image", label: "Sürpriz Açılış Görseli", size: "1920x1080", prompt_key: "surprise_option.surprise_image_prompt" }
     ],
     emoji_slots: [],
     template: {

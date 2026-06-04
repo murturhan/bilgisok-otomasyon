@@ -1027,7 +1027,7 @@ async function handleContentApprovalPage(request, env, url) {
       `<label class="lbl">Fun Fact</label>` +
       `<textarea id="q${i}_ff">${esc(q.fun_fact || '')}</textarea>` +
       imgSlotHtml(i, 'image', 'Soru Görseli', q.image_prompt, '1920x1080') +
-      imgSlotHtml(i, 'fact_image', 'Fact Görseli', q.fun_fact_image_prompt, '1024x1024');
+      imgSlotHtml(i, 'fact_image', 'Fact Görseli', q.fun_fact_image_prompt, '1920x1080');
   };
 
   const wyrCardHtml = (q, i) => {
@@ -1036,12 +1036,12 @@ async function handleContentApprovalPage(request, env, url) {
     return `<div class="row2">` +
       `<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>` +
       `<label class="lbl">Etiket</label><input type="text" id="q${i}_vl" value="${esc(vis.label || '')}" placeholder="Görünür seçenek">` +
-      imgSlotHtml(i, 'visible_image', 'Görünür Görsel', vis.image_prompt, '1024x1024') + `</div>` +
+      imgSlotHtml(i, 'visible_image', 'Görünür Görsel', vis.image_prompt, '1920x1080') + `</div>` +
       `<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>` +
       `<label class="lbl">Kapalı etiket</label><input type="text" id="q${i}_sl" value="${esc(sur.label || 'Surprise Box')}">` +
       `<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q${i}_so" value="${esc(sur.surprise_outcome || '')}">` +
       `<label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:.8em"><input type="checkbox" id="q${i}_sg"${sur.surprise_is_good !== false ? ' checked' : ''} style="accent-color:#10b981"> İyi sürpriz</label>` +
-      imgSlotHtml(i, 'surprise_image', 'Sürpriz Reveal Görseli', sur.surprise_image_prompt, '1024x1024') + `</div></div>` +
+      imgSlotHtml(i, 'surprise_image', 'Sürpriz Reveal Görseli', sur.surprise_image_prompt, '1920x1080') + `</div></div>` +
       `<label class="lbl">Jess Reaksiyon</label><textarea id="q${i}_jr">${esc(q.jess_reaction || '')}</textarea>`;
   };
 
@@ -1199,7 +1199,7 @@ function buildMcFields(q,i){
     +'<label class="lbl">Fun Fact</label>'
     +'<textarea id="q'+i+'_ff">'+esc1(q.fun_fact)+'</textarea>'
     +buildImgSlot(i,'image','Soru Görseli',q.image_prompt,'1920x1080')
-    +buildImgSlot(i,'fact_image','Fact Görseli',q.fun_fact_image_prompt,'1024x1024');
+    +buildImgSlot(i,'fact_image','Fact Görseli',q.fun_fact_image_prompt,'1920x1080');
 }
 
 function buildWyrFields(q,i){
@@ -1208,12 +1208,12 @@ function buildWyrFields(q,i){
   return '<div class="row2">'
     +'<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>'
     +'<label class="lbl">Etiket</label><input type="text" id="q'+i+'_vl" value="'+esc1(vis.label||'')+'" placeholder="Görünür seçenek">'
-    +buildImgSlot(i,'visible_image','Görünür Görsel',vis.image_prompt,'1024x1024')+'</div>'
+    +buildImgSlot(i,'visible_image','Görünür Görsel',vis.image_prompt,'1920x1080')+'</div>'
     +'<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>'
     +'<label class="lbl">Kapalı etiket</label><input type="text" id="q'+i+'_sl" value="'+esc1(sur.label||'Surprise Box')+'">'
     +'<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q'+i+'_so" value="'+esc1(sur.surprise_outcome||'')+'">'
     +'<label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:.8em"><input type="checkbox" id="q'+i+'_sg"'+(sur.surprise_is_good!==false?' checked':'')+' style="accent-color:#10b981"> İyi sürpriz</label>'
-    +buildImgSlot(i,'surprise_image','Sürpriz Reveal Görseli',sur.surprise_image_prompt,'1024x1024')+'</div></div>'
+    +buildImgSlot(i,'surprise_image','Sürpriz Reveal Görseli',sur.surprise_image_prompt,'1920x1080')+'</div></div>'
     +'<label class="lbl">Jess Reaksiyon</label><textarea id="q'+i+'_jr">'+esc1(q.jess_reaction||'')+'</textarea>';
 }
 

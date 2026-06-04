@@ -1,4 +1,4 @@
-// REV 017/02JUN26 - video_url desteği: OffthreadVideo ImageCard'da
+// REV 018/04JUN26 - fact modu: gözlük orta sütundan kaldırıldı, FunFactPanel altında gösteriliyor
 import React from "react";
 import {
   AbsoluteFill,
@@ -473,12 +473,10 @@ const LongLayout: React.FC<LayoutProps> = ({
           </div>
         </div>
       ) : (
-        // FACT MODU: 3 sütun — resim SOL, gözlük ORTA, panel SAĞ (tam yükseklik)
+        // FACT MODU: 2 sütun — resim SOL, panel SAĞ (gözlük panel altında)
         (() => {
-          const glassesSize = 280;
-          const centerColWidth = 320;
           const sideGap = 20;
-          const factColWidth = Math.floor((width - 100 - centerColWidth - sideGap * 2) / 2);
+          const factColWidth = Math.floor((width - 100 - sideGap) / 2);
           const factColHeight = Math.floor(height - bodyTop - bodyBottom);
 
           return (
@@ -486,7 +484,7 @@ const LongLayout: React.FC<LayoutProps> = ({
               style={{
                 display: "flex",
                 flexDirection: "row",
-                alignItems: "center",
+                alignItems: "flex-start",
                 justifyContent: "center",
                 gap: sideGap,
                 width: "100%",
@@ -505,27 +503,14 @@ const LongLayout: React.FC<LayoutProps> = ({
                 borderColor={borderColor}
               />
 
-              {/* ORTA: Gözlük */}
-              <div
-                style={{
-                  width: centerColWidth,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <AnimatedGlasses width={glassesSize} height={Math.floor(glassesSize / (458 / 223))} frame={localFrame} />
-              </div>
-
-              {/* SAĞ: Fact paneli */}
+              {/* SAĞ: Fact paneli (gözlük panel içinde altında) */}
               <FunFactPanel
                 text={question.fun_fact}
                 showFrame={phases.funFact}
                 isVertical={false}
                 boxWidth={factColWidth}
                 boxHeight={factColHeight}
-                hideGlasses={true}
+                hideGlasses={false}
               />
             </div>
           );

@@ -143,8 +143,8 @@ async function main() {
       console.log(`🎨 ${eksikPromptlar.length} eksik görsel üretilecek (index: ${eksikOrijinalIndexler.map(i => i+1).join(", ")})`);
       
       const { sonuclar, hatalar } = await fluxRotationCagri(eksikPromptlar, {
-        width: 1280,
-        height: 720,
+        width: 1920,
+        height: 1080,
         onSuccess: async (filteredIndex, buffer) => {
           // filteredIndex = eksikPromptlar içindeki index → orijinal'e çevir
           const orijinalIndex = eksikOrijinalIndexler[filteredIndex];

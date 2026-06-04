@@ -515,8 +515,8 @@ async function main() {
       }
       const prompts = regenQuestionImages.map(r => r.prompt);
       const res = await fluxRotationCagri(prompts, {
-        width: 1280,
-        height: 720,
+        width: 1920,
+        height: 1080,
         onSuccess: async (filteredIdx, buffer) => {
           const orijinal = regenQuestionImages[filteredIdx];
           const slot = slotForQuestion(orijinal.index, "question");
@@ -544,8 +544,8 @@ async function main() {
       }
       const prompts = regenFactImages.map(r => r.prompt);
       const res = await fluxRotationCagri(prompts, {
-        width: 1280,
-        height: 720,
+        width: 1920,
+        height: 1080,
         onSuccess: async (filteredIdx, buffer) => {
           const orijinal = regenFactImages[filteredIdx];
           const slot = slotForQuestion(orijinal.index, "fact");
