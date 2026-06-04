@@ -1,4 +1,4 @@
-// REV 027/04JUN26 - s1FileChange: Drive URL img tag'e yazılmıyor (auth gerekiyor), yerel preview korunuyor
+// REV 028/04JUN26 - button+.click()→label, JS error listener, preview daha büyük + scrollIntoView
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1029,12 +1029,13 @@ async function handleContentApprovalPage(request, env, url) {
     `<label class="lbl">Görsel Prompt (FLUX için)</label>` +
     `<textarea id="q${i}_p_${slotKey}">${esc(prompt || '')}</textarea>` +
     `<div class="flux-row"><label><input type="checkbox" id="q${i}_flux_${slotKey}" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>` +
+    `<div class="preview-box" id="q${i}_prev_${slotKey}"><span style="color:#6b7280">Önizleme yok</span></div>` +
     `<div class="upload-row">` +
-    `<button type="button" class="btn-sm btn-upload" onclick="document.getElementById('q${i}_fi_${slotKey}').click()">📁 Resim yükle</button>` +
+    `<label for="q${i}_fi_${slotKey}" class="btn-sm btn-upload" style="cursor:pointer">📁 Resim yükle</label>` +
     `<input type="file" id="q${i}_fi_${slotKey}" class="s1-file-inp" accept="image/*" onchange="s1FileChange(this,'q${i}_prev_${slotKey}','q${i}_flux_${slotKey}','${i}_${slotKey}',${i},'${slotKey}',false)">` +
-    `<button type="button" class="btn-sm btn-video" onclick="document.getElementById('q${i}_fiv_${slotKey}').click()">🎬 Video yükle</button>` +
+    `<label for="q${i}_fiv_${slotKey}" class="btn-sm btn-video" style="cursor:pointer">🎬 Video yükle</label>` +
     `<input type="file" id="q${i}_fiv_${slotKey}" class="s1-file-inp" accept=".mp4,.mov,.webm" onchange="s1FileChange(this,'q${i}_prev_${slotKey}','q${i}_flux_${slotKey}','${i}_${slotKey}',${i},'${slotKey}',true)">` +
-    `</div><div class="preview-box" id="q${i}_prev_${slotKey}"><span>Önizleme yok</span></div></div>`;
+    `</div></div>`;
   };
 
   const mcCardHtml = (q, i) => {
@@ -1142,8 +1143,8 @@ textarea{min-height:52px}
 .btn-upload{border-color:#3b82f6;color:#93c5fd}
 .btn-video{border-color:#6366f1;color:#a5b4fc}
 .s1-file-inp{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0}
-.preview-box{min-height:60px;background:#111827;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-top:5px;overflow:hidden;font-size:.74em;color:#6b7280}
-.preview-box img,.preview-box video{max-height:90px;max-width:100%;border-radius:5px}
+.preview-box{min-height:100px;background:#0d1117;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-top:5px;margin-bottom:5px;overflow:hidden;font-size:.74em;color:#6b7280;border:1px dashed #374151}
+.preview-box img,.preview-box video{max-height:120px;max-width:100%;border-radius:5px;display:block}
 .mode-row{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
 .mode-lbl{display:flex;align-items:center;gap:4px;font-size:.78em;color:#d1d5db;cursor:pointer;padding:4px 8px;border-radius:5px;border:1px solid #374151;background:#111827}
 .mode-lbl:has(input:checked){border-color:#a78bfa;background:#1e1b4b;color:#c4b5fd}
@@ -1188,6 +1189,7 @@ ${serverCards}
   </div>
 </div>
 <script>
+window.addEventListener('error',function(e){var s=document.getElementById('status');if(s){s.style.display='block';s.className='err';s.textContent='JS Hatası: '+e.message+' (satır:'+e.lineno+')';}});
 const JOB_ID = ${JSON.stringify(jobId)};
 const CHAT_ID = ${JSON.stringify(String(chat_id))};
 const REGISTRY = ${REGISTRY_JS};
@@ -1264,13 +1266,13 @@ function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode){
     +'<label class="lbl">Görsel Prompt (FLUX için)</label>'
     +'<textarea id="q'+i+'_p_'+slotKey+'">'+esc1(prompt||'')+'</textarea>'
     +'<div class="flux-row"><label><input type="checkbox" id="q'+i+'_flux_'+slotKey+'" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>'
+    +'<div class="preview-box" id="q'+i+'_prev_'+slotKey+'">'+previewHtml+'</div>'
     +'<div class="upload-row">'
-    +'<button type="button" class="btn-sm btn-upload" onclick="document.getElementById(\'q'+i+'_fi_'+slotKey+'\').click()">📁 Resim yükle</button>'
+    +'<label for="q'+i+'_fi_'+slotKey+'" class="btn-sm btn-upload" style="cursor:pointer">📁 Resim yükle</label>'
     +'<input type="file" id="q'+i+'_fi_'+slotKey+'" class="s1-file-inp" accept="image/*" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',false)">'
-    +'<button type="button" class="btn-sm btn-video" onclick="document.getElementById(\'q'+i+'_fiv_'+slotKey+'\').click()">🎬 Video yükle</button>'
+    +'<label for="q'+i+'_fiv_'+slotKey+'" class="btn-sm btn-video" style="cursor:pointer">🎬 Video yükle</label>'
     +'<input type="file" id="q'+i+'_fiv_'+slotKey+'" class="s1-file-inp" accept=".mp4,.mov,.webm" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',true)">'
     +'</div>'
-    +'<div class="preview-box" id="q'+i+'_prev_'+slotKey+'">'+previewHtml+'</div>'
     +'</div>';
 }
 
@@ -1336,7 +1338,8 @@ function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVid
     var reader=new FileReader();
     reader.onload=function(e){
       if(st){st.className='ok';st.textContent='✓ Önizleme hazır: '+file.name;}
-      prev.innerHTML='<img src="'+e.target.result+'" style="width:100%;max-height:80px;border-radius:6px">';
+      prev.innerHTML='<img src="'+e.target.result+'" style="max-width:100%;max-height:120px;border-radius:6px;display:block">';
+      prev.scrollIntoView({behavior:'smooth',block:'nearest'});
     };
     reader.onerror=function(){
       if(st){st.className='err';st.textContent='FileReader hatası!';}
