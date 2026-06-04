@@ -1,4 +1,4 @@
-// REV 018/04JUN26 - fact modu: gözlük orta sütundan kaldırıldı, FunFactPanel altında gösteriliyor
+// REV 019/04JUN26 - image_show_mode: net/flu/surpriz + flu blur efekti
 import React from "react";
 import {
   AbsoluteFill,
@@ -394,11 +394,13 @@ const LongLayout: React.FC<LayoutProps> = ({
   // Fact modunda alan 1/3 büyük (kullanıcı talebi)
   const factHeight = Math.min(height - bodyTop - bodyBottom, 800);
   
-  // ─── FİTİL + KONFETI hesabı ───
-  // show_image=true: resim hep net, fitil/patlama yok
-  // show_image=false: "?" placeholder, fünye yanar, reveal'da resim açılır + konfeti
-  const showImageClear = question.show_image !== false;
-  const blurAmount = 0;
+  // ─── Görsel mod ───
+  // net: resim hep net; flu: reveal'a kadar bulanık; surpriz: "?" placeholder
+  const showMode: string = (question as any).image_show_mode
+    || (question.show_image === false ? 'surpriz' : 'net');
+  const showImageClear = showMode !== 'surpriz';
+  const afterReveal = localFrame >= phases.reveal;
+  const blurAmount = showMode === 'flu' && !afterReveal ? 18 : 0;
 
   let fusePhase = 0;
   let burstActive = false;
@@ -447,7 +449,7 @@ const LongLayout: React.FC<LayoutProps> = ({
               fusePhase={fusePhase}
               burstActive={burstActive}
               burstLocalFrame={burstLocalFrame}
-              showAsPlaceholder={question.show_image === false && !isRevealed}
+              showAsPlaceholder={showMode === 'surpriz' && !isRevealed}
               borderColor={borderColor}
             />
           </div>
@@ -534,11 +536,13 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   // Progress bar countdown veya drumRoll/silentPause sırasında görünür
   const showProgressBar = inCountdown || inDrumRoll || inSilentPause;
   
-  // ─── FİTİL + KONFETI hesabı ───
-  // show_image=true: resim hep net, fitil/patlama yok
-  // show_image=false: "?" placeholder, fünye yanar, reveal'da resim açılır + konfeti
-  const showImageClear = question.show_image !== false;
-  const blurAmount = 0;
+  // ─── Görsel mod ───
+  // net: resim hep net; flu: reveal'a kadar bulanık; surpriz: "?" placeholder
+  const showMode: string = (question as any).image_show_mode
+    || (question.show_image === false ? 'surpriz' : 'net');
+  const showImageClear = showMode !== 'surpriz';
+  const afterReveal = localFrame >= phases.reveal;
+  const blurAmount = showMode === 'flu' && !afterReveal ? 18 : 0;
 
   let fusePhase = 0;
   let burstActive = false;

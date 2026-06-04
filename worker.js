@@ -1,4 +1,4 @@
-// REV 024/04JUN26 - stage=1 kartlar server-side render edildi (JS render bug bypass)
+// REV 025/04JUN26 - stage=1: yerel upload önizleme + Net/Flu/Sürpriz kutu mod seçimi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -998,8 +998,15 @@ async function handleContentApprovalPage(request, env, url) {
       `<option value="${k}"${qtype === k ? ' selected' : ''}>${k === 'multiple_choice' ? 'Çoktan Seçmeli' : 'Hangisini Tercih Edersin'}</option>`
     ).join('');
 
-  const imgSlotHtml = (i, slotKey, slotLabel, prompt, size) =>
-    `<div class="img-slot"><div class="img-slot-title">🖼 ${esc(slotLabel)}${size ? `<span style="font-size:.72em;color:#6b7280;font-weight:400;margin-left:6px">${esc(size)}</span>` : ''}</div>` +
+  const imgSlotHtml = (i, slotKey, slotLabel, prompt, size, showMode) => {
+    const sm = showMode || 'flu';
+    const radioName = `q${i}_mode_${slotKey}`;
+    const radios = ['net','flu','surpriz'].map(v => {
+      const labels = {net:'🖼️ Net göster', flu:'🌫️ Flu göster', surpriz:'❓ Sürpriz kutu'};
+      return `<label class="mode-lbl"><input type="radio" name="${radioName}" value="${v}"${sm===v?' checked':''}> ${esc(labels[v])}</label>`;
+    }).join('');
+    return `<div class="img-slot"><div class="img-slot-title">🖼 ${esc(slotLabel)}${size ? `<span style="font-size:.72em;color:#6b7280;font-weight:400;margin-left:6px">${esc(size)}</span>` : ''}</div>` +
+    `<div class="mode-row">${radios}</div>` +
     `<label class="lbl">Görsel Prompt (FLUX için)</label>` +
     `<textarea id="q${i}_p_${slotKey}">${esc(prompt || '')}</textarea>` +
     `<div class="flux-row"><label><input type="checkbox" id="q${i}_flux_${slotKey}" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>` +
@@ -1009,6 +1016,7 @@ async function handleContentApprovalPage(request, env, url) {
     `<label class="btn-sm btn-video" for="q${i}_filev_${slotKey}">🎬 Video yükle</label>` +
     `<input type="file" id="q${i}_filev_${slotKey}" accept=".mp4,.mov,.webm" onchange="uploadFile(${i},'${slotKey}',this,true)">` +
     `</div><div class="preview-box" id="q${i}_prev_${slotKey}"><span>Önizleme yok</span></div></div>`;
+  };
 
   const mcCardHtml = (q, i) => {
     const opts = (q.options || ['','','']).map((o, j) => {
@@ -1026,8 +1034,8 @@ async function handleContentApprovalPage(request, env, url) {
       `<input type="hidden" id="q${i}_ca" value="${q.correct_answer || 0}">` +
       `<label class="lbl">Fun Fact</label>` +
       `<textarea id="q${i}_ff">${esc(q.fun_fact || '')}</textarea>` +
-      imgSlotHtml(i, 'image', 'Soru Görseli', q.image_prompt, '1920x1080') +
-      imgSlotHtml(i, 'fact_image', 'Fact Görseli', q.fun_fact_image_prompt, '1920x1080');
+      imgSlotHtml(i, 'image', 'Soru Görseli', q.image_prompt, '1920x1080', q.show_image === false ? 'surpriz' : (q.image_show_mode || 'flu')) +
+      imgSlotHtml(i, 'fact_image', 'Fact Görseli', q.fun_fact_image_prompt, '1920x1080', q.fact_image_show_mode || 'flu');
   };
 
   const wyrCardHtml = (q, i) => {
@@ -1036,12 +1044,12 @@ async function handleContentApprovalPage(request, env, url) {
     return `<div class="row2">` +
       `<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>` +
       `<label class="lbl">Etiket</label><input type="text" id="q${i}_vl" value="${esc(vis.label || '')}" placeholder="Görünür seçenek">` +
-      imgSlotHtml(i, 'visible_image', 'Görünür Görsel', vis.image_prompt, '1920x1080') + `</div>` +
+      imgSlotHtml(i, 'visible_image', 'Görünür Görsel', vis.image_prompt, '1920x1080', vis.show_mode || 'flu') + `</div>` +
       `<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>` +
       `<label class="lbl">Kapalı etiket</label><input type="text" id="q${i}_sl" value="${esc(sur.label || 'Surprise Box')}">` +
       `<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q${i}_so" value="${esc(sur.surprise_outcome || '')}">` +
       `<label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:.8em"><input type="checkbox" id="q${i}_sg"${sur.surprise_is_good !== false ? ' checked' : ''} style="accent-color:#10b981"> İyi sürpriz</label>` +
-      imgSlotHtml(i, 'surprise_image', 'Sürpriz Reveal Görseli', sur.surprise_image_prompt, '1920x1080') + `</div></div>` +
+      imgSlotHtml(i, 'surprise_image', 'Sürpriz Reveal Görseli', sur.surprise_image_prompt, '1920x1080', sur.show_mode || 'net') + `</div></div>` +
       `<label class="lbl">Jess Reaksiyon</label><textarea id="q${i}_jr">${esc(q.jess_reaction || '')}</textarea>`;
   };
 
@@ -1117,6 +1125,10 @@ textarea{min-height:52px}
 input[type=file]{position:absolute;width:0;height:0;opacity:0;overflow:hidden;pointer-events:none}
 .preview-box{min-height:60px;background:#111827;border-radius:6px;display:flex;align-items:center;justify-content:center;margin-top:5px;overflow:hidden;font-size:.74em;color:#6b7280}
 .preview-box img,.preview-box video{max-height:90px;max-width:100%;border-radius:5px}
+.mode-row{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
+.mode-lbl{display:flex;align-items:center;gap:4px;font-size:.78em;color:#d1d5db;cursor:pointer;padding:4px 8px;border-radius:5px;border:1px solid #374151;background:#111827}
+.mode-lbl:has(input:checked){border-color:#a78bfa;background:#1e1b4b;color:#c4b5fd}
+input[type=radio]{accent-color:#a78bfa;cursor:pointer}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 #status{margin:10px 16px;padding:10px 14px;border-radius:8px;display:none;font-weight:600;font-size:.88em}
 .ok{background:#064e3b;color:#6ee7b7}.err{background:#7f1d1d;color:#fca5a5}
@@ -1198,8 +1210,8 @@ function buildMcFields(q,i){
     +'<input type="hidden" id="q'+i+'_ca" value="'+(q.correct_answer||0)+'">'
     +'<label class="lbl">Fun Fact</label>'
     +'<textarea id="q'+i+'_ff">'+esc1(q.fun_fact)+'</textarea>'
-    +buildImgSlot(i,'image','Soru Görseli',q.image_prompt,'1920x1080')
-    +buildImgSlot(i,'fact_image','Fact Görseli',q.fun_fact_image_prompt,'1920x1080');
+    +buildImgSlot(i,'image','Soru Görseli',q.image_prompt,'1920x1080',q.image_show_mode||(q.show_image===false?'surpriz':'flu'))
+    +buildImgSlot(i,'fact_image','Fact Görseli',q.fun_fact_image_prompt,'1920x1080',q.fact_image_show_mode||'flu');
 }
 
 function buildWyrFields(q,i){
@@ -1208,20 +1220,25 @@ function buildWyrFields(q,i){
   return '<div class="row2">'
     +'<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>'
     +'<label class="lbl">Etiket</label><input type="text" id="q'+i+'_vl" value="'+esc1(vis.label||'')+'" placeholder="Görünür seçenek">'
-    +buildImgSlot(i,'visible_image','Görünür Görsel',vis.image_prompt,'1920x1080')+'</div>'
+    +buildImgSlot(i,'visible_image','Görünür Görsel',vis.image_prompt,'1920x1080',vis.show_mode||'flu')+'</div>'
     +'<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>'
     +'<label class="lbl">Kapalı etiket</label><input type="text" id="q'+i+'_sl" value="'+esc1(sur.label||'Surprise Box')+'">'
     +'<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q'+i+'_so" value="'+esc1(sur.surprise_outcome||'')+'">'
     +'<label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:.8em"><input type="checkbox" id="q'+i+'_sg"'+(sur.surprise_is_good!==false?' checked':'')+' style="accent-color:#10b981"> İyi sürpriz</label>'
-    +buildImgSlot(i,'surprise_image','Sürpriz Reveal Görseli',sur.surprise_image_prompt,'1920x1080')+'</div></div>'
+    +buildImgSlot(i,'surprise_image','Sürpriz Reveal Görseli',sur.surprise_image_prompt,'1920x1080',sur.show_mode||'net')+'</div></div>'
     +'<label class="lbl">Jess Reaksiyon</label><textarea id="q'+i+'_jr">'+esc1(q.jess_reaction||'')+'</textarea>';
 }
 
-function buildImgSlot(i,slotKey,slotLabel,prompt,size){
+function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode){
   const uploadKey=i+'_'+slotKey;
   const previewHtml=uploadedUrls[uploadKey]?'<img src="'+uploadedUrls[uploadKey]+'" style="max-height:80px;border-radius:5px">':'<span>Önizleme yok</span>';
   const sizeHtml=size?'<span style="font-size:.72em;color:#6b7280;font-weight:400;margin-left:6px">'+esc1(size)+'</span>':'';
-  return '<div class="img-slot"><div class="img-slot-title">🖼 '+esc1(slotLabel)+sizeHtml+'</div>'
+  const sm=showMode||'flu';
+  const rn='q'+i+'_mode_'+slotKey;
+  const modeLabels={net:'🖼️ Net göster',flu:'🌫️ Flu göster',surpriz:'❓ Sürpriz kutu'};
+  const radios=['net','flu','surpriz'].map(v=>'<label class="mode-lbl"><input type="radio" name="'+rn+'" value="'+v+'"'+(sm===v?' checked':'')+'>'+esc1(modeLabels[v])+'</label>').join('');
+  return '<div class="img-slot"><div class="img-slot-title">🖼 '+esc1(slotLabel)+sizeHtml+'</div>'+
+    '<div class="mode-row">'+radios+'</div>'
     +'<label class="lbl">Görsel Prompt (FLUX için)</label>'
     +'<textarea id="q'+i+'_p_'+slotKey+'">'+esc1(prompt||'')+'</textarea>'
     +'<div class="flux-row"><label><input type="checkbox" id="q'+i+'_flux_'+slotKey+'" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>'
@@ -1280,23 +1297,42 @@ function addQuestion(type){
 
 async function uploadFile(i,slotKey,input,isVideo){
   const file=input.files[0];if(!file)return;
-  const prevId='q'+i+'_prev_'+slotKey;
-  const prev=document.getElementById(prevId);
-  if(prev)prev.innerHTML='<span>⏳ Yükleniyor...</span>';
+  const prev=document.getElementById('q'+i+'_prev_'+slotKey);
+
+  // Yerel önizleme hemen göster (Drive URL bekleme)
+  if(prev){
+    if(isVideo){
+      prev.innerHTML='<div style="background:#0a1f12;border-radius:6px;padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,28))+'<br><span style="color:#6b7280">'+( file.size/1024/1024).toFixed(1)+'MB</span></div>';
+    }else{
+      const objUrl=URL.createObjectURL(file);
+      prev.innerHTML='<img src="'+objUrl+'" style="max-height:80px;border-radius:5px" alt="önizleme">';
+    }
+  }
+
+  // FLUX checkbox'ı kaldır
+  const cb=document.getElementById('q'+i+'_flux_'+slotKey);if(cb)cb.checked=false;
+
+  // Arkaplanda Drive'a yükle (URL'yi submission için sakla)
   const fd=new FormData();fd.append('file',file);
   try{
     const r=await fetch('/api/upload-medya/'+JOB_ID+'/'+i+'/'+slotKey,{method:'POST',body:fd});
     const d=await r.json();
     if(d.ok){
       uploadedUrls[i+'_'+slotKey]=d.url;
-      const cb=document.getElementById('q'+i+'_flux_'+slotKey);if(cb)cb.checked=false;
-      if(prev){
-        if(isVideo)prev.innerHTML='<div style="color:#10b981;padding:8px;font-size:.8em">🎬 Video yüklendi</div>';
-        else prev.innerHTML='<img src="'+d.url+'" style="max-height:80px;border-radius:5px">';
-      }
-    }else{if(prev)prev.innerHTML='<span style="color:#fca5a5">❌ '+esc1(d.error)+'</span>';}
-  }catch(e){if(prev)prev.innerHTML='<span style="color:#fca5a5">❌ '+esc1(e.message)+'</span>';}
+      // Yerel önizleme kalır, Drive bağlantısını köşeye ekle
+      if(prev&&!isVideo){const badge=document.createElement('span');badge.style.cssText='position:absolute;bottom:3px;right:3px;background:#10b981;color:#fff;font-size:.65em;padding:1px 5px;border-radius:3px';badge.textContent='✓ Drive';prev.style.position='relative';prev.appendChild(badge);}
+    }else{
+      if(prev){const err=document.createElement('div');err.style.cssText='color:#fca5a5;font-size:.7em;margin-top:3px';err.textContent='⚠ '+d.error;prev.after(err);}
+    }
+  }catch(e){
+    if(prev){const err=document.createElement('div');err.style.cssText='color:#fca5a5;font-size:.7em;margin-top:3px';err.textContent='⚠ '+e.message;prev.after(err);}
+  }
   input.value='';
+}
+
+function getMode(i,slotKey){
+  const el=document.querySelector('input[name="q'+i+'_mode_'+slotKey+'"]:checked');
+  return el?el.value:'flu';
 }
 
 function collectSorular(){
@@ -1307,12 +1343,14 @@ function collectSorular(){
     const isWyr=q.question_type==='would_you_rather';
     const qNum=result.length+1;
     if(isWyr){
+      const visMode=getMode(i,'visible_image');
+      const surMode=getMode(i,'surprise_image');
       result.push({
-        ...q, // preserve original fields (jess_speech, question_audio_text, etc.)
+        ...q,
         question_type:'would_you_rather',
         question_text:'Pick One!',
-        visible_option:{...(q.visible_option||{}),label:val('q'+i+'_vl'),image_prompt:val('q'+i+'_p_visible_image')},
-        surprise_option:{...(q.surprise_option||{}),label:val('q'+i+'_sl'),surprise_outcome:val('q'+i+'_so'),surprise_image_prompt:val('q'+i+'_p_surprise_image'),surprise_is_good:chk('q'+i+'_sg')},
+        visible_option:{...(q.visible_option||{}),label:val('q'+i+'_vl'),image_prompt:val('q'+i+'_p_visible_image'),show_mode:visMode},
+        surprise_option:{...(q.surprise_option||{}),label:val('q'+i+'_sl'),surprise_outcome:val('q'+i+'_so'),surprise_image_prompt:val('q'+i+'_p_surprise_image'),surprise_is_good:chk('q'+i+'_sg'),show_mode:surMode},
         jess_reaction:val('q'+i+'_jr'),
         flux_visible_image:chk('q'+i+'_flux_visible_image'),
         flux_surprise_image:chk('q'+i+'_flux_surprise_image'),
@@ -1324,11 +1362,12 @@ function collectSorular(){
       const opts=[val('q'+i+'_o0'),val('q'+i+'_o1'),val('q'+i+'_o2')];
       const ca=parseInt(val('q'+i+'_ca'))||0;
       const ff=val('q'+i+'_ff');
-      // Regenerate audio texts based on edited content
+      const imgMode=getMode(i,'image');
+      const factMode=getMode(i,'fact_image');
       const qaText='Question '+qNum+'. '+qt+' Is it '+opts.map((o,j)=>letters[j]+': '+o).join(', ')+'?';
       const aaText='The correct answer is '+letters[ca]+': '+opts[ca]+'! '+ff;
       result.push({
-        ...q, // preserve: difficulty, show_image, option_flags, topic_emojis etc.
+        ...q,
         question_type:'multiple_choice',
         question_text:qt,
         options:opts,
@@ -1336,6 +1375,9 @@ function collectSorular(){
         fun_fact:ff,
         image_prompt:val('q'+i+'_p_image'),
         fun_fact_image_prompt:val('q'+i+'_p_fact_image'),
+        image_show_mode:imgMode,
+        fact_image_show_mode:factMode,
+        show_image:imgMode!=='surpriz', // backward compat
         question_audio_text:qaText,
         answer_audio_text:aaText,
         flux_image:chk('q'+i+'_flux_image'),
