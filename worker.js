@@ -1,4 +1,4 @@
-// REV 022/04JUN26 - Parça 4/4: handleIcerikOnay → 02.7 üzerinden dispatch, stage1Edits yapısı, silinen_original_indices
+// REV 023/04JUN26 - /konu_oner telegram komutu + /start menüsü
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -837,6 +837,24 @@ async function handleTelegram(request, env, ctx) {
   let body;
   try { body = await request.json(); } catch { return new Response("Bad Request", { status: 400 }); }
 
+  // Text komutları
+  if (body.message?.text) {
+    const text   = String(body.message.text).trim();
+    const chatId = String(body.message.chat?.id || "");
+    const lower  = text.toLowerCase();
+
+    if (lower === "/start") {
+      ctx.waitUntil(telegramMesajAt(chatId, `🦊 *GeniMini Tests Bot*\n\nMevcut komutlar:\n\n/konu\\_oner — Yeni içerik için konu önerileri gönder`, env));
+      return new Response("OK", { status: 200 });
+    }
+
+    if (lower === "/konu_oner" || lower === "konu öner" || lower === "konu oner") {
+      ctx.waitUntil(konuOnerTetikle(chatId, env));
+      return new Response("OK", { status: 200 });
+    }
+  }
+
+  // Buton callback'leri (mevcut, değişmedi)
   if (body.callback_query) {
     const cb     = body.callback_query;
     const cbId   = cb.id;
@@ -872,6 +890,51 @@ async function handleTelegram(request, env, ctx) {
     }
   }
   return new Response("OK", { status: 200 });
+}
+
+async function konuOnerTetikle(chatId, env) {
+  try {
+    await telegramMesajAt(chatId, `✓ Konu öneriler hazırlanıyor, birazdan gönderilecek...`, env);
+    const res = await fetch(
+      `${GH_API}/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/00-konu-oneri.yml/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          "Accept":               "application/vnd.github+json",
+          "Authorization":        `Bearer ${env.GITHUB_TOKEN}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent":           "geniminitests-worker",
+          "Content-Type":         "application/json",
+        },
+        body: JSON.stringify({ ref: "main", inputs: {} }),
+      }
+    );
+    if (!res.ok) {
+      const txt = await res.text();
+      console.error(`konuOnerTetikle hata: ${res.status} — ${txt.substring(0, 200)}`);
+      await telegramMesajAt(chatId, `❌ Workflow tetiklenemedi: ${res.status}`, env);
+    } else {
+      console.log("✓ 00-konu-oneri.yml dispatched via /konu_oner");
+    }
+  } catch (e) {
+    console.error("konuOnerTetikle hata:", e.message);
+  }
+}
+
+async function telegramMesajAt(chatId, text, env) {
+  if (!chatId) return;
+  try {
+    await fetch(
+      `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
+      }
+    );
+  } catch (e) {
+    console.error("telegramMesajAt hata:", e.message);
+  }
 }
 
 async function telegramCevapla(callbackId, env) {
