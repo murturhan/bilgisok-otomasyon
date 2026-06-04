@@ -42,6 +42,25 @@ export default {
     if (method === "POST" && path.startsWith("/api/submit/")) {
       return handleSubmit(request, env, url, ctx);
     }
+    if (method === "GET" && path === "/test-upload") {
+      return new Response(`<!DOCTYPE html><html><head><meta charset=UTF-8><title>Upload Test</title></head><body style="background:#111827;color:#f3f4f6;font-family:system-ui;padding:40px">
+<h2>📁 FileReader Önizleme Testi</h2>
+<p style="color:#9ca3af;margin:8px 0 20px">Resim seç — anında önizleme görünmeli:</p>
+<input type="file" id="tf" accept="image/*" style="display:none" onchange="go(this)">
+<label for="tf" style="display:inline-block;padding:8px 16px;background:#3b82f6;color:#fff;border-radius:6px;cursor:pointer">📁 Dosya Seç</label>
+<div id="prev" style="margin-top:16px;min-height:100px;background:#1f2937;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:.85em">Buraya önizleme gelecek</div>
+<div id="log" style="margin-top:12px;font-size:.8em;color:#9ca3af"></div>
+<script>
+function go(inp){
+  var file=inp.files[0];
+  document.getElementById('log').textContent='Dosya: '+file.name+' ('+file.size+' byte)';
+  var reader=new FileReader();
+  reader.onload=function(e){document.getElementById('prev').innerHTML='<img src="'+e.target.result+'" style="max-height:200px;border-radius:6px">';};
+  reader.onerror=function(){document.getElementById('log').textContent='FileReader HATA';};
+  reader.readAsDataURL(file);
+}
+</script></body></html>`, {headers:{'Content-Type':'text/html;charset=utf-8'}});
+    }
     if (method === "POST" && path.startsWith("/api/icerik-onay/")) {
       return handleIcerikOnay(request, env, url, ctx);
     }
@@ -1012,9 +1031,9 @@ async function handleContentApprovalPage(request, env, url) {
     `<div class="flux-row"><label><input type="checkbox" id="q${i}_flux_${slotKey}" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>` +
     `<div class="upload-row">` +
     `<label class="btn-sm btn-upload" for="q${i}_file_${slotKey}">📁 Resim yükle</label>` +
-    `<input type="file" id="q${i}_file_${slotKey}" accept="image/*" onchange="uploadFile(${i},'${slotKey}',this,false)">` +
+    `<input type="file" id="q${i}_file_${slotKey}" accept="image/*" onchange="s1FileChange(this,'q${i}_prev_${slotKey}','q${i}_flux_${slotKey}','${i}_${slotKey}',${i},'${slotKey}',false)">` +
     `<label class="btn-sm btn-video" for="q${i}_filev_${slotKey}">🎬 Video yükle</label>` +
-    `<input type="file" id="q${i}_filev_${slotKey}" accept=".mp4,.mov,.webm" onchange="uploadFile(${i},'${slotKey}',this,true)">` +
+    `<input type="file" id="q${i}_filev_${slotKey}" accept=".mp4,.mov,.webm" onchange="s1FileChange(this,'q${i}_prev_${slotKey}','q${i}_flux_${slotKey}','${i}_${slotKey}',${i},'${slotKey}',true)">` +
     `</div><div class="preview-box" id="q${i}_prev_${slotKey}"><span>Önizleme yok</span></div></div>`;
   };
 
@@ -1237,6 +1256,9 @@ function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode){
   const rn='q'+i+'_mode_'+slotKey;
   const modeLabels={net:'🖼️ Net göster',flu:'🌫️ Flu göster',surpriz:'❓ Sürpriz kutu'};
   const radios=['net','flu','surpriz'].map(v=>'<label class="mode-lbl"><input type="radio" name="'+rn+'" value="'+v+'"'+(sm===v?' checked':'')+'>'+esc1(modeLabels[v])+'</label>').join('');
+  var prevId='q'+i+'_prev_'+slotKey;
+  var fluxId='q'+i+'_flux_'+slotKey;
+  var uploadKey=i+'_'+slotKey;
   return '<div class="img-slot"><div class="img-slot-title">🖼 '+esc1(slotLabel)+sizeHtml+'</div>'+
     '<div class="mode-row">'+radios+'</div>'
     +'<label class="lbl">Görsel Prompt (FLUX için)</label>'
@@ -1244,9 +1266,9 @@ function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode){
     +'<div class="flux-row"><label><input type="checkbox" id="q'+i+'_flux_'+slotKey+'" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>'
     +'<div class="upload-row">'
     +'<label class="btn-sm btn-upload" for="q'+i+'_file_'+slotKey+'">📁 Resim yükle</label>'
-    +'<input type="file" id="q'+i+'_file_'+slotKey+'" accept="image/*" onchange="uploadFile('+i+',\''+slotKey+'\',this,false)">'
+    +'<input type="file" id="q'+i+'_file_'+slotKey+'" accept="image/*" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',false)">'
     +'<label class="btn-sm btn-video" for="q'+i+'_filev_'+slotKey+'">🎬 Video yükle</label>'
-    +'<input type="file" id="q'+i+'_filev_'+slotKey+'" accept=".mp4,.mov,.webm" onchange="uploadFile('+i+',\''+slotKey+'\',this,true)">'
+    +'<input type="file" id="q'+i+'_filev_'+slotKey+'" accept=".mp4,.mov,.webm" onchange="s1FileChange(this,\''+prevId+'\',\''+fluxId+'\',\''+uploadKey+'\','+i+',\''+slotKey+'\',true)">'
     +'</div>'
     +'<div class="preview-box" id="q'+i+'_prev_'+slotKey+'">'+previewHtml+'</div>'
     +'</div>';
@@ -1295,43 +1317,27 @@ function addQuestion(type){
   setTimeout(()=>{const cards=document.getElementById('cards-container');if(cards)cards.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
 }
 
-function uploadFile(i,slotKey,input,isVideo){
-  var file=input.files[0];if(!file)return;
-  var prev=document.getElementById('q'+i+'_prev_'+slotKey);
-
-  // FileReader ile yerel önizleme — en güvenilir yöntem
-  if(prev){
+// Stage=2 handleFileChange ile aynı pattern — previewId doğrudan parametre
+function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVideo){
+  var file=inp.files[0];if(!file)return;
+  var prev=document.getElementById(previewId);
+  var reader=new FileReader();
+  reader.onload=function(e){
+    if(!prev)return;
     if(isVideo){
-      prev.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,28))+'</div>';
+      prev.innerHTML='<div style="background:#0a1f12;border-radius:6px;padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,28))+'</div>';
     }else{
-      var reader=new FileReader();
-      reader.onload=function(ev){
-        if(prev)prev.innerHTML='<img src="'+ev.target.result+'" style="max-width:100%;max-height:80px;display:block;margin:auto;border-radius:5px">';
-      };
-      reader.onerror=function(){if(prev)prev.innerHTML='<span style="color:#fca5a5">Önizleme hatası</span>';};
-      reader.readAsDataURL(file);
+      prev.innerHTML='<img src="'+e.target.result+'" style="width:100%;max-height:80px;border-radius:6px"><span class="preview-badge">✓ Yüklendi</span>';
     }
-  }
-
-  // FLUX checkbox kaldır
-  var cb=document.getElementById('q'+i+'_flux_'+slotKey);if(cb)cb.checked=false;
-
-  // Arkaplanda Drive'a yükle
+  };
+  reader.readAsDataURL(file);
+  var cb=document.getElementById(fluxId);if(cb)cb.checked=false;
   var fd=new FormData();fd.append('file',file);
-  fetch('/api/upload-medya/'+JOB_ID+'/'+i+'/'+slotKey,{method:'POST',body:fd})
+  fetch('/api/upload-medya/'+JOB_ID+'/'+soruIdx+'/'+slotKey,{method:'POST',body:fd})
     .then(function(r){return r.json();})
-    .then(function(d){
-      if(d.ok){
-        uploadedUrls[i+'_'+slotKey]=d.url;
-        if(prev){var ok=document.createElement('div');ok.style.cssText='color:#10b981;font-size:.7em;margin-top:2px;text-align:center';ok.textContent='✓ Drive\'a yüklendi';prev.after(ok);}
-      }else{
-        if(prev){var er=document.createElement('div');er.style.cssText='color:#fca5a5;font-size:.7em;margin-top:2px';er.textContent='⚠ Drive: '+d.error;prev.after(er);}
-      }
-    })
-    .catch(function(e){
-      if(prev){var el=document.createElement('div');el.style.cssText='color:#fca5a5;font-size:.7em;margin-top:2px';el.textContent='⚠ '+e.message;prev.after(el);}
-    });
-  input.value='';
+    .then(function(d){if(d.ok)uploadedUrls[uploadKey]=d.url;})
+    .catch(function(){});
+  inp.value='';
 }
 
 function getMode(i,slotKey){
