@@ -1,4 +1,4 @@
-// REV 025/04JUN26 - stage=1: yerel upload önizleme + Net/Flu/Sürpriz kutu mod seçimi
+// REV 026/04JUN26 - s1FileChange: Drive URL upload sonrası preview box'a yazılıyor
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1320,23 +1320,51 @@ function addQuestion(type){
 // Stage=2 handleFileChange ile aynı pattern — previewId doğrudan parametre
 function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVideo){
   var file=inp.files[0];if(!file)return;
+  // ADIM 1: sync göster — fonksiyon çağrıldı mı?
+  var st=document.getElementById('status');
+  if(st){st.style.display='block';st.className='ok';st.textContent='Dosya seçildi: '+file.name+' (arıyor: '+previewId+')';}
   var prev=document.getElementById(previewId);
-  var reader=new FileReader();
-  reader.onload=function(e){
-    if(!prev)return;
-    if(isVideo){
-      prev.innerHTML='<div style="background:#0a1f12;border-radius:6px;padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,28))+'</div>';
-    }else{
-      prev.innerHTML='<img src="'+e.target.result+'" style="width:100%;max-height:80px;border-radius:6px"><span class="preview-badge">✓ Yüklendi</span>';
-    }
-  };
-  reader.readAsDataURL(file);
+  if(!prev){
+    if(st){st.className='err';st.textContent='HATA: element bulunamadı id='+previewId;}
+    return;
+  }
+  // ADIM 2: FileReader
+  if(isVideo){
+    prev.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em">🎬 '+esc1(file.name.substring(0,28))+'</div>';
+  }else{
+    prev.innerHTML='<span style="color:#a78bfa">⏳ Okunuyor...</span>';
+    var reader=new FileReader();
+    reader.onload=function(e){
+      if(st){st.className='ok';st.textContent='✓ Önizleme hazır: '+file.name;}
+      prev.innerHTML='<img src="'+e.target.result+'" style="width:100%;max-height:80px;border-radius:6px">';
+    };
+    reader.onerror=function(){
+      if(st){st.className='err';st.textContent='FileReader hatası!';}
+      prev.innerHTML='<span style="color:#fca5a5">FileReader hatası</span>';
+    };
+    reader.readAsDataURL(file);
+  }
   var cb=document.getElementById(fluxId);if(cb)cb.checked=false;
   var fd=new FormData();fd.append('file',file);
   fetch('/api/upload-medya/'+JOB_ID+'/'+soruIdx+'/'+slotKey,{method:'POST',body:fd})
     .then(function(r){return r.json();})
-    .then(function(d){if(d.ok)uploadedUrls[uploadKey]=d.url;})
-    .catch(function(){});
+    .then(function(d){
+      if(d.ok){
+        uploadedUrls[uploadKey]=d.url;
+        var prev2=document.getElementById(previewId);
+        if(prev2){
+          if(isVideo){
+            prev2.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,24))+'<br><span style="color:#6b7280">✓ Drive\'a yüklendi</span></div>';
+          }else{
+            prev2.innerHTML='<img src="'+d.url+'" style="width:100%;max-height:80px;border-radius:6px"><span class="preview-badge">✓ Drive</span>';
+          }
+        }
+        if(st){st.className='ok';st.textContent='✓ Drive\'a yüklendi: '+file.name;}
+      }else{
+        if(st){st.className='err';st.textContent='Drive yükleme hatası: '+(d.error||'bilinmeyen');}
+      }
+    })
+    .catch(function(e){if(st){st.className='err';st.textContent='Upload ağ hatası: '+e.message;}});
   inp.value='';
 }
 
