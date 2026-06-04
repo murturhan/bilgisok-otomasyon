@@ -1,4 +1,4 @@
-// REV 023/04JUN26 - /konu_oner telegram komutu + /start menüsü
+// REV 024/04JUN26 - stage=1 kartlar server-side render edildi (JS render bug bypass)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -992,6 +992,71 @@ async function handleContentApprovalPage(request, env, url) {
   const job = mevcut.data.job;
   const { baslik = "", format = "", chat_id = "", topic_emojis = [], questions = [], konu = "" } = job;
 
+  // Server-side kart render (JS render problemini bypass eder)
+  const typeOptsHtml = (qtype) =>
+    ['multiple_choice','would_you_rather'].map(k =>
+      `<option value="${k}"${qtype === k ? ' selected' : ''}>${k === 'multiple_choice' ? 'Çoktan Seçmeli' : 'Hangisini Tercih Edersin'}</option>`
+    ).join('');
+
+  const imgSlotHtml = (i, slotKey, slotLabel, prompt) =>
+    `<div class="img-slot"><div class="img-slot-title">🖼 ${esc(slotLabel)}</div>` +
+    `<label class="lbl">Görsel Prompt (FLUX için)</label>` +
+    `<textarea id="q${i}_p_${slotKey}">${esc(prompt || '')}</textarea>` +
+    `<div class="flux-row"><label><input type="checkbox" id="q${i}_flux_${slotKey}" checked style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>` +
+    `<div class="upload-row">` +
+    `<label class="btn-sm btn-upload" for="q${i}_file_${slotKey}">📁 Resim yükle</label>` +
+    `<input type="file" id="q${i}_file_${slotKey}" accept="image/*" onchange="uploadFile(${i},'${slotKey}',this,false)">` +
+    `<label class="btn-sm btn-video" for="q${i}_filev_${slotKey}">🎬 Video yükle</label>` +
+    `<input type="file" id="q${i}_filev_${slotKey}" accept=".mp4,.mov,.webm" onchange="uploadFile(${i},'${slotKey}',this,true)">` +
+    `</div><div class="preview-box" id="q${i}_prev_${slotKey}"><span>Önizleme yok</span></div></div>`;
+
+  const mcCardHtml = (q, i) => {
+    const opts = (q.options || ['','','']).map((o, j) => {
+      const ltr = ['A','B','C'][j];
+      const isCor = q.correct_answer === j;
+      return `<div class="opt-row${isCor ? ' opt-correct' : ''}" id="q${i}_row${j}">` +
+        `<span class="opt-lbl">${ltr}</span>` +
+        `<input type="text" id="q${i}_o${j}" value="${esc(o)}" placeholder="Şık ${ltr}">` +
+        `<button type="button" class="correct-btn${isCor ? ' is-correct' : ''}" id="q${i}_cb${j}" onclick="setCorrect1(${i},${j})">${isCor ? '✓ doğru' : '○'}</button>` +
+        `</div>`;
+    }).join('');
+    return `<label class="lbl">Soru metni</label>` +
+      `<textarea id="q${i}_qt">${esc(q.question_text || '')}</textarea>` +
+      `<label class="lbl" style="margin-top:8px">Şıklar</label><div class="opts-list">${opts}</div>` +
+      `<input type="hidden" id="q${i}_ca" value="${q.correct_answer || 0}">` +
+      `<label class="lbl">Fun Fact</label>` +
+      `<textarea id="q${i}_ff">${esc(q.fun_fact || '')}</textarea>` +
+      imgSlotHtml(i, 'image', 'Soru Görseli', q.image_prompt) +
+      imgSlotHtml(i, 'fact_image', 'Fact Görseli', q.fun_fact_image_prompt);
+  };
+
+  const wyrCardHtml = (q, i) => {
+    const vis = q.visible_option || {};
+    const sur = q.surprise_option || {};
+    return `<div class="row2">` +
+      `<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>` +
+      `<label class="lbl">Etiket</label><input type="text" id="q${i}_vl" value="${esc(vis.label || '')}" placeholder="Görünür seçenek">` +
+      imgSlotHtml(i, 'visible_image', 'Görünür Görsel', vis.image_prompt) + `</div>` +
+      `<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>` +
+      `<label class="lbl">Kapalı etiket</label><input type="text" id="q${i}_sl" value="${esc(sur.label || 'Surprise Box')}">` +
+      `<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q${i}_so" value="${esc(sur.surprise_outcome || '')}">` +
+      `<label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:.8em"><input type="checkbox" id="q${i}_sg"${sur.surprise_is_good !== false ? ' checked' : ''} style="accent-color:#10b981"> İyi sürpriz</label>` +
+      imgSlotHtml(i, 'surprise_image', 'Sürpriz Reveal Görseli', sur.surprise_image_prompt) + `</div></div>` +
+      `<label class="lbl">Jess Reaksiyon</label><textarea id="q${i}_jr">${esc(q.jess_reaction || '')}</textarea>`;
+  };
+
+  const serverCards = questions.map((q, i) => {
+    const isWyr = q.question_type === 'would_you_rather';
+    const numBadge = isWyr
+      ? `<span class="card-num wyr">🤔 WYR ${i + 1}</span>`
+      : `<span class="card-num">Soru ${i + 1}</span>`;
+    const header = `<div class="card-header">${numBadge}` +
+      `<select class="type-sel" id="q${i}_type" onchange="changeType(${i},this.value)">${typeOptsHtml(q.question_type)}</select>` +
+      `<button type="button" class="del-btn" onclick="deleteQ(${i})">🗑️ Sil</button></div>`;
+    const inner = isWyr ? wyrCardHtml(q, i) : mcCardHtml(q, i);
+    return `<div class="card" id="card${i}">${header}${inner}</div>`;
+  }).join('\n');
+
   const REGISTRY_JS = JSON.stringify({
     multiple_choice: {
       label: "Çoktan Seçmeli",
@@ -1080,7 +1145,9 @@ input[type=file]{position:absolute;width:0;height:0;opacity:0;overflow:hidden;po
   </div>
 </div>
 <div id="status"></div>
-<div class="cards" id="cards-container"></div>
+<div class="cards" id="cards-container">
+${serverCards}
+</div>
 <div class="add-q-row"><button type="button" class="add-q-btn" onclick="openTypeModal()">➕ Yeni soru ekle</button></div>
 <div id="type-modal">
   <div class="type-modal-inner">
@@ -1297,7 +1364,7 @@ async function submitAction(action){
   }catch(e){st.className='err';st.textContent='❌ '+e.message;}
 }
 
-renderAllCards();
+// Initial render server-side yapildi — JS yalnizca type change/delete/add sonrasi re-render
 </script>
 </body>
 </html>`;
