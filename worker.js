@@ -1,4 +1,4 @@
-// REV 030/04JUN26 - KRITIK: buildImgSlot'ta const+var uploadKey çift tanım syntax error düzeltildi
+// REV 031/04JUN26 - Telegram'da apostrof template literal icinde string kiriyordu, duzeltildi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1439,7 +1439,7 @@ async function submitAction(action){
       body:JSON.stringify({video_baslik:val('video_baslik'),sorular,action,chat_id:CHAT_ID,silinen_original_indices:silineenOriginalIndices}),
     });
     const d=await r.json();
-    if(d.ok){st.className='ok';st.textContent='✅ Gönderildi! Telegram\'da bildirim alacaksın.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
+    if(d.ok){st.className='ok';st.textContent='✅ Gönderildi! Telegram bildirimini bekle.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
     else{st.className='err';st.textContent='❌ Hata: '+JSON.stringify(d);}
   }catch(e){st.className='err';st.textContent='❌ '+e.message;}
 }
