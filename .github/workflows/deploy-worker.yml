@@ -26,10 +26,16 @@ jobs:
         run: |
           npx wrangler@4 deploy --no-bundle
 
-      - name: Sync GITHUB_TOKEN secret to Worker
+      - name: Sync secrets to Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WORKER_GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
+          WORKER_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          WORKER_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          WORKER_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
         run: |
           echo "$WORKER_GITHUB_TOKEN" | npx wrangler@4 secret put GITHUB_TOKEN
+          echo "$WORKER_OAUTH_CLIENT_ID" | npx wrangler@4 secret put GOOGLE_OAUTH_CLIENT_ID
+          echo "$WORKER_OAUTH_CLIENT_SECRET" | npx wrangler@4 secret put GOOGLE_OAUTH_CLIENT_SECRET
+          echo "$WORKER_OAUTH_REFRESH_TOKEN" | npx wrangler@4 secret put GOOGLE_OAUTH_REFRESH_TOKEN

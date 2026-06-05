@@ -1,4 +1,4 @@
-// REV 033/04JUN26 - buildImgSlot+openTypeModal: \' template literal hatasi, String.fromCharCode(39) kullanildi
+// REV 034/05JUN26 - handleUploadMedya: SA quota yok hatasi, OAuth refresh token ile token alma
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1575,8 +1575,9 @@ async function handleUploadMedya(request, env, url) {
     return json({ ok: false, error: "Geçersiz path" }, 400);
   }
 
-  const saJson = env.GDRIVE_SERVICE_ACCOUNT_JSON;
-  if (!saJson) return json({ ok: false, error: "GDRIVE_SERVICE_ACCOUNT_JSON secret eksik" }, 500);
+  if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET || !env.GOOGLE_OAUTH_REFRESH_TOKEN) {
+    return json({ ok: false, error: "OAuth secrets eksik: GOOGLE_OAUTH_CLIENT_ID / CLIENT_SECRET / REFRESH_TOKEN Worker secrets'a eklenmeli" }, 500);
+  }
 
   let formData;
   try { formData = await request.formData(); } catch { return json({ ok: false, error: "multipart form parse hatası" }, 400); }
@@ -1591,7 +1592,7 @@ async function handleUploadMedya(request, env, url) {
   const driveFolderId = mevcut.data.job.drive_folder_id;
 
   try {
-    const token = await getGDriveTokenRW(saJson);
+    const token = await getOAuthToken(env);
 
     // 01-gorseller alt klasörünü bul
     const gorselRes = await fetch(
@@ -1661,6 +1662,22 @@ async function handleUploadMedya(request, env, url) {
   } catch (e) {
     return json({ ok: false, error: e.message }, 500);
   }
+}
+
+// OAuth refresh token ile access token al (upload için — SA quota yok)
+async function getOAuthToken(env) {
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `client_id=${encodeURIComponent(env.GOOGLE_OAUTH_CLIENT_ID)}&client_secret=${encodeURIComponent(env.GOOGLE_OAUTH_CLIENT_SECRET)}&refresh_token=${encodeURIComponent(env.GOOGLE_OAUTH_REFRESH_TOKEN)}&grant_type=refresh_token`,
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`OAuth token hatasi ${res.status}: ${txt.substring(0, 200)}`);
+  }
+  const data = await res.json();
+  if (!data.access_token) throw new Error("OAuth: access_token gelmedi");
+  return data.access_token;
 }
 
 // SA token — write scope (drive full)
