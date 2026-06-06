@@ -1,4 +1,4 @@
-// REV 034/05JUN26 - handleUploadMedya: SA quota yok hatasi, OAuth refresh token ile token alma
+// REV 035/06JUN26 - submitAction: collectSorular try-catch icine alindi, hata gorulur oldu
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1434,18 +1434,18 @@ function collectSorular(){
 async function submitAction(action){
   const st=document.getElementById('status');
   st.style.display='block';st.className='';
-  st.textContent='⏳ Kaydediliyor ve '+(action==='stage2_flux'?'FLUX görsel üretimi başlatılıyor...':'ses+render başlatılıyor...');
-  const sorular=collectSorular();
-  const silineenOriginalIndices=[...deletedIdx]; // deleted original question indices
+  st.textContent='Kaydediliyor...';
   try{
+    const sorular=collectSorular();
+    const silineenOriginalIndices=[...deletedIdx];
     const r=await fetch('/api/icerik-onay/'+JOB_ID,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({video_baslik:val('video_baslik'),sorular,action,chat_id:CHAT_ID,silinen_original_indices:silineenOriginalIndices}),
     });
     const d=await r.json();
-    if(d.ok){st.className='ok';st.textContent='✅ Gönderildi! Telegram bildirimini bekle.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
-    else{st.className='err';st.textContent='❌ Hata: '+JSON.stringify(d);}
-  }catch(e){st.className='err';st.textContent='❌ '+e.message;}
+    if(d.ok){st.className='ok';st.textContent='Gonderildi! Telegram bildirimi bekleniyor.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
+    else{st.className='err';st.textContent='Hata: '+JSON.stringify(d);}
+  }catch(e){st.className='err';st.textContent='Hata: '+e.message;}
 }
 
 // Initial render server-side yapildi — JS yalnizca type change/delete/add sonrasi re-render
