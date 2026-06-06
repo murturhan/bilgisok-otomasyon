@@ -34,8 +34,10 @@ jobs:
           WORKER_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           WORKER_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
           WORKER_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+          WORKER_TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: |
           echo "$WORKER_GITHUB_TOKEN" | npx wrangler@4 secret put GITHUB_TOKEN
           echo "$WORKER_OAUTH_CLIENT_ID" | npx wrangler@4 secret put GOOGLE_OAUTH_CLIENT_ID
           echo "$WORKER_OAUTH_CLIENT_SECRET" | npx wrangler@4 secret put GOOGLE_OAUTH_CLIENT_SECRET
           echo "$WORKER_OAUTH_REFRESH_TOKEN" | npx wrangler@4 secret put GOOGLE_OAUTH_REFRESH_TOKEN
+          echo "$WORKER_TELEGRAM_BOT_TOKEN" | npx wrangler@4 secret put TELEGRAM_BOT_TOKEN
