@@ -1,4 +1,4 @@
-// REV 039/06JUN26 - stage=1: Net goster default (flu yerine)
+// REV 040/06JUN26 - addQuestion/deleteQ/changeType: renderAllCards yerine tek kart guncelle (diger kartlardaki metinler kaybolmasin)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1290,22 +1290,39 @@ function setCorrect1(qi,j){
   const inp=document.getElementById('q'+qi+'_ca');if(inp)inp.value=j;
 }
 
+function replaceCard(i){
+  var old=document.getElementById('card'+i);
+  if(!old)return;
+  var div=document.createElement('div');
+  div.innerHTML=buildCard(QUESTIONS[i],i);
+  old.parentNode.replaceChild(div.firstChild,old);
+}
+
 function changeType(i,newType){
   if(QUESTIONS[i].question_type===newType)return;
-  if(!confirm('Bu sorunun içeriği silinecek ve yeni şablon yüklenecek. Onaylıyor musun?')){
+  if(!confirm('Bu sorunun icerigi silinecek ve yeni sablon yuklenecek. Onayliyor musun?')){
     document.getElementById('q'+i+'_type').value=QUESTIONS[i].question_type;return;
   }
   const tmpl=JSON.parse(JSON.stringify(REGISTRY[newType].template));
   tmpl.question_type=newType;
   QUESTIONS[i]=tmpl;
   deletedIdx.delete(i);
-  renderAllCards();
+  replaceCard(i);
 }
 
 function deleteQ(i){
-  if(!confirm('Bu soru silinecek. Onaylıyor musun?'))return;
+  if(!confirm('Bu soru silinecek. Onayliyor musun?'))return;
   deletedIdx.add(i);
-  renderAllCards();
+  var card=document.getElementById('card'+i);
+  if(card){
+    card.className='card deleted-card';
+    if(!card.querySelector('.deleted-banner')){
+      var b=document.createElement('div');
+      b.className='deleted-banner';
+      b.textContent='Bu soru silindi (kaydet butonu ile kalici olur)';
+      card.insertBefore(b,card.firstChild);
+    }
+  }
 }
 
 function openTypeModal(){
@@ -1320,8 +1337,12 @@ function addQuestion(type){
   tmpl.question_type=type;
   QUESTIONS.push(tmpl);
   closeTypeModal();
-  renderAllCards();
-  setTimeout(()=>{const cards=document.getElementById('cards-container');if(cards)cards.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
+  var i=QUESTIONS.length-1;
+  var cards=document.getElementById('cards-container');
+  var div=document.createElement('div');
+  div.innerHTML=buildCard(QUESTIONS[i],i);
+  cards.appendChild(div.firstChild);
+  setTimeout(()=>{cards.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
 }
 
 // Stage=2 handleFileChange ile aynı pattern — previewId doğrudan parametre
