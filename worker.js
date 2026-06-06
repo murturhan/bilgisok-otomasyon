@@ -1,4 +1,4 @@
-// REV 037/06JUN26 - driveQuestionsGuncelle: 02-ses yoksa olustur, questions.json yoksa create et (skip_stage2 fix)
+// REV 038/06JUN26 - stage=1: Sadece Kaydet butonu eklendi (workflow tetiklemez)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1111,7 +1111,7 @@ body{font-family:system-ui,sans-serif;background:#111827;color:#f3f4f6;padding:0
 .title-inp{width:100%;background:#111827;color:#f3f4f6;border:1px solid #4b5563;border-radius:6px;padding:5px 9px;font-size:.88em}
 .sticky-btns{display:flex;gap:6px;flex-wrap:wrap}
 .sticky-btns button{padding:7px 12px;border:none;border-radius:6px;font-weight:700;font-size:.78em;cursor:pointer;line-height:1.3}
-.ba{background:#8b5cf6;color:#fff}.bb{background:#0ea5e9;color:#fff}
+.ba{background:#8b5cf6;color:#fff}.bb{background:#0ea5e9;color:#fff}.bc{background:#374151;color:#d1d5db;border:1px solid #4b5563}
 button:hover{opacity:.88}
 .cards{padding:12px 16px}
 .card{background:#1f2937;border-radius:10px;padding:14px;margin-bottom:14px;border:1px solid #374151}
@@ -1168,10 +1168,11 @@ input[type=radio]{accent-color:#a78bfa;cursor:pointer}
 <div class="topbar">
   <div class="topbar-left">
     <div class="topbar h1">🦊 GeniMini — İçerik Onayı (Aşama 1)</div>
-    <div class="topbar meta">${esc(jobId)} · ${esc(format)} · ${esc(konu)}</div>
+    <div class="topbar meta">📋 <b>${esc(jobId)}</b> · ${esc(format)} · ${esc(konu)}</div>
     <input type="text" id="video_baslik" class="title-inp" value="${esc(baslik)}" placeholder="Video başlığı...">
   </div>
   <div class="sticky-btns">
+    <button type="button" class="bc" onclick="submitAction('save_only')">💾 Sadece<br>Kaydet</button>
     <button type="button" class="ba" onclick="submitAction('stage2_flux')">🎨 Aşama 2'ye geç<br>(FLUX üret)</button>
     <button type="button" class="bb" onclick="submitAction('skip_stage2')">⏭️ Aşama 2'yi atla<br>(direkt ses+render)</button>
   </div>
@@ -1443,8 +1444,10 @@ async function submitAction(action){
       body:JSON.stringify({video_baslik:val('video_baslik'),sorular,action,chat_id:CHAT_ID,silinen_original_indices:silineenOriginalIndices}),
     });
     const d=await r.json();
-    if(d.ok){st.className='ok';st.textContent='Gonderildi! Telegram bildirimi bekleniyor.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
-    else{st.className='err';st.textContent='Hata: '+JSON.stringify(d);}
+    if(d.ok){
+      if(d.saved){st.className='ok';st.textContent='Kaydedildi! Workflow tetiklenmedi.';}
+      else{st.className='ok';st.textContent='Gonderildi! Telegram bildirimi bekleniyor.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
+    }else{st.className='err';st.textContent='Hata: '+JSON.stringify(d);}
   }catch(e){st.className='err';st.textContent='Hata: '+e.message;}
 }
 
@@ -1491,9 +1494,14 @@ async function handleIcerikOnay(request, env, url, ctx) {
     ctx.waitUntil(driveQuestionsGuncelle(mevcut.data?.job?.drive_folder_id, jobId, video_baslik, sorular, env));
   }
 
-  // 02.7 üzerinden dispatch — 02.7 edits'i okur, uygular, sonraki workflow'u başlatır
   const chatIdStr = String(chat_id || mevcut?.data?.job?.chat_id || "");
 
+  // save_only: sadece kaydet, workflow tetikleme
+  if (action === "save_only") {
+    return json({ ok: true, saved: true });
+  }
+
+  // 02.7 üzerinden dispatch — 02.7 edits'i okur, uygular, sonraki workflow'u başlatır
   const actionLabel = action === "stage2_flux" ? "FLUX gorsel uretimi" : "ses+render";
   ctx.waitUntil(telegramMesajAt(chatIdStr, `⏳ *Icerik kaydedildi!* Simdi ${actionLabel} basliyor...\n\nJob: \`${jobId}\``, env));
 
