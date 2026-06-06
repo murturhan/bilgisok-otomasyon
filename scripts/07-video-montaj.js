@@ -1,4 +1,4 @@
-// REV 013/01JUN26 - Telegram: Markdown link syntax (bare URL underscore parse hatasi gideriyor)
+// REV 014/06JUN26 - skip_stage2: fact gorsel yoksa question gorselini fallback kullan, driveIndir hata toleransli
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -92,6 +92,20 @@ async function driveIndir(fileId, hedefYol, auth) {
     res.data.on("error", reject).pipe(writeStream);
     writeStream.on("finish", resolve).on("error", reject);
   });
+}
+
+async function driveIndirFallback(fileId, hedefYol, fallbackYol, auth) {
+  try {
+    await driveIndir(fileId, hedefYol, auth);
+  } catch (e) {
+    console.warn(`driveIndir basarisiz (${hedefYol}): ${e.message}`);
+    if (fallbackYol && fs.existsSync(fallbackYol)) {
+      fs.copyFileSync(fallbackYol, hedefYol);
+      console.log(`✓ Fallback kullanildi: ${fallbackYol} → ${hedefYol}`);
+    } else {
+      console.warn(`Fallback da yok: ${hedefYol} atlanıyor`);
+    }
+  }
 }
 
 async function formatTespit(jobFolderId, auth) {
@@ -519,15 +533,18 @@ async function main() {
       const fYol = path.join(REMOTION_PUBLIC, "questions", fAdi);
       
       if (tekGorselMu) {
-        // Eski yapı: sıralı 5 görsel
+        // Eski yapı: sıralı N görsel, fact = question ile aynı
         gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, qYol, saAuth));
         gorselIndirmePromises.push(driveIndir(gorselDosyalar[i].id, fYol, saAuth));
       } else {
-        // Yeni yapı: sıralı 10 görsel, çift index question, tek index fun_fact
+        // Yeni yapı: çift index question, tek index fun_fact
         const qIdx = i * 2;
         const fIdx = i * 2 + 1;
         gorselIndirmePromises.push(driveIndir(gorselDosyalar[qIdx].id, qYol, saAuth));
-        gorselIndirmePromises.push(driveIndir(gorselDosyalar[fIdx].id, fYol, saAuth));
+        // fact yoksa question gorselini fallback kullan
+        gorselIndirmePromises.push(
+          driveIndirFallback(gorselDosyalar[fIdx].id, fYol, qYol, saAuth)
+        );
       }
       
       questions[i].image_path = `questions/${qAdi}`;
