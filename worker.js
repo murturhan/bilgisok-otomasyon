@@ -1,4 +1,4 @@
-// REV 035/06JUN26 - submitAction: collectSorular try-catch icine alindi, hata gorulur oldu
+// REV 036/06JUN26 - handleIcerikOnay: Telegram bildirim eklendi, dispatch hata loglama iyilestirme
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1493,6 +1493,10 @@ async function handleIcerikOnay(request, env, url, ctx) {
 
   // 02.7 üzerinden dispatch — 02.7 edits'i okur, uygular, sonraki workflow'u başlatır
   const chatIdStr = String(chat_id || mevcut?.data?.job?.chat_id || "");
+
+  const actionLabel = action === "stage2_flux" ? "FLUX gorsel uretimi" : "ses+render";
+  ctx.waitUntil(telegramMesajAt(chatIdStr, `⏳ *Icerik kaydedildi!* Simdi ${actionLabel} basliyor...\n\nJob: \`${jobId}\``, env));
+
   ctx.waitUntil(githubDispatch("degisiklik_uygula", {
     job_id: jobId,
     chat_id: chatIdStr,
