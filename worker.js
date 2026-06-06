@@ -1,4 +1,4 @@
-// REV 036/06JUN26 - handleIcerikOnay: Telegram bildirim eklendi, dispatch hata loglama iyilestirme
+// REV 037/06JUN26 - driveQuestionsGuncelle: 02-ses yoksa olustur, questions.json yoksa create et (skip_stage2 fix)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1514,14 +1514,25 @@ async function driveQuestionsGuncelle(driveFolderId, jobId, baslik, sorular, env
   if (!saJson) { console.warn("driveQuestionsGuncelle: GDRIVE_SERVICE_ACCOUNT_JSON yok"); return; }
   try {
     const token = await getGDriveTokenRW(saJson);
-    // 02-ses klasörünü bul
+
+    // 02-ses klasörünü bul veya oluştur
     const sesFolderRes = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("'" + driveFolderId + "' in parents and name='02-ses' and mimeType='application/vnd.google-apps.folder' and trashed=false")}&fields=files(id)&pageSize=1`,
       { headers: { "Authorization": `Bearer ${token}` } }
     );
     const sesData = await sesFolderRes.json();
-    const sesFolderId = sesData.files?.[0]?.id;
-    if (!sesFolderId) { console.warn("driveQuestionsGuncelle: 02-ses klasörü bulunamadı"); return; }
+    let sesFolderId = sesData.files?.[0]?.id;
+    if (!sesFolderId) {
+      const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "02-ses", mimeType: "application/vnd.google-apps.folder", parents: [driveFolderId] }),
+      });
+      const createData = await createRes.json();
+      sesFolderId = createData.id;
+      console.log(`✓ driveQuestionsGuncelle: 02-ses klasörü oluşturuldu: ${sesFolderId}`);
+    }
+    if (!sesFolderId) { console.warn("driveQuestionsGuncelle: 02-ses klasörü oluşturulamadı"); return; }
 
     // questions.json dosyasını bul
     const jsonRes = await fetch(
@@ -1530,38 +1541,44 @@ async function driveQuestionsGuncelle(driveFolderId, jobId, baslik, sorular, env
     );
     const jsonData = await jsonRes.json();
     const fileId = jsonData.files?.[0]?.id;
-    if (!fileId) { console.warn("driveQuestionsGuncelle: questions.json bulunamadı"); return; }
 
-    // Mevcut içeriği oku, questions + baslik güncelle
-    const readRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-      { headers: { "Authorization": `Bearer ${token}` } }
-    );
-    const existing = await readRes.json().catch(() => ({}));
-    const updated = { ...existing, baslik, questions: sorular };
-
-    // Dosyayı güncelle
-    const boundary = "-------314159265358979323846";
-    const meta = JSON.stringify({ name: "questions.json", mimeType: "application/json" });
+    // Mevcut varsa içeriği oku, yoksa boş başla
+    let existing = {};
+    if (fileId) {
+      const readRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        { headers: { "Authorization": `Bearer ${token}` } }
+      );
+      existing = await readRes.json().catch(() => ({}));
+    }
+    const updated = { ...existing, baslik, questions: sorular, job_id: jobId };
     const content = JSON.stringify(updated, null, 2);
-    const body2 = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+    const boundary = "-------314159265358979323846";
 
-    const updateRes = await fetch(
-      `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`,
-      {
-        method: "PATCH",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": `multipart/related; boundary=${boundary}`,
-        },
-        body: body2,
-      }
-    );
+    let updateRes;
+    if (fileId) {
+      // Güncelle
+      const meta = JSON.stringify({ name: "questions.json", mimeType: "application/json" });
+      const body2 = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+      updateRes = await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`,
+        { method: "PATCH", headers: { "Authorization": `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` }, body: body2 }
+      );
+    } else {
+      // Yoksa oluştur
+      const meta = JSON.stringify({ name: "questions.json", mimeType: "application/json", parents: [sesFolderId] });
+      const body2 = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n--${boundary}--`;
+      updateRes = await fetch(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+        { method: "POST", headers: { "Authorization": `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` }, body: body2 }
+      );
+    }
+
     if (!updateRes.ok) {
       const txt = await updateRes.text();
-      console.warn(`driveQuestionsGuncelle: güncelleme hatası ${updateRes.status}: ${txt.substring(0, 200)}`);
+      console.warn(`driveQuestionsGuncelle: ${fileId ? 'güncelleme' : 'oluşturma'} hatası ${updateRes.status}: ${txt.substring(0, 200)}`);
     } else {
-      console.log(`✓ Drive questions.json güncellendi: ${fileId}`);
+      console.log(`✓ Drive questions.json ${fileId ? 'güncellendi' : 'oluşturuldu'} (02-ses)`);
     }
   } catch (e) {
     console.error("driveQuestionsGuncelle hata:", e.message);
