@@ -1,4 +1,4 @@
-// REV 004/04JUN26 - stage=1 desteği: soru ekle/sil/tip_değiş, video başlık, silinen medya yedekleme (Parça 4/4)
+// REV 005/06JUN26 - skip_stage2 akışında gorsel_status "completed:skipped" set ediliyor (07 kontrolü geçiyor)
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -295,6 +295,8 @@ async function main() {
         await tetikle("gorsel_uret", { job_id: JOB_ID, chat_id: job.chat_id, partial_regen: true, stage: "2" });
         console.log("✅ 02-gorsel-uret (partial_regen) dispatch edildi");
       } else {
+        await jobGuncelle(JOB_ID, { gorsel_status: "completed:skipped" });
+        console.log("gorsel_status: completed:skipped (stage2 atlandı, 07 kontrolü geçecek)");
         await tetikle("seslendirme_uret", { job_id: JOB_ID, chat_id: job.chat_id, stage: "skipped" });
         console.log("✅ 03-seslendirme-uret dispatch edildi (stage2 atlandı)");
       }
