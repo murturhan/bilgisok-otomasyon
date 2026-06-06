@@ -1,4 +1,4 @@
-// REV 038/06JUN26 - stage=1: Sadece Kaydet butonu eklendi (workflow tetiklemez)
+// REV 039/06JUN26 - stage=1: Net goster default (flu yerine)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1018,7 +1018,7 @@ async function handleContentApprovalPage(request, env, url) {
     ).join('');
 
   const imgSlotHtml = (i, slotKey, slotLabel, prompt, size, showMode) => {
-    const sm = showMode || 'flu';
+    const sm = showMode || 'net';
     const radioName = `q${i}_mode_${slotKey}`;
     const radios = ['net','flu','surpriz'].map(v => {
       const labels = {net:'🖼️ Net göster', flu:'🌫️ Flu göster', surpriz:'❓ Sürpriz kutu'};
@@ -1054,8 +1054,8 @@ async function handleContentApprovalPage(request, env, url) {
       `<input type="hidden" id="q${i}_ca" value="${q.correct_answer || 0}">` +
       `<label class="lbl">Fun Fact</label>` +
       `<textarea id="q${i}_ff">${esc(q.fun_fact || '')}</textarea>` +
-      imgSlotHtml(i, 'image', 'Soru Görseli', q.image_prompt, '1920x1080', q.show_image === false ? 'surpriz' : (q.image_show_mode || 'flu')) +
-      imgSlotHtml(i, 'fact_image', 'Fact Görseli', q.fun_fact_image_prompt, '1920x1080', q.fact_image_show_mode || 'flu');
+      imgSlotHtml(i, 'image', 'Soru Görseli', q.image_prompt, '1920x1080', q.show_image === false ? 'surpriz' : (q.image_show_mode || 'net')) +
+      imgSlotHtml(i, 'fact_image', 'Fact Görseli', q.fun_fact_image_prompt, '1920x1080', q.fact_image_show_mode || 'net');
   };
 
   const wyrCardHtml = (q, i) => {
@@ -1064,7 +1064,7 @@ async function handleContentApprovalPage(request, env, url) {
     return `<div class="row2">` +
       `<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>` +
       `<label class="lbl">Etiket</label><input type="text" id="q${i}_vl" value="${esc(vis.label || '')}" placeholder="Görünür seçenek">` +
-      imgSlotHtml(i, 'visible_image', 'Görünür Görsel', vis.image_prompt, '1920x1080', vis.show_mode || 'flu') + `</div>` +
+      imgSlotHtml(i, 'visible_image', 'Görünür Görsel', vis.image_prompt, '1920x1080', vis.show_mode || 'net') + `</div>` +
       `<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>` +
       `<label class="lbl">Kapalı etiket</label><input type="text" id="q${i}_sl" value="${esc(sur.label || 'Surprise Box')}">` +
       `<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q${i}_so" value="${esc(sur.surprise_outcome || '')}">` +
@@ -1233,8 +1233,8 @@ function buildMcFields(q,i){
     +'<input type="hidden" id="q'+i+'_ca" value="'+(q.correct_answer||0)+'">'
     +'<label class="lbl">Fun Fact</label>'
     +'<textarea id="q'+i+'_ff">'+esc1(q.fun_fact)+'</textarea>'
-    +buildImgSlot(i,'image','Soru Görseli',q.image_prompt,'1920x1080',q.image_show_mode||(q.show_image===false?'surpriz':'flu'))
-    +buildImgSlot(i,'fact_image','Fact Görseli',q.fun_fact_image_prompt,'1920x1080',q.fact_image_show_mode||'flu');
+    +buildImgSlot(i,'image','Soru Görseli',q.image_prompt,'1920x1080',q.image_show_mode||(q.show_image===false?'surpriz':'net'))
+    +buildImgSlot(i,'fact_image','Fact Görseli',q.fun_fact_image_prompt,'1920x1080',q.fact_image_show_mode||'net');
 }
 
 function buildWyrFields(q,i){
@@ -1243,7 +1243,7 @@ function buildWyrFields(q,i){
   return '<div class="row2">'
     +'<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>'
     +'<label class="lbl">Etiket</label><input type="text" id="q'+i+'_vl" value="'+esc1(vis.label||'')+'" placeholder="Görünür seçenek">'
-    +buildImgSlot(i,'visible_image','Görünür Görsel',vis.image_prompt,'1920x1080',vis.show_mode||'flu')+'</div>'
+    +buildImgSlot(i,'visible_image','Görünür Görsel',vis.image_prompt,'1920x1080',vis.show_mode||'net')+'</div>'
     +'<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>'
     +'<label class="lbl">Kapalı etiket</label><input type="text" id="q'+i+'_sl" value="'+esc1(sur.label||'Surprise Box')+'">'
     +'<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q'+i+'_so" value="'+esc1(sur.surprise_outcome||'')+'">'
@@ -1256,7 +1256,7 @@ function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode){
   const uploadKey=i+'_'+slotKey;
   const previewHtml=uploadedUrls[uploadKey]?'<img src="'+uploadedUrls[uploadKey]+'" style="max-height:80px;border-radius:5px">':'<span>Onizleme yok</span>';
   const sizeHtml=size?'<span style="font-size:.72em;color:#6b7280;font-weight:400;margin-left:6px">'+esc1(size)+'</span>':'';
-  const sm=showMode||'flu';
+  const sm=showMode||'net';
   const rn='q'+i+'_mode_'+slotKey;
   const modeLabels={net:'Net goster',flu:'Flu goster',surpriz:'Surpriz kutu'};
   const radios=['net','flu','surpriz'].map(v=>'<label class="mode-lbl"><input type="radio" name="'+rn+'" value="'+v+'"'+(sm===v?' checked':'')+'>'+esc1(modeLabels[v])+'</label>').join('');
@@ -1374,7 +1374,7 @@ function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVid
 
 function getMode(i,slotKey){
   const el=document.querySelector('input[name="q'+i+'_mode_'+slotKey+'"]:checked');
-  return el?el.value:'flu';
+  return el?el.value:'net';
 }
 
 function collectSorular(){
