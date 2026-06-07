@@ -1,4 +1,4 @@
-// REV 009/04JUN26 - 02-gorsel-uret dispatch kaldirildi, 01.5-icerik-onay'a devredildi
+// REV 010/07JUN26 - GECİCİ: Shorts format girerse hata firlat
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -541,7 +541,9 @@ TOPIC EMOJIS (for intro screen emoji band)
 async function main() {
   try {
     console.log(`Job: ${JOB_ID}, Format: ${FORMAT}`);
-    
+    // GECİCİ: Shorts format disabled
+    if (FORMAT === "shorts") throw new Error("Shorts şimdilik desteklenmiyor");
+
     const konu = await konuHavuzundanAl(TARIH, INDEX);
     console.log(`Konu: ${konu}`);
     

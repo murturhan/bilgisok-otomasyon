@@ -1,4 +1,4 @@
-// REV 002/04JUN26 - partial_regen modu: stage=1 editlerinden sadece işaretli slotları üret
+// REV 003/07JUN26 - GECİCİ: Shorts format girerse hata firlat
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -62,8 +62,10 @@ async function mevcutGorselIndexleri(klasorId) {
 async function main() {
   try {
     console.log(`Job: ${JOB_ID}`);
+    // GECİCİ: Shorts format disabled
+    if (JOB_ID && JOB_ID.endsWith("S")) throw new Error("Shorts şimdilik desteklenmiyor");
     const job = await jobOku(JOB_ID);
-    
+
     if (!job.ai_gorsel_prompts || job.ai_gorsel_prompts.length === 0) {
       throw new Error("ai_gorsel_prompts boş!");
     }

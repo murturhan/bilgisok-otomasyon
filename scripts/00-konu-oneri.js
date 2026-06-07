@@ -1,4 +1,4 @@
-// REV 003/04JUN26 - Gemini 503 için exponential backoff retry (5 deneme)
+// REV 004/07JUN26 - GECİCİ: Shorts butonları gizlendi, sadece Long-Tam ve Long-Test
 /**
  * 00 - KONU ÖNERİ SCRIPT'I
  *
@@ -152,31 +152,20 @@ async function sheetsYaz(konular, tarih) {
 
 // ─── TELEGRAM ────────────────────────────────────────────────
 async function telegramButonGonder(konular, tarih, jobIds) {
-  // 3 konu × 8 buton = 24 buton (her konu 4 satır: MC Tam/Test + WYR Tam/Test)
+  // GECİCİ: Sadece Long format — Shorts gizlendi (kod silinmedi)
+  // 3 konu × 2 buton = 6 buton (Long-Tam + Long-Test)
   const inlineKeyboard = [];
   for (let idx = 0; idx < konular.length; idx++) {
     const konu = konular[idx];
-    const kisaKonu = konu.length > 25 ? konu.substring(0, 22) + "..." : konu;
+    const kisaKonu = konu.length > 28 ? konu.substring(0, 25) + "..." : konu;
     inlineKeyboard.push([
-      { text: `🎬 ${idx + 1}. ${kisaKonu} (Short)`, callback_data: `quiz:shorts:${tarih}:${idx}:full:mc` },
-      { text: `📺 ${idx + 1}. ${kisaKonu} (Long)`,  callback_data: `quiz:long:${tarih}:${idx}:full:mc` },
-    ]);
-    inlineKeyboard.push([
-      { text: `🧪 ${idx + 1}. ${kisaKonu} (Short Test)`, callback_data: `quiz:shorts:${tarih}:${idx}:test:mc` },
-      { text: `🧪 ${idx + 1}. ${kisaKonu} (Long Test)`,  callback_data: `quiz:long:${tarih}:${idx}:test:mc` },
-    ]);
-    inlineKeyboard.push([
-      { text: `🤔 ${idx + 1}. ${kisaKonu} (WYR Short)`, callback_data: `quiz:shorts:${tarih}:${idx}:full:wyr` },
-      { text: `🤔 ${idx + 1}. ${kisaKonu} (WYR Long)`,  callback_data: `quiz:long:${tarih}:${idx}:full:wyr` },
-    ]);
-    inlineKeyboard.push([
-      { text: `🧪 ${idx + 1}. ${kisaKonu} (WYR Short Test)`, callback_data: `quiz:shorts:${tarih}:${idx}:test:wyr` },
-      { text: `🧪 ${idx + 1}. ${kisaKonu} (WYR Long Test)`,  callback_data: `quiz:long:${tarih}:${idx}:test:wyr` },
+      { text: `📺 ${idx + 1}. ${kisaKonu} (Long)`,      callback_data: `quiz:long:${tarih}:${idx}:full:mc` },
+      { text: `🧪 ${idx + 1}. ${kisaKonu} (Long Test)`, callback_data: `quiz:long:${tarih}:${idx}:test:mc` },
     ]);
   }
 
   const jobIdSatiri = jobIds
-    ? konular.map((_, i) => `   ${i+1}. Shorts: \`${jobIds[i]?.shorts || "?"}\` / Long: \`${jobIds[i]?.long || "?"}\``).join("\n")
+    ? konular.map((_, i) => `   ${i+1}. Long: \`${jobIds[i]?.long || "?"}\``).join("\n")
     : "";
 
   const mesajMetni =
@@ -185,8 +174,8 @@ async function telegramButonGonder(konular, tarih, jobIds) {
     `Today's 3 quiz topic suggestions:\n\n` +
     konular.map((k, i) => `${i + 1}️⃣ *${k}*`).join("\n\n") +
     (jobIdSatiri ? `\n\n📋 *Job IDs:*\n${jobIdSatiri}` : "") +
-    `\n\n👇 Pick a topic, format AND mode:\n` +
-    `🎬/📺 = Multiple Choice | 🤔 = Would You Rather | 🧪 = Test (1 soru)`;
+    `\n\n👇 Pick a topic:\n` +
+    `📺 = Long (25 soru) | 🧪 = Test (1 soru)`;
   
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   const body = {

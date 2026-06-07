@@ -1,4 +1,4 @@
-// REV 005/30MAY26 - WYR "Pick one!" TTS prepend kaldirildi
+// REV 006/07JUN26 - GECİCİ: Shorts format girerse hata firlat
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -179,8 +179,10 @@ async function main() {
   
   try {
     console.log(`Job: ${JOB_ID}`);
+    // GECİCİ: Shorts format disabled
+    if (JOB_ID && JOB_ID.endsWith("S")) throw new Error("Shorts şimdilik desteklenmiyor");
     const job = await jobOku(JOB_ID);
-    
+
     await jobGuncelle(JOB_ID, { ses_status: "running" });
     
     const tmpDir = "/tmp/seslendirme";

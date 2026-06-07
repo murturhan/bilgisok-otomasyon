@@ -1,4 +1,4 @@
-// REV 014/06JUN26 - skip_stage2: fact gorsel yoksa question gorselini fallback kullan, driveIndir hata toleransli
+// REV 015/07JUN26 - GECİCİ: Shorts format girerse hata firlat
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -355,6 +355,8 @@ async function main() {
 
   try {
     console.log(`Job: ${JOB_ID}`);
+    // GECİCİ: Shorts format disabled
+    if (JOB_ID && JOB_ID.endsWith("S")) throw new Error("Shorts şimdilik desteklenmiyor");
     const job = await jobOku(JOB_ID);
 
     try {

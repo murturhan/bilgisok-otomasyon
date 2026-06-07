@@ -53,4 +53,7 @@ Bu kuralı commit + push et. Sonra rapor ver: CLAUDE.md güncellendi.
 - scripts/lib/cloudflare.js içindeki fluxRotationCagri() round-robin + 429/quota fallback yapar
 - Bu dosyaya DOKUNMA, çalışıyor.
 
+## GEÇİCİ: Sadece Long
+Shorts format şimdilik devre dışı. Long format çalışmaya odaklan. Shorts kodu DOKUNULMASIN, sadece UI'da gizlendi.
+
 

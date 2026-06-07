@@ -1,4 +1,4 @@
-// REV 041/06JUN26 - flux_image durumu kaydedilip sayfada dogru render ediliyor (checked/unchecked)
+// REV 042/07JUN26 - GECİCİ: Shorts callback'te reddediliyor, sadece Long aktif
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -885,6 +885,11 @@ async function handleTelegram(request, env, ctx) {
     const parts = data.split(":");
     if (parts[0] === "quiz" && parts.length >= 4) {
       const format            = parts[1];
+      // GECİCİ: Shorts desteklenmiyor
+      if (format === "shorts") {
+        ctx.waitUntil(telegramMesajAt(chatId, "⚠️ Shorts format şimdilik devre dışı. Lütfen Long seçin.", env));
+        return new Response("OK", { status: 200 });
+      }
       const tarih             = parts[2];
       const idx               = parts[3];
       const mode              = parts[4] || "full";
