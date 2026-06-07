@@ -1,4 +1,4 @@
-// REV 042/07JUN26 - GECİCİ: Shorts callback'te reddediliyor, sadece Long aktif
+// REV 044/07JUN26 - prob2 tamamlandi: playClick() + sticky btn anlik disable her iki sayfada
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -375,8 +375,9 @@ button:hover{opacity:.88}
 .emoji-edit-inp:focus{outline:none}
 .emoji-hint{font-size:.68em;color:#6b7280;display:block;text-align:center;margin-top:3px;pointer-events:none}
 .img-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
-.btn-sm{padding:5px 10px;border:1px solid #4b5563;background:#374151;color:#d1d5db;border-radius:5px;font-size:.78em;cursor:pointer}
+.btn-sm{padding:5px 10px;border:1px solid #4b5563;background:#374151;color:#d1d5db;border-radius:5px;font-size:.78em;cursor:pointer;transition:transform 0.08s,box-shadow 0.08s}
 .btn-sm:hover{background:#4b5563}
+.btn-sm:active{transform:scale(0.93)!important;box-shadow:inset 0 2px 5px rgba(0,0,0,0.5)!important}
 .btn-upload{border-color:#3b82f6;color:#93c5fd}
 .btn-regen{border-color:#f59e0b;color:#fcd34d}
 input[type=file]{position:absolute;width:0;height:0;opacity:0;overflow:hidden;pointer-events:none}
@@ -452,6 +453,7 @@ const N = ${questions.length};
 const QUESTIONS = ${JSON.stringify(questions).replace(/<\//g, '<\\/')};
 const customImages = {};
 const customVideos = {};
+const s1VideoUrls = {};
 
 function val(id){const e=document.getElementById(id);return e?e.value:"";}
 function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
@@ -463,13 +465,17 @@ function handleFileChange(inp,previewId,key,isVideo){
     if(isVideo){
       customVideos[key]=e.target.result;
       var mb=(file.size/1024/1024).toFixed(1);
-      document.getElementById(previewId).innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span>';
+      document.getElementById(previewId).innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span><button type="button" onclick="clearMediaStage2(\''+previewId+'\',\''+key+'\',true)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
     }else{
       customImages[key]=e.target.result;
-      document.getElementById(previewId).innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span>';
+      document.getElementById(previewId).innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span><button type="button" onclick="clearMediaStage2(\''+previewId+'\',\''+key+'\',false)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
     }
   };
   reader.readAsDataURL(file);
+}
+function clearMediaStage2(previewId,key,isVideo){
+  if(isVideo) delete customVideos[key]; else delete customImages[key];
+  document.getElementById(previewId).innerHTML='';
 }
 
 function toggleRegen(checkId, btnId, key){
@@ -609,7 +615,12 @@ async function changeBoxApi(qi){
   }
 }
 
+function playClick(){try{var c=new(window.AudioContext||window.webkitAudioContext)();var b=c.createBuffer(1,Math.ceil(c.sampleRate*0.04),c.sampleRate);var d=b.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-(i/d.length),3)*0.4;var s=c.createBufferSource();s.buffer=b;var g=c.createGain();g.gain.value=0.5;s.connect(g);g.connect(c.destination);s.start();setTimeout(function(){c.close();},200);}catch(e){}}
+
 async function submit_(level, applyEdits){
+  playClick();
+  const allBtns=document.querySelectorAll(".sticky-btns button");
+  allBtns.forEach(function(b){b.disabled=true;});
   const edits={};
   if(applyEdits){
     for(let i=0;i<N;i++){
@@ -685,7 +696,7 @@ async function submit_(level, applyEdits){
     } else {
       st.className="err";st.textContent="❌ Hata: "+JSON.stringify(d);
     }
-  }catch(e){st.className="err";st.textContent="❌ "+e.message;}
+  }catch(e){st.className="err";st.textContent="❌ "+e.message;allBtns.forEach(function(b){b.disabled=false;});}
 }
 
 
@@ -1143,8 +1154,9 @@ textarea{min-height:52px}
 .flux-row{display:flex;align-items:center;gap:8px;margin:6px 0}
 .flux-row label{font-size:.78em;color:#fcd34d;cursor:pointer;display:flex;align-items:center;gap:5px}
 .upload-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
-.btn-sm{padding:4px 9px;border:1px solid #4b5563;background:#374151;color:#d1d5db;border-radius:5px;font-size:.76em;cursor:pointer}
+.btn-sm{padding:4px 9px;border:1px solid #4b5563;background:#374151;color:#d1d5db;border-radius:5px;font-size:.76em;cursor:pointer;transition:transform 0.08s,box-shadow 0.08s}
 .btn-sm:hover{background:#4b5563}
+.btn-sm:active{transform:scale(0.93)!important;box-shadow:inset 0 2px 5px rgba(0,0,0,0.5)!important}
 .btn-upload{border-color:#3b82f6;color:#93c5fd}
 .btn-video{border-color:#6366f1;color:#a5b4fc}
 .s1-file-inp{position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;opacity:0}
@@ -1382,13 +1394,17 @@ function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVid
     .then(function(r){return r.json();})
     .then(function(d){
       if(d.ok){
-        uploadedUrls[uploadKey]=d.url;
-        // Resim için: Drive thumbnail URL başka origin'den img tag'e yüklenmiyor.
-        // Yerel FileReader önizlemesi (data URL) zaten görünüyor — onu bozma.
-        // Sadece video için metni güncelle (video'nun yerel önizlemesi yok).
+        // prob6: video URL'i ayri tut (image URL ile karismasin)
         if(isVideo){
+          s1VideoUrls[uploadKey]=d.url;
+          delete uploadedUrls[uploadKey];
           var prev2=document.getElementById(previewId);
-          if(prev2) prev2.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,24))+'<br><span style="color:#6b7280">Drive upload tamam</span></div>';
+          if(prev2) prev2.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,24))+'<br><span style="color:#6b7280">Drive upload tamam</span></div><button type="button" class="btn-sm" style="margin-top:4px;border-color:#ef4444;color:#fca5a5" onclick="s1ClearMedia(\''+previewId+'\',\''+uploadKey+'\',true)">❌ Kaldır</button>';
+        }else{
+          uploadedUrls[uploadKey]=d.url;
+          // prob1: resim kaldır butonu (preview zaten data URL, sadece remove butonu ekle)
+          var prevEl=document.getElementById(previewId);
+          if(prevEl){var rmBtn=prevEl.querySelector('.s1-remove-btn');if(!rmBtn){var b=document.createElement('button');b.type='button';b.className='btn-sm s1-remove-btn';b.style.cssText='display:block;margin-top:4px;border-color:#ef4444;color:#fca5a5';b.textContent='❌ Kaldır';b.onclick=function(){s1ClearMedia(previewId,uploadKey,false);};prevEl.appendChild(b);}}
         }
         if(st){st.className='ok';st.textContent='Drive upload tamam: '+file.name;}
       }else{
@@ -1402,6 +1418,15 @@ function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVid
 function getMode(i,slotKey){
   const el=document.querySelector('input[name="q'+i+'_mode_'+slotKey+'"]:checked');
   return el?el.value:'net';
+}
+
+// prob1: stage=1 medya kaldır
+function s1ClearMedia(previewId, uploadKey, isVideo){
+  if(isVideo) delete s1VideoUrls[uploadKey]; else delete uploadedUrls[uploadKey];
+  var prev=document.getElementById(previewId);
+  if(prev) prev.innerHTML='<span style="color:#6b7280">Önizleme yok</span>';
+  var fluxId=previewId.replace('_prev_','_flux_');
+  var cb=document.getElementById(fluxId);if(cb)cb.checked=true;
 }
 
 function collectSorular(){
@@ -1442,6 +1467,8 @@ function collectSorular(){
         options:opts,
         correct_answer:ca,
         fun_fact:ff,
+        // prob4: option_flags stage=1'de duzenlendi, collect et
+        option_flags:[val('q'+i+'_f0'),val('q'+i+'_f1'),val('q'+i+'_f2')],
         image_prompt:val('q'+i+'_p_image'),
         fun_fact_image_prompt:val('q'+i+'_p_fact_image'),
         image_show_mode:imgMode,
@@ -1453,16 +1480,24 @@ function collectSorular(){
         flux_fact_image:chk('q'+i+'_flux_fact_image'),
         uploaded_image_url:uploadedUrls[i+'_image']||null,
         uploaded_fact_image_url:uploadedUrls[i+'_fact_image']||null,
+        // prob6: video upload ayri track et
+        uploaded_video_url:s1VideoUrls[i+'_image']||null,
+        uploaded_fact_video_url:s1VideoUrls[i+'_fact_image']||null,
       });
     }
   });
   return result;
 }
 
+function playClick(){try{var c=new(window.AudioContext||window.webkitAudioContext)();var b=c.createBuffer(1,Math.ceil(c.sampleRate*0.04),c.sampleRate);var d=b.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-(i/d.length),3)*0.4;var s=c.createBufferSource();s.buffer=b;var g=c.createGain();g.gain.value=0.5;s.connect(g);g.connect(c.destination);s.start();setTimeout(function(){c.close();},200);}catch(e){}}
+
 async function submitAction(action){
+  playClick();
+  const allBtns=document.querySelectorAll('.sticky-btns button');
+  allBtns.forEach(function(b){b.disabled=true;});
   const st=document.getElementById('status');
   st.style.display='block';st.className='';
-  st.textContent='Kaydediliyor...';
+  st.textContent='⏳ Kaydediliyor...';
   try{
     const sorular=collectSorular();
     const silineenOriginalIndices=[...deletedIdx];
@@ -1475,7 +1510,7 @@ async function submitAction(action){
       if(d.saved){st.className='ok';st.textContent='Kaydedildi! Workflow tetiklenmedi.';}
       else{st.className='ok';st.textContent='Gonderildi! Telegram bildirimi bekleniyor.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
     }else{st.className='err';st.textContent='Hata: '+JSON.stringify(d);}
-  }catch(e){st.className='err';st.textContent='Hata: '+e.message;}
+  }catch(e){st.className='err';st.textContent='Hata: '+e.message;allBtns.forEach(function(b){b.disabled=false;});}
 }
 
 // Initial render server-side yapildi — JS yalnizca type change/delete/add sonrasi re-render
@@ -1712,8 +1747,12 @@ async function handleUploadMedya(request, env, url) {
       body: JSON.stringify({ role: "reader", type: "anyone" }),
     });
 
-    const driveUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
-    return json({ ok: true, url: driveUrl, file_id: fileId });
+    // prob6: video icin download URL, gorsel icin thumbnail URL
+    const isVideoMime = mimeType.startsWith("video/") || /\.(mp4|mov|webm|avi)$/i.test(ext);
+    const driveUrl = isVideoMime
+      ? `https://drive.google.com/uc?export=download&id=${fileId}`
+      : `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+    return json({ ok: true, url: driveUrl, file_id: fileId, is_video: isVideoMime });
 
   } catch (e) {
     return json({ ok: false, error: e.message }, 500);

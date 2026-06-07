@@ -1,4 +1,4 @@
-// REV 005/06JUN26 - skip_stage2 akışında gorsel_status "completed:skipped" set ediliyor (07 kontrolü geçiyor)
+// REV 006/07JUN26 - GECİCİ: ilk ses uretime "yeniden" deme; ses_status kontrolu
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -590,9 +590,10 @@ async function main() {
       console.log("07-video-montaj tetiklendi");
     } else {
       // full: 03-seslendirme (sonra 07 zaten otomatik tetikleniyor)
+      const ilkSesMi = !String(job.ses_status || "").startsWith("completed");
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}\n\nSes yeniden uretiliyor...`
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
       );
       await tetikle("seslendirme_uret", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("03-seslendirme tetiklendi");

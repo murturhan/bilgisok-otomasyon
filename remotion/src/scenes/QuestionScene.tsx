@@ -1,4 +1,4 @@
-// REV 019/04JUN26 - image_show_mode: net/flu/surpriz + flu blur efekti
+// REV 020/07JUN26 - flu modu icin de fitil aktif (onceden sadece surpriz)
 import React from "react";
 import {
   AbsoluteFill,
@@ -402,10 +402,12 @@ const LongLayout: React.FC<LayoutProps> = ({
   const afterReveal = localFrame >= phases.reveal;
   const blurAmount = showMode === 'flu' && !afterReveal ? 18 : 0;
 
+  // fuse: surpriz (hidden image) + flu (blur) her iki modda da yanar
+  const hasFuse = !showImageClear || showMode === 'flu';
   let fusePhase = 0;
   let burstActive = false;
   let burstLocalFrame = 0;
-  if (!showImageClear) {
+  if (hasFuse) {
     if (localFrame >= phases.countdown && localFrame < phases.silentPause) {
       const fuseDuration = phases.silentPause - phases.countdown;
       fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
@@ -415,7 +417,7 @@ const LongLayout: React.FC<LayoutProps> = ({
     burstActive = localFrame >= phases.reveal && localFrame < phases.reveal + 35;
     burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   }
-  
+
   return (
     <div
       style={{
@@ -544,10 +546,12 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   const afterReveal = localFrame >= phases.reveal;
   const blurAmount = showMode === 'flu' && !afterReveal ? 18 : 0;
 
+  // fuse: surpriz + flu her iki modda yanar
+  const hasFuse = !showImageClear || showMode === 'flu';
   let fusePhase = 0;
   let burstActive = false;
   let burstLocalFrame = 0;
-  if (!showImageClear) {
+  if (hasFuse) {
     if (localFrame >= phases.countdown && localFrame < phases.silentPause) {
       const fuseDuration = phases.silentPause - phases.countdown;
       fusePhase = Math.min(1, (localFrame - phases.countdown) / fuseDuration);
@@ -557,7 +561,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
     burstActive = localFrame >= phases.reveal && localFrame < phases.reveal + 35;
     burstLocalFrame = burstActive ? localFrame - phases.reveal : 0;
   }
-  
+
   return (
     <div
       style={{
