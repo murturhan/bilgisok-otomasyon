@@ -1,4 +1,4 @@
-// REV 044/07JUN26 - prob2 tamamlandi: playClick() + sticky btn anlik disable her iki sayfada
+// REV 045/08JUN26 - s1VideoUrls stage=1 script'te tanimsizdi - upload ReferenceError duzeltildi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1215,6 +1215,7 @@ const REGISTRY = ${REGISTRY_JS};
 let QUESTIONS = ${JSON.stringify(questions).replace(/<\//g, '<\\/')};
 const deletedIdx = new Set();
 const uploadedUrls = {}; // key: "i_slot" → url
+const s1VideoUrls = {}; // key: "i_slot" → video url (prob6 fix — ayri track)
 
 function esc1(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function val(id){const e=document.getElementById(id);return e?e.value:'';}
