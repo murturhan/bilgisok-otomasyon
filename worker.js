@@ -1,4 +1,4 @@
-// REV 045/08JUN26 - s1VideoUrls stage=1 script'te tanimsizdi - upload ReferenceError duzeltildi
+// REV 046/08JUN26 - SyntaxError: s1FileChange onclick template literal quote escape hatasi duzeltildi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1400,7 +1400,15 @@ function s1FileChange(inp, previewId, fluxId, uploadKey, soruIdx, slotKey, isVid
           s1VideoUrls[uploadKey]=d.url;
           delete uploadedUrls[uploadKey];
           var prev2=document.getElementById(previewId);
-          if(prev2) prev2.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,24))+'<br><span style="color:#6b7280">Drive upload tamam</span></div><button type="button" class="btn-sm" style="margin-top:4px;border-color:#ef4444;color:#fca5a5" onclick="s1ClearMedia(\''+previewId+'\',\''+uploadKey+'\',true)">❌ Kaldır</button>';
+          if(prev2){
+            prev2.innerHTML='<div style="padding:8px;color:#10b981;font-size:.8em;text-align:center">🎬 '+esc1(file.name.substring(0,24))+'<br><span style="color:#6b7280">Drive upload tamam</span></div>';
+            var rmBtn2=document.createElement('button');
+            rmBtn2.type='button';rmBtn2.className='btn-sm';
+            rmBtn2.style.cssText='margin-top:4px;border-color:#ef4444;color:#fca5a5';
+            rmBtn2.textContent='❌ Kaldır';
+            (function(pId,uKey){rmBtn2.onclick=function(){s1ClearMedia(pId,uKey,true);};})(previewId,uploadKey);
+            prev2.appendChild(rmBtn2);
+          }
         }else{
           uploadedUrls[uploadKey]=d.url;
           // prob1: resim kaldır butonu (preview zaten data URL, sadece remove butonu ekle)
