@@ -1,4 +1,4 @@
-// REV 010/07JUN26 - GECİCİ: Shorts format girerse hata firlat
+// REV 011/09JUN26 - /uret formu destegi: KONU_OVERRIDE, N_SORU, SORU_TIPI_JSON, DIL env vars
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -35,6 +35,12 @@ const IS_TEST_MODE = process.env.TEST_MODE === "true" || process.env.TEST_MODE =
 const QUESTION_COUNT = IS_TEST_MODE ? 1 : (FORMAT === "shorts" ? 5 : 25);
 const QUESTION_TYPE = process.env.QUESTION_TYPE || "multiple_choice";
 const IS_WYR = QUESTION_TYPE === "would_you_rather";
+
+// /uret form override parametreleri
+const KONU_OVERRIDE = process.env.KONU_OVERRIDE || null;
+const N_SORU_OVERRIDE = process.env.N_SORU ? parseInt(process.env.N_SORU) : null;
+const DIL = process.env.DIL || "English";
+const SORU_TIPI_JSON_STR = process.env.SORU_TIPI_JSON || null;
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -96,13 +102,17 @@ CRITICAL:
 `;
 }
 
-async function icerikUret(konu) {
-  console.log(`Gemini quiz üretiyor: "${konu}", format: ${FORMAT}, ${QUESTION_COUNT} soru, type: ${QUESTION_TYPE}`);
+async function icerikUret(konu, nSoruArg = null, isWyrArg = null) {
+  const effectiveCount = nSoruArg !== null ? nSoruArg : QUESTION_COUNT;
+  const effectiveIsWyr = isWyrArg !== null ? isWyrArg : IS_WYR;
+  const effectiveDil = DIL || "English";
+  console.log(`Gemini quiz üretiyor: "${konu}", format: ${FORMAT}, ${effectiveCount} soru, isWyr: ${effectiveIsWyr}, dil: ${effectiveDil}`);
 
   const geminiKeys = [GEMINI_API_KEY];
   if (GEMINI_API_KEY_2) geminiKeys.push(GEMINI_API_KEY_2);
 
-  const prompt = IS_WYR ? wyrGeminiPrompt(konu, QUESTION_COUNT, FORMAT) : `You are an expert content creator for "GeniMini Tests" - educational quiz YouTube channel for kids ages 4-12.
+  const dilNote = effectiveDil !== "English" ? `\n- Language: Write ALL content in ${effectiveDil} (question_text, options, fun_fact, audio texts, baslik, aciklama). Keep field names in English.` : "";
+  const prompt = effectiveIsWyr ? wyrGeminiPrompt(konu, effectiveCount, FORMAT) : `You are an expert content creator for "GeniMini Tests" - educational quiz YouTube channel for kids ages 4-12.
 
 Channel mascot: **Jess the Fox** - cute, friendly Pixar-style fox who hosts the quiz.
 
@@ -115,7 +125,7 @@ QUIZ STRUCTURE
 
 You will create:
 1. **Intro audio** (Jess greets viewers, 2-3 sentences)
-2. **${QUESTION_COUNT} questions** with 3 multiple choice answers each
+2. **${effectiveCount} questions** with 3 multiple choice answers each
 3. **Outro audio** (Jess says goodbye, 2-3 sentences)
 
 For EACH question, you must create:
@@ -124,7 +134,7 @@ For EACH question, you must create:
 - **answer_audio_text**: What Jess SAYS when revealing the answer (confirms correct answer + fun fact)
 - image_prompt for the question visual
 
-DIFFICULTY DISTRIBUTION (for ${QUESTION_COUNT} questions):
+DIFFICULTY DISTRIBUTION (for ${effectiveCount} questions):
 ${FORMAT === "shorts" ? `- Easy: 3 questions (ages 4-7)
 - Medium: 2 questions (ages 7-12)` : `- Easy: 8 questions (ages 4-7, basic recognition)
 - Medium: 12 questions (ages 7-10, knowledge)
@@ -267,8 +277,8 @@ JSON OUTPUT (must be valid JSON, no markdown):
 }
 
 CRITICAL:
-- EXACTLY ${QUESTION_COUNT} question${QUESTION_COUNT === 1 ? "" : "s"}
-- All in English
+- EXACTLY ${effectiveCount} question${effectiveCount === 1 ? "" : "s"}
+- All in English${dilNote}
 - Image prompts MUST be PIXAR/3D CARTOON
 - All child-safe
 - Answers SHORT (1-3 words)
@@ -352,7 +362,7 @@ TOPIC EMOJIS (for intro screen emoji band)
         const oncekiSayi = json.questions.length;
         json.questions = json.questions.filter((q) => {
           if (!q.question_text) return false;
-          if (IS_WYR) return true; // WYR sorularında options kontrolü yok
+          if (effectiveIsWyr) return true; // WYR sorularında options kontrolü yok
           if (!q.options || !Array.isArray(q.options) || q.options.length !== 3) return false;
           if (q.correct_answer === undefined || q.correct_answer < 0 || q.correct_answer > 2) return false;
           return true;
@@ -364,20 +374,20 @@ TOPIC EMOJIS (for intro screen emoji band)
       }
       
       // Minimum gereken soru sayısı (tam sayı şart değil - %80 yeter)
-      const minQuestions = Math.floor(QUESTION_COUNT * 0.8);
+      const minQuestions = Math.floor(effectiveCount * 0.8);
       if (!json.questions || json.questions.length < minQuestions) {
         throw new Error(`Gemini ${json.questions?.length || 0} sağlam soru verdi, ${minQuestions} (min) gerekli.`);
       }
-      
-      if (json.questions.length > QUESTION_COUNT) {
-        json.questions = json.questions.slice(0, QUESTION_COUNT);
+
+      if (json.questions.length > effectiveCount) {
+        json.questions = json.questions.slice(0, effectiveCount);
       }
       
       // Validation
       for (let i = 0; i < json.questions.length; i++) {
         const q = json.questions[i];
         if (!q.question_text) throw new Error(`Soru ${i+1}: question_text yok`);
-        if (IS_WYR) {
+        if (effectiveIsWyr) {
           // WYR soruları için hafif validasyon
           q.question_type = "would_you_rather"; // Gemini bazen unutuyor, garantile
           if (!q.visible_option) q.visible_option = { label: "Option A" };
@@ -482,7 +492,7 @@ TOPIC EMOJIS (for intro screen emoji band)
       // ai_gorsel_prompts: her soru için 2 prompt + 1 background (en sonda)
       // MC: q1_question, q1_funfact, ..., background
       // WYR: q1_visible, q1_surprise, ..., background
-      if (!IS_WYR) {
+      if (!effectiveIsWyr) {
         json.ai_gorsel_prompts = [];
         for (const q of json.questions) {
           json.ai_gorsel_prompts.push(q.image_prompt);
@@ -490,7 +500,6 @@ TOPIC EMOJIS (for intro screen emoji band)
         }
       } else {
         // WYR: ai_gorsel_prompts already built in validation loop above
-        // just ensure array exists
         if (!json.ai_gorsel_prompts) json.ai_gorsel_prompts = [];
       }
       // Background prompt - EN SON
@@ -502,17 +511,17 @@ TOPIC EMOJIS (for intro screen emoji band)
       // Senaryo: Tüm ses parçalarının birleşimi (backward compat için)
       // Not: intro/outro Jess video kendi sesini taşıdığı için burada yok
       json.senaryo = json.questions
-        .map(q => IS_WYR
+        .map(q => effectiveIsWyr
           ? `${q.question_audio_text || ""} ${q.reveal_audio_text || q.jess_reaction || ""}`
           : `${q.question_audio_text} ${q.answer_audio_text}`)
         .join("\n\n");
-      
+
       json.tts_telaffuz = json.senaryo;
       json.muzik_mood = "kids";
-      
+
       console.log(`İçerik üretildi: ${json.baslik}`);
-      console.log(`${json.questions.length} soru, format: ${FORMAT}, type: ${QUESTION_TYPE}`);
-      if (!IS_WYR) {
+      console.log(`${json.questions.length} soru, format: ${FORMAT}, isWyr: ${effectiveIsWyr}, dil: ${effectiveDil}`);
+      if (!effectiveIsWyr) {
         console.log(`Zorluk: ${
           ["easy", "medium", "hard"].map(d =>
             `${d}=${json.questions.filter(q => q.difficulty === d).length}`
@@ -544,8 +553,8 @@ async function main() {
     // GECİCİ: Shorts format disabled
     if (FORMAT === "shorts") throw new Error("Shorts şimdilik desteklenmiyor");
 
-    const konu = await konuHavuzundanAl(TARIH, INDEX);
-    console.log(`Konu: ${konu}`);
+    const konu = KONU_OVERRIDE || await konuHavuzundanAl(TARIH, INDEX);
+    console.log(`Konu: ${konu}${KONU_OVERRIDE ? " (override)" : ""}`);
     
     await telegram(
       CHAT_ID,
@@ -556,10 +565,42 @@ async function main() {
       `⏳ Generating quiz with Jess...`
     );
     
-    const icerik = await icerikUret(konu);
-    
+    // Karma tip destegi: SORU_TIPI_JSON varsa MC + WYR ayri uret, birlestir
+    let icerik;
+    if (SORU_TIPI_JSON_STR) {
+      let tipiDagilimi;
+      try { tipiDagilimi = JSON.parse(SORU_TIPI_JSON_STR); } catch { tipiDagilimi = {}; }
+      const mcN = parseInt(tipiDagilimi.multiple_choice) || 0;
+      const wyrN = parseInt(tipiDagilimi.would_you_rather) || 0;
+      if (mcN > 0 && wyrN > 0) {
+        console.log(`Karma tip: ${mcN} MC + ${wyrN} WYR ayri üretiliyor...`);
+        const mcIcerik = await icerikUret(konu, mcN, false);
+        const wyrIcerik = await icerikUret(konu, wyrN, true);
+        icerik = mcIcerik;
+        icerik.questions = [...mcIcerik.questions, ...wyrIcerik.questions];
+        // Karistir
+        for (let k = icerik.questions.length - 1; k > 0; k--) {
+          const r = Math.floor(Math.random() * (k + 1));
+          [icerik.questions[k], icerik.questions[r]] = [icerik.questions[r], icerik.questions[k]];
+        }
+        icerik.ai_gorsel_prompts = [
+          ...mcIcerik.ai_gorsel_prompts.slice(0, -1),
+          ...wyrIcerik.ai_gorsel_prompts.slice(0, -1),
+          icerik.background_prompt,
+        ];
+        console.log(`Karma üretim tamam: ${icerik.questions.length} soru (${mcN} MC + ${wyrN} WYR)`);
+      } else if (wyrN > 0) {
+        icerik = await icerikUret(konu, wyrN, true);
+      } else {
+        icerik = await icerikUret(konu, mcN || N_SORU_OVERRIDE, false);
+      }
+    } else {
+      icerik = await icerikUret(konu, N_SORU_OVERRIDE, null);
+    }
+
     const safeTitle = konu.substring(0, 50).replace(/[^a-zA-Z0-9 ]/g, "");
-    const klasorAdi = `${TARIH}-${FORMAT}-${safeTitle}`;
+    const tarihForFolder = TARIH || new Date().toISOString().split("T")[0].replace(/-/g, "");
+    const klasorAdi = `${tarihForFolder}-${FORMAT}-${safeTitle}`;
     
     console.log(`Drive klasörü açılıyor: ${klasorAdi}`);
     const anaKlasor = await driveKlasorAc(klasorAdi);

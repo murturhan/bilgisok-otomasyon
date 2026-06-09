@@ -1,4 +1,4 @@
-// REV 046/08JUN26 - SyntaxError: s1FileChange onclick template literal quote escape hatasi duzeltildi
+// REV 047/09JUN26 - 6 yenilik: intro animasyon, kart renk, sıralama, drive url, resim oncelik, /uret formu
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -66,6 +66,12 @@ function go(inp){
     }
     if (method === "POST" && path.startsWith("/api/upload-medya/")) {
       return handleUploadMedya(request, env, url);
+    }
+    if (method === "GET" && path === "/uret-form") {
+      return handleUretForm(request, env, url);
+    }
+    if (method === "POST" && path === "/uret-form-submit") {
+      return handleUretFormSubmit(request, env, ctx);
     }
     if (method === "GET" && url.searchParams.has("job")) {
       const stage = url.searchParams.get("stage");
@@ -874,12 +880,18 @@ async function handleTelegram(request, env, ctx) {
     const lower  = text.toLowerCase();
 
     if (lower === "/start") {
-      ctx.waitUntil(telegramMesajAt(chatId, `🦊 *GeniMini Tests Bot*\n\nMevcut komutlar:\n\n/konu\\_oner — Yeni içerik için konu önerileri gönder`, env));
+      ctx.waitUntil(telegramMesajAt(chatId, `🦊 *GeniMini Tests Bot*\n\nMevcut komutlar:\n\n/konu\\_oner — Yeni içerik için konu önerileri gönder\n/uret — Özelleştirilmiş içerik üret (form)`, env));
       return new Response("OK", { status: 200 });
     }
 
     if (lower === "/konu_oner" || lower === "konu öner" || lower === "konu oner") {
       ctx.waitUntil(konuOnerTetikle(chatId, env));
+      return new Response("OK", { status: 200 });
+    }
+
+    if (lower === "/uret") {
+      const formUrl = `https://telegram-to-github.murturhan.workers.dev/uret-form?chat_id=${chatId}`;
+      ctx.waitUntil(telegramMesajAt(chatId, `🎬 *İçerik Üretici*\n\nKonu ve ayarları belirlemek için formu doldurun:\n${formUrl}`, env));
       return new Response("OK", { status: 200 });
     }
   }
@@ -1089,16 +1101,26 @@ async function handleContentApprovalPage(request, env, url) {
       `<label class="lbl">Jess Reaksiyon</label><textarea id="q${i}_jr">${esc(q.jess_reaction || '')}</textarea>`;
   };
 
+  const S1_CARD_BG_SRV = ['rgba(255,248,225,0.07)','rgba(232,245,233,0.07)','rgba(252,228,236,0.07)','rgba(225,245,254,0.07)','rgba(255,243,224,0.07)'];
+  const S1_CARD_BORDER_SRV = ['#FFF8E1','#E8F5E9','#FCE4EC','#E1F5FE','#FFF3E0'];
   const serverCards = questions.map((q, i) => {
     const isWyr = q.question_type === 'would_you_rather';
     const numBadge = isWyr
       ? `<span class="card-num wyr">🤔 WYR ${i + 1}</span>`
       : `<span class="card-num">Soru ${i + 1}</span>`;
-    const header = `<div class="card-header">${numBadge}` +
+    const moveUp = i > 0
+      ? `<button type="button" class="move-btn" onclick="moveQ(${i},-1)">↑</button>`
+      : `<button type="button" class="move-btn" disabled>↑</button>`;
+    const moveDown = i < questions.length - 1
+      ? `<button type="button" class="move-btn" onclick="moveQ(${i},1)">↓</button>`
+      : `<button type="button" class="move-btn" disabled>↓</button>`;
+    const header = `<div class="card-header">${numBadge}${moveUp}${moveDown}` +
       `<select class="type-sel" id="q${i}_type" onchange="changeType(${i},this.value)">${typeOptsHtml(q.question_type)}</select>` +
       `<button type="button" class="del-btn" onclick="deleteQ(${i})">🗑️ Sil</button></div>`;
     const inner = isWyr ? wyrCardHtml(q, i) : mcCardHtml(q, i);
-    return `<div class="card" id="card${i}">${header}${inner}</div>`;
+    const bg = S1_CARD_BG_SRV[i % 5];
+    const bl = S1_CARD_BORDER_SRV[i % 5];
+    return `<div class="card" id="card${i}" style="background:${bg};border-left:3px solid ${bl}">${header}${inner}</div>`;
   }).join('\n');
 
   const REGISTRY_JS = JSON.stringify({
@@ -1179,6 +1201,9 @@ input[type=radio]{accent-color:#a78bfa;cursor:pointer}
 .type-option-btn:hover{border-color:#8b5cf6;background:#1a1a2e}
 .section-title{font-size:.75em;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 5px}
 .wyr-side{border:1px solid #1e293b;border-radius:8px;padding:10px;margin-bottom:8px}
+.move-btn{padding:2px 8px;background:#374151;color:#a78bfa;border:1px solid #4b5563;border-radius:4px;font-size:.8em;cursor:pointer;font-weight:700;line-height:1.4}
+.move-btn:hover{background:#4b5563}
+.move-btn:disabled{opacity:.28;cursor:default}
 </style>
 </head>
 <body>
@@ -1216,6 +1241,8 @@ let QUESTIONS = ${JSON.stringify(questions).replace(/<\//g, '<\\/')};
 const deletedIdx = new Set();
 const uploadedUrls = {}; // key: "i_slot" → url
 const s1VideoUrls = {}; // key: "i_slot" → video url (prob6 fix — ayri track)
+const S1_CARD_BG=['rgba(255,248,225,0.07)','rgba(232,245,233,0.07)','rgba(252,228,236,0.07)','rgba(225,245,254,0.07)','rgba(255,243,224,0.07)'];
+const S1_CARD_BORDER=['#FFF8E1','#E8F5E9','#FCE4EC','#E1F5FE','#FFF3E0'];
 
 function esc1(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function val(id){const e=document.getElementById(id);return e?e.value:'';}
@@ -1236,11 +1263,14 @@ function buildCard(q,i){
   const isDel=deletedIdx.has(i);
   const numBadge=isWyr?'<span class="card-num wyr">🤔 WYR '+(i+1)+'</span>':'<span class="card-num">Soru '+(i+1)+'</span>';
   const typeOpts=Object.entries(REGISTRY).map(([k,v])=>'<option value="'+k+'"'+(q.question_type===k?' selected':'')+'>'+esc1(v.label)+'</option>').join('');
-  const header='<div class="card-header">'+numBadge+'<select class="type-sel" id="q'+i+'_type" onchange="changeType('+i+',this.value)">'+typeOpts+'</select><button type="button" class="del-btn" onclick="deleteQ('+i+')">🗑️ Sil</button></div>';
-  const delBanner=isDel?'<div class="deleted-banner">🗑️ Bu soru silindi (kaydet butonu ile kalıcı olur)</div>':'';
+  const moveUp=i>0?'<button type="button" class="move-btn" onclick="moveQ('+i+',-1)">↑</button>':'<button type="button" class="move-btn" disabled>↑</button>';
+  const moveDown=i<QUESTIONS.length-1?'<button type="button" class="move-btn" onclick="moveQ('+i+',1)">↓</button>':'<button type="button" class="move-btn" disabled>↓</button>';
+  const header='<div class="card-header">'+numBadge+moveUp+moveDown+'<select class="type-sel" id="q'+i+'_type" onchange="changeType('+i+',this.value)">'+typeOpts+'</select><button type="button" class="del-btn" onclick="deleteQ('+i+')">🗑️ Sil</button></div>';
+  const delBanner=isDel?'<div class="deleted-banner">Bu soru silindi (kaydet butonu ile kalici olur)</div>':'';
   const cardCls='card'+(isDel?' deleted-card':'');
   const inner=isWyr?buildWyrFields(q,i):buildMcFields(q,i);
-  return '<div class="'+cardCls+'" id="card'+i+'">'+delBanner+header+inner+'</div>';
+  const bg=S1_CARD_BG[i%5];const bl=S1_CARD_BORDER[i%5];
+  return '<div class="'+cardCls+'" id="card'+i+'" style="background:'+bg+';border-left:3px solid '+bl+'">'+delBanner+header+inner+'</div>';
 }
 
 function buildMcFields(q,i){
@@ -1362,6 +1392,30 @@ function addQuestion(type){
   div.innerHTML=buildCard(QUESTIONS[i],i);
   cards.appendChild(div.firstChild);
   setTimeout(()=>{cards.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
+}
+
+// item3: kart sıralama - i ve dir (-1 yukari, +1 asagi)
+function moveQ(i,dir){
+  var j=i+dir;
+  if(j<0||j>=QUESTIONS.length)return;
+  var tmp=QUESTIONS[i];QUESTIONS[i]=QUESTIONS[j];QUESTIONS[j]=tmp;
+  // deletedIdx'i takas et
+  var iDel=deletedIdx.has(i);var jDel=deletedIdx.has(j);
+  deletedIdx.delete(i);deletedIdx.delete(j);
+  if(iDel)deletedIdx.add(j);if(jDel)deletedIdx.add(i);
+  // uploadedUrls ve s1VideoUrls key'lerini takas et
+  var slotKeys=['image','fact_image','visible_image','surprise_image'];
+  slotKeys.forEach(function(sk){
+    var ki=String(i)+'_'+sk;var kj=String(j)+'_'+sk;
+    var vi=uploadedUrls[ki];var vj=uploadedUrls[kj];
+    delete uploadedUrls[ki];delete uploadedUrls[kj];
+    if(vi!==undefined)uploadedUrls[kj]=vi;if(vj!==undefined)uploadedUrls[ki]=vj;
+    var svi=s1VideoUrls[ki];var svj=s1VideoUrls[kj];
+    delete s1VideoUrls[ki];delete s1VideoUrls[kj];
+    if(svi!==undefined)s1VideoUrls[kj]=svi;if(svj!==undefined)s1VideoUrls[ki]=svj;
+  });
+  replaceCard(i);replaceCard(j);
+  var dest=document.getElementById('card'+j);if(dest)dest.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 // Stage=2 handleFileChange ile aynı pattern — previewId doğrudan parametre
@@ -1756,10 +1810,10 @@ async function handleUploadMedya(request, env, url) {
       body: JSON.stringify({ role: "reader", type: "anyone" }),
     });
 
-    // prob6: video icin download URL, gorsel icin thumbnail URL
+    // prob6: video icin download URL (+confirm=t large file bypass), gorsel icin thumbnail URL
     const isVideoMime = mimeType.startsWith("video/") || /\.(mp4|mov|webm|avi)$/i.test(ext);
     const driveUrl = isVideoMime
-      ? `https://drive.google.com/uc?export=download&id=${fileId}`
+      ? `https://drive.google.com/uc?export=download&confirm=t&id=${fileId}`
       : `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
     return json({ ok: true, url: driveUrl, file_id: fileId, is_video: isVideoMime });
 
@@ -1832,4 +1886,148 @@ function esc(str) {
   return String(str || "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ─── GET /uret-form — İçerik üretim formu ────────────────────────
+async function handleUretForm(request, env, url) {
+  const chatId = (url.searchParams.get("chat_id") || "").replace(/[^0-9\-]/g, "");
+  const html = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GeniMini — İçerik Üret</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:#111827;color:#f3f4f6;padding:20px;max-width:580px;margin:0 auto}
+h1{font-size:1.2em;color:#a78bfa;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card{background:#1f2937;border-radius:12px;padding:18px;margin-bottom:14px;border:1px solid #374151}
+.lbl{display:block;color:#9ca3af;font-size:.78em;margin-bottom:5px;margin-top:10px}
+.lbl:first-child{margin-top:0}
+textarea,input[type=number],select{width:100%;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.9em;font-family:inherit;resize:vertical}
+textarea{min-height:80px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.total-note{font-size:.75em;color:#6b7280;margin-top:8px}
+.total-note b{color:#a78bfa}
+.btn{display:block;width:100%;padding:12px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:1em;font-weight:700;cursor:pointer;margin-top:16px;transition:opacity .15s}
+.btn:hover{opacity:.88}.btn:disabled{opacity:.45;cursor:default}
+#status{margin-top:10px;padding:10px;border-radius:6px;display:none;font-size:.85em;line-height:1.4}
+.ok{background:#064e3b;color:#6ee7b7}.err{background:#7f1d1d;color:#fca5a5}
+</style>
+</head>
+<body>
+<h1>🦊 GeniMini &mdash; İçerik Üret</h1>
+<div class="card">
+  <label class="lbl">Konu (Topic)</label>
+  <textarea id="konu" placeholder="Örn: Dinosaurs, Ocean Animals, Space Exploration, Ancient Egypt..."></textarea>
+</div>
+<div class="card">
+  <label class="lbl">Soru Tipi Dağılımı</label>
+  <div class="row2">
+    <div>
+      <label class="lbl">📝 Çoktan Seçmeli (MC)</label>
+      <input type="number" id="mc_count" value="15" min="0" max="25" oninput="updateTotal()">
+    </div>
+    <div>
+      <label class="lbl">🤔 Would You Rather (WYR)</label>
+      <input type="number" id="wyr_count" value="0" min="0" max="25" oninput="updateTotal()">
+    </div>
+  </div>
+  <p class="total-note">Toplam: <b id="total_soru">15</b> soru</p>
+</div>
+<div class="card">
+  <label class="lbl">Dil / Language</label>
+  <select id="dil">
+    <option value="English" selected>🇬🇧 English</option>
+    <option value="Turkish">🇹🇷 Turkish</option>
+    <option value="Spanish">🇪🇸 Spanish</option>
+    <option value="French">🇫🇷 French</option>
+    <option value="German">🇩🇪 German</option>
+    <option value="Arabic">🇸🇦 Arabic</option>
+  </select>
+</div>
+<button class="btn" id="btn-submit" onclick="submitForm()">🚀 İçerik Üret</button>
+<div id="status"></div>
+<script>
+const CHAT_ID='${chatId}';
+function updateTotal(){
+  var mc=parseInt(document.getElementById('mc_count').value)||0;
+  var wyr=parseInt(document.getElementById('wyr_count').value)||0;
+  document.getElementById('total_soru').textContent=mc+wyr;
+}
+async function submitForm(){
+  var konu=document.getElementById('konu').value.trim();
+  var mc=parseInt(document.getElementById('mc_count').value)||0;
+  var wyr=parseInt(document.getElementById('wyr_count').value)||0;
+  var dil=document.getElementById('dil').value;
+  var st=document.getElementById('status');
+  if(!konu){st.style.display='block';st.className='err';st.textContent='Konu boş bırakılamaz!';return;}
+  if(mc+wyr===0){st.style.display='block';st.className='err';st.textContent='En az 1 soru girilmeli!';return;}
+  var btn=document.getElementById('btn-submit');
+  btn.disabled=true;btn.textContent='⏳ Gönderiliyor...';
+  st.style.display='block';st.className='';st.textContent='⏳ Gönderiliyor...';
+  try{
+    var r=await fetch('/uret-form-submit',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({konu,mc_count:mc,wyr_count:wyr,n_soru:mc+wyr,dil,chat_id:CHAT_ID})});
+    var d=await r.json();
+    if(d.ok){
+      st.className='ok';
+      st.textContent='✓ Üretim başlatıldı! Job ID: '+d.job_id+' — Telegram bildirimi gelecek.';
+    }else{
+      st.className='err';st.textContent='Hata: '+(d.error||'bilinmeyen');
+      btn.disabled=false;btn.textContent='🚀 İçerik Üret';
+    }
+  }catch(e){
+    st.className='err';st.textContent='Ağ hatası: '+e.message;
+    btn.disabled=false;btn.textContent='🚀 İçerik Üret';
+  }
+}
+</script>
+</body>
+</html>`;
+  return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8", "Cache-Control": "no-store" } });
+}
+
+// ─── POST /uret-form-submit — Form submit → workflow dispatch ─────
+async function handleUretFormSubmit(request, env, ctx) {
+  let body;
+  try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
+  const { konu, mc_count, wyr_count, n_soru, dil, chat_id } = body;
+  if (!konu || !chat_id) return json({ ok: false, error: "konu ve chat_id zorunlu" }, 400);
+
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(2);
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const jobId = `U${yy}${mm}${dd}${String(Date.now()).slice(-4)}L`;
+  const tarih = `${dd}.${mm}.20${yy}`;
+
+  const mcN = parseInt(mc_count) || 0;
+  const wyrN = parseInt(wyr_count) || 0;
+  const totalN = parseInt(n_soru) || (mcN + wyrN) || 10;
+  const soruTipiJson = JSON.stringify({ multiple_choice: mcN, would_you_rather: wyrN });
+  const questionType = wyrN > 0 && mcN === 0 ? "would_you_rather" : "multiple_choice";
+
+  ctx.waitUntil((async () => {
+    try {
+      await githubDispatch("icerik_uret", {
+        job_id: jobId,
+        tarih,
+        index: "0",
+        chat_id: String(chat_id),
+        video_format: "long",
+        test_mode: false,
+        question_type: questionType,
+        konu_override: konu,
+        n_soru: String(totalN),
+        soru_tipi_json: soruTipiJson,
+        dil: dil || "English",
+      }, env);
+      await telegramMesajAt(String(chat_id),
+        `✓ *İçerik üretiliyor\\!*\n\n📚 Konu: ${konu}\n❓ ${totalN} soru (MC:${mcN} WYR:${wyrN})\n🌐 ${dil || "English"}\n\n🆔 \`${jobId}\`\n\n⏳ Hazır olunca link gelecek\\.\\.\\.`, env);
+    } catch (e) {
+      console.error("uret-form-submit dispatch hatasi:", e.message);
+    }
+  })());
+
+  return json({ ok: true, job_id: jobId });
 }

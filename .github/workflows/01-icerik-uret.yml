@@ -1,4 +1,4 @@
-# REV 003/04JUN26 - 01.5-icerik-onay tetikleme eklendi (02-gorsel-uret yerini aldı)
+# REV 004/09JUN26 - /uret form destegi: konu_override, n_soru, soru_tipi_json, dil inputs
 name: 01 - İçerik Üret
 # REVISION: paralel dispatch'ler kaldırıldı, akış sıralı (01→02 kod tetikler) 2026-05-25
 
@@ -31,6 +31,22 @@ on:
         description: 'Soru tipi: multiple_choice veya would_you_rather'
         required: false
         default: 'multiple_choice'
+      konu_override:
+        description: 'Konu metni (override - boşsa havuzdan alınır)'
+        required: false
+        default: ''
+      n_soru:
+        description: 'Toplam soru sayısı (boşsa format bazlı: long=25)'
+        required: false
+        default: ''
+      soru_tipi_json:
+        description: 'Karma tip JSON, örn: {"multiple_choice":15,"would_you_rather":5}'
+        required: false
+        default: ''
+      dil:
+        description: 'İçerik dili (English, Turkish, Spanish, French...)'
+        required: false
+        default: 'English'
 
 permissions:
   actions: write
@@ -70,6 +86,10 @@ jobs:
             echo "test_mode=${{ github.event.client_payload.test_mode || 'false' }}" >> $GITHUB_OUTPUT
             echo "job_id=${{ github.event.client_payload.job_id || github.run_id }}" >> $GITHUB_OUTPUT
             echo "question_type=${{ github.event.client_payload.question_type || 'multiple_choice' }}" >> $GITHUB_OUTPUT
+            echo "konu_override=${{ github.event.client_payload.konu_override }}" >> $GITHUB_OUTPUT
+            echo "n_soru=${{ github.event.client_payload.n_soru }}" >> $GITHUB_OUTPUT
+            echo "dil=${{ github.event.client_payload.dil || 'English' }}" >> $GITHUB_OUTPUT
+            printf 'soru_tipi_json=%s\n' '${{ github.event.client_payload.soru_tipi_json }}' >> $GITHUB_OUTPUT
           else
             echo "tarih=${{ github.event.inputs.tarih }}" >> $GITHUB_OUTPUT
             echo "index=${{ github.event.inputs.index }}" >> $GITHUB_OUTPUT
@@ -78,6 +98,10 @@ jobs:
             echo "test_mode=${{ github.event.inputs.test_mode || 'false' }}" >> $GITHUB_OUTPUT
             echo "job_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
             echo "question_type=${{ github.event.inputs.question_type || 'multiple_choice' }}" >> $GITHUB_OUTPUT
+            echo "konu_override=${{ github.event.inputs.konu_override }}" >> $GITHUB_OUTPUT
+            echo "n_soru=${{ github.event.inputs.n_soru }}" >> $GITHUB_OUTPUT
+            echo "dil=${{ github.event.inputs.dil || 'English' }}" >> $GITHUB_OUTPUT
+            printf 'soru_tipi_json=%s\n' '${{ github.event.inputs.soru_tipi_json }}' >> $GITHUB_OUTPUT
           fi
       
       - name: İçerik üret
@@ -98,6 +122,10 @@ jobs:
           VIDEO_FORMAT: ${{ steps.params.outputs.video_format }}
           TEST_MODE: ${{ steps.params.outputs.test_mode }}
           QUESTION_TYPE: ${{ steps.params.outputs.question_type }}
+          KONU_OVERRIDE: ${{ steps.params.outputs.konu_override }}
+          N_SORU: ${{ steps.params.outputs.n_soru }}
+          SORU_TIPI_JSON: ${{ steps.params.outputs.soru_tipi_json }}
+          DIL: ${{ steps.params.outputs.dil }}
           WORKFLOW_DISPATCH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
           GITHUB_REPO_OWNER: ${{ github.repository_owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}

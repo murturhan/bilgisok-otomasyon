@@ -1,4 +1,4 @@
-// REV 006/30MAY26 - Scene2 logo kucultuldu, baslik zIndex yukseltildi
+// REV 007/09JUN26 - Scene1 Jess konusma yazisi animasyonlu (item1): word-by-word, all colored, pop sfx
 import React from "react";
 import {
   AbsoluteFill,
@@ -80,7 +80,7 @@ export const IntroSceneLong: React.FC<Props> = ({
           transform: `scale(${scene1Scale})`,
           filter: scene1Blur > 0 ? `blur(${scene1Blur}px)` : undefined,
         }}>
-          <Scene1Long />
+          <Scene1Long sfx_pop_single={sfx_pop_single} />
         </div>
       )}
       
@@ -107,21 +107,27 @@ export const IntroSceneLong: React.FC<Props> = ({
 };
 
 // ═══ SAHNE 1 ═══ Logo+balon SOL, Jess SAĞ (YATAY)
-const Scene1Long: React.FC = () => {
+const WORD_COLORS = ['#f59e0b', '#10b981', '#ec4899', '#3b82f6'];
+const WORD_STAGGER = 9;
+const WORD_START_FRAME = 26;
+
+const Scene1Long: React.FC<{ sfx_pop_single?: string }> = ({ sfx_pop_single }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  
+
   const logoAnim = spring({ frame, fps, config: { damping: 11, stiffness: 110 } });
   const logoScale = interpolate(logoAnim, [0, 1], [0, 1]);
   const logoY = interpolate(logoAnim, [0, 1], [-120, 0]);
   const logoIdleBounce = frame > 25 ? Math.sin(frame * 0.1) * 6 : 0;
-  
+
   const greetingAnim = spring({ frame: frame - 18, fps, config: { damping: 13, stiffness: 100 } });
   const greetingScale = interpolate(greetingAnim, [0, 1], [0, 1]);
   const greetingOpacity = interpolate(greetingAnim, [0, 0.5], [0, 1]);
   const greetingFloat = Math.sin(frame * 0.08) * 5;
   const greetingTilt = Math.sin(frame * 0.1) * 1.5;
-  
+
+  const words = LONG_GREETING_TEXT.split(' ');
+
   return (
     <>
       {/* SOL: Logo + Greeting balonu */}
@@ -135,22 +141,37 @@ const Scene1Long: React.FC = () => {
         }}>
           <GeniMiniLogo width={700} />
         </div>
-        
+
         <div style={{
           opacity: greetingOpacity,
           transform: `scale(${greetingScale}) translateY(${greetingFloat}px) rotate(${greetingTilt}deg)`,
-          backgroundColor: BRAND.white, color: BRAND.black,
-          padding: "24px 44px", borderRadius: 36,
-          fontSize: 42, fontFamily: FONTS.display, fontWeight: 900,
+          backgroundColor: BRAND.white,
+          padding: "22px 40px", borderRadius: 36,
+          fontSize: 54, fontFamily: FONTS.display, fontWeight: 900,
           border: `5px solid ${BRAND.yellow}`,
           boxShadow: `0 10px 25px rgba(0,0,0,0.45), 0 0 40px ${BRAND.yellow}`,
           maxWidth: "95%", textAlign: "center", letterSpacing: 0.5,
-          lineHeight: 1.2, textTransform: "uppercase",
+          lineHeight: 1.3, textTransform: "uppercase",
         }}>
-          {LONG_GREETING_TEXT}
+          {words.map((word, idx) => {
+            const wFrame = frame - (WORD_START_FRAME + idx * WORD_STAGGER);
+            const wAnim = spring({ frame: wFrame, fps, config: { damping: 12, stiffness: 180 } });
+            const wScale = interpolate(wAnim, [0, 1], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+            const wOpacity = interpolate(wAnim, [0, 0.4], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+            return (
+              <span key={idx} style={{
+                display: "inline-block",
+                opacity: wOpacity,
+                transform: `scale(${wScale})`,
+                transformOrigin: "center bottom",
+                color: WORD_COLORS[idx % WORD_COLORS.length],
+                marginRight: "0.18em",
+              }}>{word}</span>
+            );
+          })}
         </div>
       </div>
-      
+
       {/* SAĞ: Jess Video */}
       <div style={{
         position: "absolute", right: "2%", bottom: 0, width: "40%",
@@ -162,6 +183,13 @@ const Scene1Long: React.FC = () => {
           volume={1}
         />
       </div>
+
+      {/* Word pop SFX - her kelime girişinde pop_single */}
+      {sfx_pop_single && words.map((_, idx) => (
+        <Sequence key={`wpop-${idx}`} from={WORD_START_FRAME + idx * WORD_STAGGER} durationInFrames={20}>
+          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
+        </Sequence>
+      ))}
     </>
   );
 };

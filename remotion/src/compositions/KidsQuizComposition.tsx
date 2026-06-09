@@ -1,4 +1,4 @@
-// REV 014/07JUN26 - uploaded_video_url fallback (prob6); funFact artik imageSrc'e fallback yapmaz (prob7)
+// REV 015/09JUN26 - uploaded_image_url priority (item5): uploaded beats flux image_url
 import React from "react";
 import {
   AbsoluteFill,
@@ -218,11 +218,11 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         const phases = computeQuestionPhases(q as any);
         const imageSrc = (q as any).image_path
           ? staticFile((q as any).image_path)
-          : (q as any).image_url || "";
+          : (q as any).uploaded_image_url || (q as any).image_url || "";
         // prob7: funFact imageSrc'e fallback yapmasin - ayri slot ayri gorsel
         const funFactImageSrc = (q as any).fun_fact_image_path
           ? staticFile((q as any).fun_fact_image_path)
-          : (q as any).fun_fact_image_url || "";
+          : (q as any).uploaded_fact_image_url || (q as any).fun_fact_image_url || "";
         // prob6: uploaded_video_url stage=1 video upload fallback
         const videoSrc: string = (q as any).question_video_url || (q as any).uploaded_video_url || "";
         const funFactVideoSrc: string = (q as any).fun_fact_video_url || (q as any).uploaded_fact_video_url || "";
