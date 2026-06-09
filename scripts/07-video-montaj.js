@@ -1,4 +1,4 @@
-// REV 015/07JUN26 - GECİCİ: Shorts format girerse hata firlat
+// REV 016/09JUN26 - skip_intro/skip_outro destegi: questions.json'dan okuyup intro/outro surecini atla
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -654,6 +654,10 @@ async function main() {
 
     const IS_TEST_MODE = questionsData.is_test_mode === true;
     if (IS_TEST_MODE) console.log("🧪 TEST MODE: intro/outro render edilmeyecek, sadece sorular");
+    const SKIP_INTRO = IS_TEST_MODE || questionsData.skip_intro === true;
+    const SKIP_OUTRO = IS_TEST_MODE || questionsData.skip_outro === true;
+    if (questionsData.skip_intro === true) console.log("⏭ skip_intro: intro render atlanıyor");
+    if (questionsData.skip_outro === true) console.log("⏭ skip_outro: outro render atlanıyor");
 
     const inputProps = {
       title: "GeniMini Tests",
@@ -661,13 +665,13 @@ async function main() {
       channel_name: "GeniMini Tests",
       questions: questions,
       jess_poses: jessPosesForRemotion,
-      
+
       // Intro/outro: ayrı mp3 yok, Jess video kendi sesini taşıyor.
       // Sahne 1 = Jess video süresi, Sahne 2 = kalan zaman (topic announce + buffer)
       intro_audio_path: null,
       outro_audio_path: null,
-      intro_audio_duration: IS_TEST_MODE ? 0 : introMinDuration,
-      outro_audio_duration: IS_TEST_MODE ? 0 : outroMinDuration,
+      intro_audio_duration: SKIP_INTRO ? 0 : introMinDuration,
+      outro_audio_duration: SKIP_OUTRO ? 0 : outroMinDuration,
       is_test_mode: IS_TEST_MODE,
       
       // Jess video gerçek süreleri (composition Sahne 1 / Sahne 2 ayrım noktası için)

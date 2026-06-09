@@ -1,4 +1,4 @@
-// REV 011/09JUN26 - /uret formu destegi: KONU_OVERRIDE, N_SORU, SORU_TIPI_JSON, DIL env vars
+// REV 012/09JUN26 - INCLUDE_INTRO/INCLUDE_OUTRO destegi: questions.json'a skip_intro/skip_outro yaz
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -41,6 +41,8 @@ const KONU_OVERRIDE = process.env.KONU_OVERRIDE || null;
 const N_SORU_OVERRIDE = process.env.N_SORU ? parseInt(process.env.N_SORU) : null;
 const DIL = process.env.DIL || "English";
 const SORU_TIPI_JSON_STR = process.env.SORU_TIPI_JSON || null;
+const INCLUDE_INTRO = process.env.INCLUDE_INTRO !== "false";
+const INCLUDE_OUTRO = process.env.INCLUDE_OUTRO !== "false";
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -642,6 +644,8 @@ async function main() {
       background_prompt: icerik.background_prompt || "",
       topic_emojis: icerik.topic_emojis || [],
       is_test_mode: IS_TEST_MODE,
+      skip_intro: !INCLUDE_INTRO,
+      skip_outro: !INCLUDE_OUTRO,
       questions: icerik.questions,
     }, null, 2));
     

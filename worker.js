@@ -1,4 +1,4 @@
-// REV 047/09JUN26 - 6 yenilik: intro animasyon, kart renk, sıralama, drive url, resim oncelik, /uret formu
+// REV 048/09JUN26 - /uret @botname fix + form intro/outro secenegi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -889,7 +889,7 @@ async function handleTelegram(request, env, ctx) {
       return new Response("OK", { status: 200 });
     }
 
-    if (lower === "/uret") {
+    if (lower === "/uret" || lower.startsWith("/uret@")) {
       const formUrl = `https://telegram-to-github.murturhan.workers.dev/uret-form?chat_id=${chatId}`;
       ctx.waitUntil(telegramMesajAt(chatId, `🎬 *İçerik Üretici*\n\nKonu ve ayarları belirlemek için formu doldurun:\n${formUrl}`, env));
       return new Response("OK", { status: 200 });
@@ -1908,6 +1908,8 @@ textarea{min-height:80px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
 .total-note{font-size:.75em;color:#6b7280;margin-top:8px}
 .total-note b{color:#a78bfa}
+.chk-row{display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;font-size:.9em;color:#d1d5db}
+.chk-row input[type=checkbox]{width:18px;height:18px;accent-color:#8b5cf6;cursor:pointer;flex-shrink:0}
 .btn{display:block;width:100%;padding:12px;background:#8b5cf6;color:#fff;border:none;border-radius:8px;font-size:1em;font-weight:700;cursor:pointer;margin-top:16px;transition:opacity .15s}
 .btn:hover{opacity:.88}.btn:disabled{opacity:.45;cursor:default}
 #status{margin-top:10px;padding:10px;border-radius:6px;display:none;font-size:.85em;line-height:1.4}
@@ -1945,6 +1947,11 @@ textarea{min-height:80px}
     <option value="Arabic">🇸🇦 Arabic</option>
   </select>
 </div>
+<div class="card">
+  <label class="lbl">Sahne Seçenekleri</label>
+  <label class="chk-row"><input type="checkbox" id="include_intro" checked> 🎬 İntro sahnesi olsun</label>
+  <label class="chk-row"><input type="checkbox" id="include_outro" checked> 🏆 Outro sahnesi olsun</label>
+</div>
 <button class="btn" id="btn-submit" onclick="submitForm()">🚀 İçerik Üret</button>
 <div id="status"></div>
 <script>
@@ -1959,6 +1966,8 @@ async function submitForm(){
   var mc=parseInt(document.getElementById('mc_count').value)||0;
   var wyr=parseInt(document.getElementById('wyr_count').value)||0;
   var dil=document.getElementById('dil').value;
+  var include_intro=document.getElementById('include_intro').checked;
+  var include_outro=document.getElementById('include_outro').checked;
   var st=document.getElementById('status');
   if(!konu){st.style.display='block';st.className='err';st.textContent='Konu boş bırakılamaz!';return;}
   if(mc+wyr===0){st.style.display='block';st.className='err';st.textContent='En az 1 soru girilmeli!';return;}
@@ -1967,7 +1976,7 @@ async function submitForm(){
   st.style.display='block';st.className='';st.textContent='⏳ Gönderiliyor...';
   try{
     var r=await fetch('/uret-form-submit',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({konu,mc_count:mc,wyr_count:wyr,n_soru:mc+wyr,dil,chat_id:CHAT_ID})});
+      body:JSON.stringify({konu,mc_count:mc,wyr_count:wyr,n_soru:mc+wyr,dil,chat_id:CHAT_ID,include_intro,include_outro})});
     var d=await r.json();
     if(d.ok){
       st.className='ok';
@@ -1991,7 +2000,7 @@ async function submitForm(){
 async function handleUretFormSubmit(request, env, ctx) {
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
-  const { konu, mc_count, wyr_count, n_soru, dil, chat_id } = body;
+  const { konu, mc_count, wyr_count, n_soru, dil, chat_id, include_intro, include_outro } = body;
   if (!konu || !chat_id) return json({ ok: false, error: "konu ve chat_id zorunlu" }, 400);
 
   const now = new Date();
@@ -2021,6 +2030,8 @@ async function handleUretFormSubmit(request, env, ctx) {
         n_soru: String(totalN),
         soru_tipi_json: soruTipiJson,
         dil: dil || "English",
+        include_intro: include_intro !== false,
+        include_outro: include_outro !== false,
       }, env);
       await telegramMesajAt(String(chat_id),
         `✓ *İçerik üretiliyor\\!*\n\n📚 Konu: ${konu}\n❓ ${totalN} soru (MC:${mcN} WYR:${wyrN})\n🌐 ${dil || "English"}\n\n🆔 \`${jobId}\`\n\n⏳ Hazır olunca link gelecek\\.\\.\\.`, env);

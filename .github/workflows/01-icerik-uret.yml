@@ -1,4 +1,4 @@
-# REV 004/09JUN26 - /uret form destegi: konu_override, n_soru, soru_tipi_json, dil inputs
+# REV 005/09JUN26 - include_intro/include_outro destegi
 name: 01 - İçerik Üret
 # REVISION: paralel dispatch'ler kaldırıldı, akış sıralı (01→02 kod tetikler) 2026-05-25
 
@@ -47,6 +47,14 @@ on:
         description: 'İçerik dili (English, Turkish, Spanish, French...)'
         required: false
         default: 'English'
+      include_intro:
+        description: 'İntro sahnesi olsun (true/false)'
+        required: false
+        default: 'true'
+      include_outro:
+        description: 'Outro sahnesi olsun (true/false)'
+        required: false
+        default: 'true'
 
 permissions:
   actions: write
@@ -90,6 +98,8 @@ jobs:
             echo "n_soru=${{ github.event.client_payload.n_soru }}" >> $GITHUB_OUTPUT
             echo "dil=${{ github.event.client_payload.dil || 'English' }}" >> $GITHUB_OUTPUT
             printf 'soru_tipi_json=%s\n' '${{ github.event.client_payload.soru_tipi_json }}' >> $GITHUB_OUTPUT
+            echo "include_intro=${{ github.event.client_payload.include_intro != false && 'true' || 'false' }}" >> $GITHUB_OUTPUT
+            echo "include_outro=${{ github.event.client_payload.include_outro != false && 'true' || 'false' }}" >> $GITHUB_OUTPUT
           else
             echo "tarih=${{ github.event.inputs.tarih }}" >> $GITHUB_OUTPUT
             echo "index=${{ github.event.inputs.index }}" >> $GITHUB_OUTPUT
@@ -102,6 +112,8 @@ jobs:
             echo "n_soru=${{ github.event.inputs.n_soru }}" >> $GITHUB_OUTPUT
             echo "dil=${{ github.event.inputs.dil || 'English' }}" >> $GITHUB_OUTPUT
             printf 'soru_tipi_json=%s\n' '${{ github.event.inputs.soru_tipi_json }}' >> $GITHUB_OUTPUT
+            echo "include_intro=${{ github.event.inputs.include_intro || 'true' }}" >> $GITHUB_OUTPUT
+            echo "include_outro=${{ github.event.inputs.include_outro || 'true' }}" >> $GITHUB_OUTPUT
           fi
       
       - name: İçerik üret
@@ -126,6 +138,8 @@ jobs:
           N_SORU: ${{ steps.params.outputs.n_soru }}
           SORU_TIPI_JSON: ${{ steps.params.outputs.soru_tipi_json }}
           DIL: ${{ steps.params.outputs.dil }}
+          INCLUDE_INTRO: ${{ steps.params.outputs.include_intro }}
+          INCLUDE_OUTRO: ${{ steps.params.outputs.include_outro }}
           WORKFLOW_DISPATCH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
           GITHUB_REPO_OWNER: ${{ github.repository_owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}
