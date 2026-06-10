@@ -1,4 +1,4 @@
-// REV 048/09JUN26 - /uret @botname fix + form intro/outro secenegi
+// REV 049/10JUN26 - /uret Markdown underscore bug fix: chat_id URL inline link olarak sar
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -891,7 +891,8 @@ async function handleTelegram(request, env, ctx) {
 
     if (lower === "/uret" || lower.startsWith("/uret@")) {
       const formUrl = `https://telegram-to-github.murturhan.workers.dev/uret-form?chat_id=${chatId}`;
-      ctx.waitUntil(telegramMesajAt(chatId, `🎬 *İçerik Üretici*\n\nKonu ve ayarları belirlemek için formu doldurun:\n${formUrl}`, env));
+      // Markdown v1: URL'deki _ karakteri italic trigger olur — inline link [text](url) ile koruma
+      ctx.waitUntil(telegramMesajAt(chatId, `🎬 *İçerik Üretici*\n\nKonu ve ayarları belirlemek için formu doldurun:\n[Formu Aç](${formUrl})`, env));
       return new Response("OK", { status: 200 });
     }
   }
@@ -971,7 +972,7 @@ async function konuOnerTetikle(chatId, env) {
 async function telegramMesajAt(chatId, text, env) {
   if (!chatId) return;
   try {
-    await fetch(
+    const res = await fetch(
       `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`,
       {
         method: "POST",
@@ -979,6 +980,10 @@ async function telegramMesajAt(chatId, text, env) {
         body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
       }
     );
+    if (!res.ok) {
+      const err = await res.text().catch(() => "");
+      console.error(`telegramMesajAt API hata ${res.status}:`, err);
+    }
   } catch (e) {
     console.error("telegramMesajAt hata:", e.message);
   }
