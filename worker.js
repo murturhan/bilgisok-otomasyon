@@ -1,4 +1,4 @@
-// REV 049/10JUN26 - /uret Markdown underscore bug fix: chat_id URL inline link olarak sar
+// REV 050/10JUN26 - /uret form dispatch: repository_dispatch -> workflow_dispatch (token scope fix)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -2023,23 +2023,45 @@ async function handleUretFormSubmit(request, env, ctx) {
 
   ctx.waitUntil((async () => {
     try {
-      await githubDispatch("icerik_uret", {
-        job_id: jobId,
-        tarih,
-        index: "0",
-        chat_id: String(chat_id),
-        video_format: "long",
-        test_mode: false,
-        question_type: questionType,
-        konu_override: konu,
-        n_soru: String(totalN),
-        soru_tipi_json: soruTipiJson,
-        dil: dil || "English",
-        include_intro: include_intro !== false,
-        include_outro: include_outro !== false,
-      }, env);
+      // workflow_dispatch kullan (repository_dispatch repo scope ister, token'da yok)
+      const wfRes = await fetch(
+        `${GH_API}/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/01-icerik-uret.yml/dispatches`,
+        {
+          method: "POST",
+          headers: {
+            "Accept":               "application/vnd.github+json",
+            "Authorization":        `Bearer ${env.GITHUB_TOKEN}`,
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type":         "application/json",
+          },
+          body: JSON.stringify({
+            ref: "main",
+            inputs: {
+              job_id:         jobId,
+              tarih,
+              index:          "0",
+              chat_id:        String(chat_id),
+              video_format:   "long",
+              test_mode:      "false",
+              question_type:  questionType,
+              konu_override:  konu,
+              n_soru:         String(totalN),
+              soru_tipi_json: soruTipiJson,
+              dil:            dil || "English",
+              include_intro:  String(include_intro !== false),
+              include_outro:  String(include_outro !== false),
+            },
+          }),
+        }
+      );
+      if (!wfRes.ok) {
+        const txt = await wfRes.text().catch(() => "");
+        console.error(`01-icerik-uret dispatch hatasi ${wfRes.status}:`, txt.substring(0, 300));
+      } else {
+        console.log(`✓ 01-icerik-uret workflow_dispatch: job=${jobId}`);
+      }
       await telegramMesajAt(String(chat_id),
-        `✓ *İçerik üretiliyor\\!*\n\n📚 Konu: ${konu}\n❓ ${totalN} soru (MC:${mcN} WYR:${wyrN})\n🌐 ${dil || "English"}\n\n🆔 \`${jobId}\`\n\n⏳ Hazır olunca link gelecek\\.\\.\\.`, env);
+        `Icerik uretiliyor!\n\nKonu: ${konu}\nSoru: ${totalN} (MC:${mcN} WYR:${wyrN})\nDil: ${dil || "English"}\n\nJob ID: ${jobId}\n\nHazir olunca link gelecek...`, env);
     } catch (e) {
       console.error("uret-form-submit dispatch hatasi:", e.message);
     }

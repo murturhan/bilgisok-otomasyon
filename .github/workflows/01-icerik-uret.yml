@@ -1,4 +1,4 @@
-# REV 005/09JUN26 - include_intro/include_outro destegi
+# REV 006/10JUN26 - job_id workflow_dispatch input eklendi (/uret formundan geliyor)
 name: 01 - İçerik Üret
 # REVISION: paralel dispatch'ler kaldırıldı, akış sıralı (01→02 kod tetikler) 2026-05-25
 
@@ -14,6 +14,10 @@ on:
         description: 'Konu indexi (0-2)'
         required: true
         default: '0'
+      job_id:
+        description: 'Job ID (/uret formundan gelir, boşsa run_id kullanılır)'
+        required: false
+        default: ''
       chat_id:
         description: 'Telegram chat ID'
         required: false
@@ -106,7 +110,7 @@ jobs:
             echo "chat_id=${{ github.event.inputs.chat_id }}" >> $GITHUB_OUTPUT
             echo "video_format=${{ github.event.inputs.video_format || 'long' }}" >> $GITHUB_OUTPUT
             echo "test_mode=${{ github.event.inputs.test_mode || 'false' }}" >> $GITHUB_OUTPUT
-            echo "job_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
+            echo "job_id=${{ github.event.inputs.job_id || github.run_id }}" >> $GITHUB_OUTPUT
             echo "question_type=${{ github.event.inputs.question_type || 'multiple_choice' }}" >> $GITHUB_OUTPUT
             echo "konu_override=${{ github.event.inputs.konu_override }}" >> $GITHUB_OUTPUT
             echo "n_soru=${{ github.event.inputs.n_soru }}" >> $GITHUB_OUTPUT
