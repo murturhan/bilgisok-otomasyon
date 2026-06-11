@@ -1,4 +1,4 @@
-// REV 050/10JUN26 - /uret form dispatch: repository_dispatch -> workflow_dispatch (token scope fix)
+// REV 051/11JUN26 - /uret dispatch: hata Telegram'a yaziliyor + senkron dispatch (debug)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -2021,51 +2021,60 @@ async function handleUretFormSubmit(request, env, ctx) {
   const soruTipiJson = JSON.stringify({ multiple_choice: mcN, would_you_rather: wyrN });
   const questionType = wyrN > 0 && mcN === 0 ? "would_you_rather" : "multiple_choice";
 
-  ctx.waitUntil((async () => {
-    try {
-      // workflow_dispatch kullan (repository_dispatch repo scope ister, token'da yok)
-      const wfRes = await fetch(
-        `${GH_API}/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/01-icerik-uret.yml/dispatches`,
-        {
-          method: "POST",
-          headers: {
-            "Accept":               "application/vnd.github+json",
-            "Authorization":        `Bearer ${env.GITHUB_TOKEN}`,
-            "X-GitHub-Api-Version": "2022-11-28",
-            "Content-Type":         "application/json",
+  // Dispatch senkron (ctx.waitUntil değil) — hata response'a ve Telegram'a yansısın
+  let dispatchStatus = 0;
+  let dispatchErrBody = "";
+  try {
+    const wfRes = await fetch(
+      `${GH_API}/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/01-icerik-uret.yml/dispatches`,
+      {
+        method: "POST",
+        headers: {
+          "Accept":               "application/vnd.github+json",
+          "Authorization":        `Bearer ${env.GITHUB_TOKEN}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type":         "application/json",
+        },
+        body: JSON.stringify({
+          ref: "main",
+          inputs: {
+            job_id:         jobId,
+            tarih,
+            index:          "0",
+            chat_id:        String(chat_id),
+            video_format:   "long",
+            test_mode:      "false",
+            question_type:  questionType,
+            konu_override:  konu,
+            n_soru:         String(totalN),
+            soru_tipi_json: soruTipiJson,
+            dil:            dil || "English",
+            include_intro:  String(include_intro !== false),
+            include_outro:  String(include_outro !== false),
           },
-          body: JSON.stringify({
-            ref: "main",
-            inputs: {
-              job_id:         jobId,
-              tarih,
-              index:          "0",
-              chat_id:        String(chat_id),
-              video_format:   "long",
-              test_mode:      "false",
-              question_type:  questionType,
-              konu_override:  konu,
-              n_soru:         String(totalN),
-              soru_tipi_json: soruTipiJson,
-              dil:            dil || "English",
-              include_intro:  String(include_intro !== false),
-              include_outro:  String(include_outro !== false),
-            },
-          }),
-        }
-      );
-      if (!wfRes.ok) {
-        const txt = await wfRes.text().catch(() => "");
-        console.error(`01-icerik-uret dispatch hatasi ${wfRes.status}:`, txt.substring(0, 300));
-      } else {
-        console.log(`✓ 01-icerik-uret workflow_dispatch: job=${jobId}`);
+        }),
       }
-      await telegramMesajAt(String(chat_id),
-        `Icerik uretiliyor!\n\nKonu: ${konu}\nSoru: ${totalN} (MC:${mcN} WYR:${wyrN})\nDil: ${dil || "English"}\n\nJob ID: ${jobId}\n\nHazir olunca link gelecek...`, env);
-    } catch (e) {
-      console.error("uret-form-submit dispatch hatasi:", e.message);
+    );
+    dispatchStatus = wfRes.status;
+    if (!wfRes.ok) {
+      dispatchErrBody = (await wfRes.text().catch(() => "")).substring(0, 200);
+      console.error(`01-icerik-uret dispatch hatasi ${dispatchStatus}:`, dispatchErrBody);
+    } else {
+      console.log(`✓ 01-icerik-uret workflow_dispatch: job=${jobId}`);
     }
-  })());
+  } catch (e) {
+    dispatchStatus = -1;
+    dispatchErrBody = e.message;
+    console.error("01-icerik-uret dispatch exception:", e.message);
+  }
 
-  return json({ ok: true, job_id: jobId });
+  if (dispatchStatus === 204) {
+    ctx.waitUntil(telegramMesajAt(String(chat_id),
+      `Icerik uretiliyor!\n\nKonu: ${konu}\nSoru: ${totalN} (MC:${mcN} WYR:${wyrN})\nDil: ${dil || "English"}\n\nJob ID: ${jobId}\n\nHazir olunca link gelecek...`, env));
+    return json({ ok: true, job_id: jobId });
+  } else {
+    ctx.waitUntil(telegramMesajAt(String(chat_id),
+      `HATA: Workflow dispatch basarisiz!\nStatus: ${dispatchStatus}\n${dispatchErrBody}\n\nJob ID: ${jobId}`, env));
+    return json({ ok: false, job_id: jobId, dispatch_status: dispatchStatus, error: dispatchErrBody });
+  }
 }
