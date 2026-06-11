@@ -1,4 +1,4 @@
-// REV 051/11JUN26 - /uret dispatch: hata Telegram'a yaziliyor + senkron dispatch (debug)
+// REV 052/11JUN26 - /uret dispatch: eksik User-Agent header eklendi (GitHub API 403 fix)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -2033,6 +2033,7 @@ async function handleUretFormSubmit(request, env, ctx) {
           "Accept":               "application/vnd.github+json",
           "Authorization":        `Bearer ${env.GITHUB_TOKEN}`,
           "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent":           "geniminitests-worker",
           "Content-Type":         "application/json",
         },
         body: JSON.stringify({
