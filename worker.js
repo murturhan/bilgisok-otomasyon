@@ -1,4 +1,4 @@
-// REV 052/11JUN26 - /uret dispatch: eksik User-Agent header eklendi (GitHub API 403 fix)
+// REV 053/12JUN26 - fix: onay2 JS syntax error (\\' in template literal → data-p/data-k onclick)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -471,10 +471,10 @@ function handleFileChange(inp,previewId,key,isVideo){
     if(isVideo){
       customVideos[key]=e.target.result;
       var mb=(file.size/1024/1024).toFixed(1);
-      document.getElementById(previewId).innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span><button type="button" onclick="clearMediaStage2(\''+previewId+'\',\''+key+'\',true)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
+      document.getElementById(previewId).innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span><button type="button" data-p="'+previewId+'" data-k="'+key+'" onclick="clearMediaStage2(this.dataset.p,this.dataset.k,true)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
     }else{
       customImages[key]=e.target.result;
-      document.getElementById(previewId).innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span><button type="button" onclick="clearMediaStage2(\''+previewId+'\',\''+key+'\',false)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
+      document.getElementById(previewId).innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span><button type="button" data-p="'+previewId+'" data-k="'+key+'" onclick="clearMediaStage2(this.dataset.p,this.dataset.k,false)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
     }
   };
   reader.readAsDataURL(file);
