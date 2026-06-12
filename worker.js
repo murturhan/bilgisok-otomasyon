@@ -1,4 +1,4 @@
-// REV 053/12JUN26 - fix: onay2 JS syntax error (\\' in template literal → data-p/data-k onclick)
+// REV 054/12JUN26 - fix: buildQuestionCard video_url geçişi (uploaded_video_url → <video> önizleme)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -719,18 +719,24 @@ function buildQuestionCard(q, i) {
     fun_fact = "", image_prompt = "", fun_fact_image_prompt = "",
     question_image_url = null, fun_fact_image_url = null,
     show_image = true,
+    uploaded_video_url = null, uploaded_image_url = null,
+    uploaded_fact_video_url = null, uploaded_fact_image_url = null,
   } = q;
 
   const flagInputs = (q.option_flags || ["","",""]).map((f, j) =>
     `<div class="emoji-cell"><button type="button" class="emoji-pick-btn" id="q${i}_f${j}_btn" onclick="editEmoji('q${i}_f${j}')">${esc(f)||"❓"}</button><input type="text" class="emoji-edit-inp" id="q${i}_f${j}" value="${esc(f)}" maxlength="8"><span class="emoji-hint">${["A","B","C"][j]}</span></div>`
   ).join("");
 
-  const qImgContent = question_image_url
-    ? `<img src="${esc(question_image_url)}" alt="soru görseli">`
-    : `<div class="no-img">Görsel yok</div>`;
-  const fImgContent = fun_fact_image_url
-    ? `<img src="${esc(fun_fact_image_url)}" alt="fact görseli">`
-    : `<div class="no-img">Görsel yok</div>`;
+  const qImgContent = uploaded_video_url
+    ? `<video src="${esc(uploaded_video_url)}" controls style="max-height:90px;width:100%;border-radius:6px"></video>`
+    : (uploaded_image_url || question_image_url)
+      ? `<img src="${esc(uploaded_image_url || question_image_url)}" alt="soru görseli">`
+      : `<div class="no-img">Görsel yok</div>`;
+  const fImgContent = uploaded_fact_video_url
+    ? `<video src="${esc(uploaded_fact_video_url)}" controls style="max-height:90px;width:100%;border-radius:6px"></video>`
+    : (uploaded_fact_image_url || fun_fact_image_url)
+      ? `<img src="${esc(uploaded_fact_image_url || fun_fact_image_url)}" alt="fact görseli">`
+      : `<div class="no-img">Görsel yok</div>`;
 
   // b) Şıklar yatayda; ✓ doğru SADECE correct_answer'da
   const optRows = options.map((o, j) =>
