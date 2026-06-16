@@ -324,66 +324,66 @@ async function renderVS({ vsTitle, konu, leftUnicodes, rightUnicodes, format, is
 }
 
 async function main() {
-  console.log("📦 Twemoji indiriliyor (cache'li)...");
+  console.log("📦 Downloading Twemoji (cached)...");
 
-  // 6 farklı tema gösterimi
-  // 1) DİNOZORLAR — jurassic tema (yeşil/lime), T-rex hero
+  // 6 different theme demos
+  // 1) DINOSAURS — jurassic theme (red/amber), T-rex hero
   await renderTopic({
-    title: "DİNOZORLAR",
-    konu: "dinozor çağı",
+    title: "DINOSAURS",
+    konu: "dinosaur era",
     subjectUnicodes: ["1f996"], // 🦖
     format: "long",
-    isim: "1-long-dinozor.jpg",
+    isim: "1-long-dinosaur.jpg",
   });
 
-  // 2) UZAY GEZEGENLERİ — cosmic tema (mor/pembe), gezegen + roket
+  // 2) SPACE ADVENTURE — cosmic theme (purple/pink), planet + rocket
   await renderTopic({
-    title: "UZAY MACERA",
-    konu: "uzay gezegenleri",
+    title: "SPACE ADVENTURE",
+    konu: "planets and rockets",
     subjectUnicodes: ["1fa90", "1f680"], // 🪐 🚀
     format: "long",
-    isim: "2-long-uzay.jpg",
+    isim: "2-long-space.jpg",
   });
 
-  // 3) HAYVANLAR — wild tema (kırmızı/turuncu), aslan + fil shorts
+  // 3) WILD ANIMALS — wild theme (red/orange), lion + elephant shorts
   await renderTopic({
-    title: "VAHŞİ HAYVANLAR",
-    konu: "hayvan dünyası",
+    title: "WILD ANIMALS",
+    konu: "animal world",
     subjectUnicodes: ["1f981", "1f418"], // 🦁 🐘
     format: "shorts",
-    isim: "3-shorts-hayvan.jpg",
+    isim: "3-shorts-animals.jpg",
   });
 
-  // 4) MEYVELER — juicy tema (bordo/sarı), çilek + muz + üzüm shorts
+  // 4) JUICY FRUITS — juicy theme (bordeaux/yellow), strawberry + banana + grapes
   await renderTopic({
-    title: "RENKLİ MEYVELER",
-    konu: "meyveler",
+    title: "JUICY FRUITS",
+    konu: "fruits",
     subjectUnicodes: ["1f353", "1f34c", "1f347"], // 🍓 🍌 🍇
     format: "shorts",
-    isim: "4-shorts-meyve.jpg",
+    isim: "4-shorts-fruits.jpg",
   });
 
-  // 5) PIZZA VS HAMBURGER — tasty tema, VS long
+  // 5) PIZZA VS BURGER — tasty theme, VS long
   await renderVS({
-    vsTitle: "PIZZA VS HAMBURGER",
-    konu: "yemek",
+    vsTitle: "PIZZA VS BURGER",
+    konu: "food",
     leftUnicodes: ["1f355"],   // 🍕
     rightUnicodes: ["1f354"],  // 🍔
     format: "long",
-    isim: "5-long-vs-yemek.jpg",
+    isim: "5-long-vs-food.jpg",
   });
 
-  // 6) KAPLAN VS ASLAN — wild tema, VS shorts
+  // 6) TIGER VS LION — wild theme, VS shorts
   await renderVS({
-    vsTitle: "KAPLAN VS ASLAN",
-    konu: "vahşi hayvan",
+    vsTitle: "TIGER VS LION",
+    konu: "wild animal",
     leftUnicodes: ["1f405"],   // 🐅
     rightUnicodes: ["1f981"],  // 🦁
     format: "shorts",
-    isim: "6-shorts-vs-hayvan.jpg",
+    isim: "6-shorts-vs-animals.jpg",
   });
 
-  console.log(`\n✅ Tüm thumbnail'ler: ${OUT_DIR}`);
+  console.log(`\n✅ All thumbnails: ${OUT_DIR}`);
 }
 
 main().catch((e) => {

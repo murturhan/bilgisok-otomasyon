@@ -1,72 +1,74 @@
-# 05 - Thumbnail Üretimi (v11 — Hero-Centric Edition)
+# 05 - Thumbnail Generator (v11 — Hero-Centric Edition)
 
-GeniMini Tests kanalı için viral standartlarda YouTube thumbnail üreten modül.
+Viral-standard YouTube thumbnail generator for the GeniMini Tests kids quiz channel.
 
-## v10 → v11 Değişiklikleri (kullanıcı feedback: "viral değildi, konuyu merkeze al")
+## v10 → v11 Changes (user feedback: "not viral — put the topic at the center")
 
-| # | Sorun (v10)                                | Çözüm (v11)                                                       |
-|---|--------------------------------------------|-------------------------------------------------------------------|
-| 1 | Konuyla ilgili görsel yoktu                | FLUX bg artık subject-hero olarak gelir + opsiyonel topic overlay |
-| 2 | Sağda dev mor panel sahneyi kapatıyordu    | Panel KALDIRILDI; başlık ince alt/üst bant                        |
-| 3 | "QUIZ!" kırmızı daire ucuz duruyordu       | KALDIRILDI                                                        |
-| 4 | "?" mavi daire (shorts)                    | KALDIRILDI                                                        |
-| 5 | Pastel gradient bg soluk + kontrastsızdı   | Per-topic WARM CONTRAST tema (Brain Time / Mind Warehouse tarzı)  |
-| 6 | FLUX bg blur'lanıyordu                     | BLUR YOK — konu net görünür                                       |
-| 7 | Jess her thumbnail'de zorunluydu           | OPSİYONEL (`THUMB_USE_JESS=1` ile aktif)                          |
-| 8 | VS layout pembe/mavi (cinsiyetçi)          | Per-tema warm vs blue                                             |
-| 9 | Vignette yoktu                             | Strong radial vignette (%75) — konuya odak                        |
+| # | Problem (v10)                              | Fix (v11)                                                        |
+|---|--------------------------------------------|------------------------------------------------------------------|
+| 1 | No topic-related visual                    | FLUX bg now comes as subject hero + optional topic image overlay |
+| 2 | Huge purple right panel hid the scene      | Panel REMOVED; title now a thin top/bottom band                  |
+| 3 | Cheap "QUIZ!" red circle                   | REMOVED                                                          |
+| 4 | "?" blue circle (shorts)                   | REMOVED                                                          |
+| 5 | Pastel gradient bg was washed out          | Per-topic WARM CONTRAST theme (Brain Time / Mind Warehouse style)|
+| 6 | FLUX bg was being blurred                  | NO blur — topic stays sharp                                      |
+| 7 | Jess was mandatory in every thumbnail      | OPTIONAL (`THUMB_USE_JESS=1` to enable)                          |
+| 8 | VS layout was pink/blue                    | Per-theme warm vs blue                                           |
+| 9 | No vignette                                | Strong radial vignette (75%) — focus on subject                  |
 
-## Per-Topic Warm Contrast Tema
+## Per-Topic Warm Contrast Themes
 
-Konu keyword'üne göre otomatik palet seçimi:
+Theme is auto-selected from topic keywords (English):
 
-| Tema       | Anahtar Kelimeler              | Palet (bg1 → bg2)         | Örnek Konu             |
-|------------|--------------------------------|---------------------------|------------------------|
-| `jurassic` | dinozor, fosil, jurassic       | `#7C1D1D` → `#F59E0B`     | DİNOZORLAR             |
-| `cosmic`   | uzay, gezegen, yıldız, galaksi | `#1E0A5C` → `#EC4899`     | UZAY MACERA            |
-| `wild`     | hayvan, kaplan, aslan, fil...  | `#7F1D1D` → `#FB923C`     | VAHŞİ HAYVANLAR        |
-| `juicy`    | meyve, çilek, muz, karpuz...   | `#9F1239` → `#FBBF24`     | RENKLİ MEYVELER        |
-| `tasty`    | yemek, pizza, hamburger...     | `#7C2D12` → `#F59E0B`     | PIZZA VS HAMBURGER     |
-| `ocean`    | deniz, balık, ahtapot, yunus   | `#0C4A6E` → `#22D3EE`     | DENİZ HAYVANLARI       |
-| `royal`    | (default fallback)             | `#3B0764` → `#FBBF24`     | herhangi               |
+| Theme      | Keywords                                                  | Palette (bg1 → bg2)       | Example                |
+|------------|-----------------------------------------------------------|---------------------------|------------------------|
+| `jurassic` | dinosaur, dino, jurassic, t-rex, fossil, prehistoric      | `#7C1D1D` → `#F59E0B`     | DINOSAURS              |
+| `cosmic`   | space, planet, star, galaxy, moon, sun, astronaut, rocket | `#1E0A5C` → `#EC4899`     | SPACE ADVENTURE        |
+| `wild`     | animal, tiger, lion, elephant, wolf, bear, panda, ...     | `#7F1D1D` → `#FB923C`     | WILD ANIMALS           |
+| `juicy`    | fruit, strawberry, banana, apple, grape, watermelon, ...  | `#9F1239` → `#FBBF24`     | JUICY FRUITS           |
+| `tasty`    | food, pizza, burger, candy, ice cream, cake, ...          | `#7C2D12` → `#F59E0B`     | PIZZA VS BURGER        |
+| `ocean`    | sea, fish, shark, ocean, dolphin, whale, ...              | `#0C4A6E` → `#22D3EE`     | OCEAN ANIMALS          |
+| `royal`    | (default fallback)                                        | `#3B0764` → `#FBBF24`     | any topic              |
 
-## 3 Layout Tipi
+You can extend by adding keywords to `TEMALAR.*.keywords` in `05-thumbnail-uret.js`.
 
-### LONG 1280×720 — Konu hero merkez, başlık ALT bant
+## 3 Layout Types
+
+### LONG 1280×720 — topic hero centered, title in BOTTOM band
 ```
 ┌──────────────────────────────────────────────────────┐
 │ center warm glow + strong vignette                   │
-│ GENIMINI TESTS · sol-üst micro             [CTA ⭐]  │
+│ GENIMINI TESTS · top-left micro            [CTA ⭐]  │
 │                                                      │
-│        [ KONU GÖRSELİ — HERO ~%62 height ]           │
-│        (FLUX bg + opsiyonel topic overlay)           │
+│        [ TOPIC HERO — ~62% of height ]               │
+│        (FLUX bg + optional topic overlay)            │
 │                                                      │
 │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
-│ │   BAŞLIK — kelime kelime renkli — rotate -1.5°  │ │
+│ │   TITLE — word-by-word color — rotated -1.5°    │ │
 │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
 └──────────────────────────────────────────────────────┘
 ```
 
-### SHORTS 1080×1920 — Konu hero merkez, başlık ÜST bant
+### SHORTS 1080×1920 — topic hero centered, title in TOP band
 ```
 ┌──────────────┐
 │ ━━━━━━━━━━━━ │
-│ │  BAŞLIK   │ │
+│ │   TITLE   │ │
 │ ━━━━━━━━━━━━ │
 │              │
-│   [ KONU    │
+│   [ TOPIC   │
 │     HERO    │
-│     ~%60   ]│
+│    ~60%   ] │
 │              │
 │         [⭐] │
 │ GENIMINI…    │
 └──────────────┘
 ```
 
-### VS — split-screen warm vs blue + konu icon'ları her yarıda
+### VS — split-screen warm vs blue + topic icons in each half
 ```
 ┌─────────────────────────────────┐
-│  PIZZA              HAMBURGER   │
+│  PIZZA              BURGER       │
 │ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
 │            ┌────┐               │
 │  🍕        │ VS │      🍔      │
@@ -76,15 +78,15 @@ Konu keyword'üne göre otomatik palet seçimi:
 └─────────────────────────────────┘
 ```
 
-VS otomatik tetiklenir: konu metni `vs` / `mi…mi` içeriyorsa.
+VS is auto-triggered when the topic contains `vs` (e.g., "PIZZA VS BURGER").
 
-## Kullanım
+## Usage
 
-### Production (job pipeline — v9/v10 ile aynı env/Sheets)
+### Production (job pipeline — same env/Sheets as v9/v10)
 
 ```bash
 JOB_ID=<sheet_row_id> \
-GDRIVE_JESS_FOLDER_ID=1R6dy2JfGc_gqALMdawL5fLJRiFOgQPDZ \
+GDRIVE_JESS_FOLDER_ID=... \
 GDRIVE_SERVICE_ACCOUNT_JSON='...' \
 GSHEETS_SPREADSHEET_ID='...' \
 CLOUDFLARE_API_TOKEN='...' CLOUDFLARE_ACCOUNT_ID='...' \
@@ -92,37 +94,37 @@ TELEGRAM_BOT_TOKEN='...' \
 node scripts/05-thumbnail-uret.js
 ```
 
-Sheets kolonları:
+Sheets columns:
 
-| Kolon                       | Değişti?    | Açıklama                                      |
-|-----------------------------|-------------|-----------------------------------------------|
-| `thumbnail_baslik`          | aynı        | 2-3 kelimelik kısa başlık                     |
-| `thumbnail_prompt`          | aynı        | FLUX bg prompt — artık "hero shot" tarzında   |
-| `konu`                      | aynı        | Ham konu (VS + tema tespiti)                  |
-| `thumbnail_subject_image`   | **YENİ**    | Opsiyonel topic hero (Drive path)             |
+| Column                      | Changed? | Description                                  |
+|-----------------------------|----------|----------------------------------------------|
+| `thumbnail_baslik`          | same     | 2-3 word short title (e.g. "SPACE QUIZ")     |
+| `thumbnail_prompt`          | same     | FLUX bg prompt — now "hero shot" style       |
+| `konu`                      | same     | Raw topic (used for VS + theme detection)    |
+| `thumbnail_subject_image`   | **NEW**  | Optional topic hero (file path)              |
 
-### Opsiyonel Env
+### Optional Env
 
-| Env                 | Varsayılan | Açıklama                                    |
-|---------------------|------------|---------------------------------------------|
-| `THUMB_USE_JESS=1`  | (off)      | Jess'i küçük köşe mascot'u olarak ekle     |
+| Env                 | Default | Description                                     |
+|---------------------|---------|-------------------------------------------------|
+| `THUMB_USE_JESS=1`  | (off)   | Add Jess as a small corner mascot               |
 
 ### Standalone Test
 
 ```bash
 node scripts/05-thumbnail-test.js
-# → ./test-output/ — 6 farklı tema thumbnail'i (Twemoji hero ile)
+# → ./test-output/ — 6 theme samples (Twemoji hero placeholders)
 ```
 
-Üretilen örnekler:
-- `1-long-dinozor.jpg` — jurassic tema, T-rex hero
-- `2-long-uzay.jpg` — cosmic tema, gezegen + roket
-- `3-shorts-hayvan.jpg` — wild tema, aslan + fil vertical
-- `4-shorts-meyve.jpg` — juicy tema, çilek + muz + üzüm diamond
-- `5-long-vs-yemek.jpg` — tasty VS, pizza vs hamburger
-- `6-shorts-vs-hayvan.jpg` — wild VS, kaplan vs aslan vertical
+Generated samples:
+- `1-long-dinosaur.jpg` — jurassic theme, T-Rex hero
+- `2-long-space.jpg` — cosmic theme, planet + rocket
+- `3-shorts-animals.jpg` — wild theme, lion + elephant vertical
+- `4-shorts-fruits.jpg` — juicy theme, strawberry + banana + grape diamond
+- `5-long-vs-food.jpg` — tasty VS, pizza vs burger
+- `6-shorts-vs-animals.jpg` — wild VS, tiger vs lion vertical
 
-### Programatik
+### Programmatic
 
 ```js
 import {
@@ -136,43 +138,42 @@ import {
   TEMALAR,
 } from "./scripts/05-thumbnail-uret.js";
 
-const tema = temaSec("dinozor çağı"); // { ad: "jurassic", bg1, bg2, ... }
-const vs = vsTespit("KAPLAN vs ASLAN"); // { sol: "KAPLAN", sag: "ASLAN" }
+const tema = temaSec("dinosaur era"); // { ad: "jurassic", bg1, bg2, ... }
+const vs = vsTespit("TIGER VS LION");  // { sol: "TIGER", sag: "LION" }
 
-// Tam render:
 const buffer = await thumbnailUret({
   prompt: "T-Rex roaring in volcanic landscape",
-  baslikKisa: "DİNOZORLAR",
+  baslikKisa: "DINOSAURS",
   format: "long",
-  konu: "dinozor",
-  hesap: cfHesap,
+  konu: "dinosaur",
+  hesap: cfAccount,
   jobSeed: "abc",
-  topicImagePath: "/path/to/optional-hero.png",  // opsiyonel
+  topicImagePath: "/path/to/optional-hero.png",  // optional
 });
 ```
 
-## Tasarım Sistemi
+## Design System
 
-### Tipografi
+### Typography
 - **Display**: `Lilita One` → `Fredoka` → `Baloo` → `Luckiest Guy` → `Impact`
-- 168-220px başlık (subject'in altında/üstünde)
-- Beyaz 14-18px stroke + 3 katmanlı drop-shadow
+- Title: 110-220px (above/below the subject)
+- White 14-18px stroke + 3-layer drop shadow
 
-### Renkler
-- Kelime kelime: `HIGHLIGHT_PALETTE` = `["#FFE600", "#FF5BA7", "#5BE0FF", "#7FFF7F", "#FFB347"]`
+### Colors
+- Word-by-word: `HIGHLIGHT_PALETTE` = `["#FFE600", "#FF5BA7", "#5BE0FF", "#7FFF7F", "#FFB347"]`
 - Per-topic warm contrast: `TEMALAR` (jurassic/cosmic/wild/juicy/tasty/ocean/royal)
 
-### CTA Slogan Havuzu (deterministik seçim)
-`TAHMİN ET!` · `HANGİSİ?` · `%99 BİLEMİYOR!` · `BİL BAKALIM!` · `ŞOK!` · `VAY CANINA!` · `ZOR MU?`
+### CTA Slogan Pool (deterministic selection)
+`GUESS!` · `WHICH ONE?` · `99% FAIL!` · `CAN YOU?` · `SHOCK!` · `NO WAY!` · `TOO HARD?`
 
-## Geriye Uyumluluk
-- ✅ Aynı env değişkenleri (yeni: opsiyonel `THUMB_USE_JESS`)
-- ✅ Aynı Sheets kolonları (yeni: opsiyonel `thumbnail_subject_image`)
-- ✅ Aynı çıktı yolu (`thumbnail-<format>-<ts>.jpg`)
-- ✅ Aynı Drive klasörü, aynı Telegram formatı
-- ✅ v9/v10 job'ları **kod değişikliği gerektirmeden** v11 ile çalışır
+## Backwards Compatibility
+- ✅ Same env variables (new: optional `THUMB_USE_JESS`)
+- ✅ Same Sheets columns (new: optional `thumbnail_subject_image`)
+- ✅ Same output filename format (`thumbnail-<format>-<ts>.jpg`)
+- ✅ Same Drive folder, same Telegram message format
+- ✅ v9/v10 jobs run on v11 **without any code changes**
 
-## Bilinen Sınırlar
-- FLUX bg başarısız olursa per-tema radial gradient fallback (pipeline kırılmaz)
-- Konu keyword'leri TEMALAR.* keywords array'ine ekleyerek genişletilebilir
-- VS modunda Jess yok (split estetiğini bozmamak için)
+## Known Limits
+- If FLUX bg fails → per-theme radial gradient fallback (pipeline never breaks)
+- Extend keyword coverage by appending to `TEMALAR.<theme>.keywords` arrays
+- No Jess in VS mode (preserves the split aesthetic)

@@ -63,52 +63,55 @@ const USE_JESS = THUMB_USE_JESS === "1";
 // ─── BRAND PALET (theme.ts ile uyumlu) ────────────────────────────────────
 const HIGHLIGHT_PALETTE = ["#FFE600", "#FF5BA7", "#5BE0FF", "#7FFF7F", "#FFB347"];
 
-// CTA rozetleri (kısa, merak uyandıran; deterministik seçim)
+// CTA badges (short, curiosity-driven; deterministic selection per job)
 const CTA_SLOGANS = [
-  "TAHMİN ET!",
-  "HANGİSİ?",
-  "%99 BİLEMİYOR!",
-  "BİL BAKALIM!",
-  "ŞOK!",
-  "VAY CANINA!",
-  "ZOR MU?",
+  "GUESS!",
+  "WHICH ONE?",
+  "99% FAIL!",
+  "CAN YOU?",
+  "SHOCK!",
+  "NO WAY!",
+  "TOO HARD?",
 ];
 
 // ─── PER-TOPIC WARM CONTRAST TEMA ─────────────────────────────────────────
-// Konu keyword'ünden uygun warm-contrast palet seçer. Brain Time / Mind
-// Warehouse / Bright Side referans estetiği.
+// Keyword based theme selection (English-first; multi-word keywords supported).
+// Brain Time / Mind Warehouse / Bright Side reference aesthetic.
 const TEMALAR = {
   jurassic: {
-    keywords: ["dinozor", "tarih öncesi", "jurassic", "fosil"],
+    keywords: ["dinosaur", "dino", "jurassic", "t-rex", "trex", "fossil", "prehistoric"],
     // Volkanik gün batımı: koyu kırmızı → amber. Yeşil dinozor üzerine TAM kontrast.
     bg1: "#7C1D1D", bg2: "#F59E0B",
     titleColor: "#FFE600", accent: "#FFE600",
   },
   cosmic: {
-    keywords: ["uzay", "gezegen", "yıldız", "galaksi", "ay", "güneş", "astronot"],
+    keywords: ["space", "planet", "star", "galaxy", "moon", "sun", "astronaut",
+               "rocket", "cosmos", "solar", "universe"],
     bg1: "#1E0A5C", bg2: "#EC4899",      // derin mor → pembe
     titleColor: "#FFE600", accent: "#5BE0FF",
   },
   wild: {
-    keywords: ["hayvan", "kaplan", "aslan", "fil", "zürafa", "köpek", "kedi",
-               "kurt", "ayı", "panda", "maymun", "zebra"],
+    keywords: ["animal", "tiger", "lion", "elephant", "giraffe", "dog", "cat",
+               "wolf", "bear", "panda", "monkey", "zebra", "fox", "rabbit",
+               "horse", "cheetah", "leopard", "wildlife"],
     bg1: "#7F1D1D", bg2: "#FB923C",      // koyu kırmızı → turuncu
     titleColor: "#FFE600", accent: "#FFE600",
   },
   juicy: {
-    keywords: ["meyve", "çilek", "muz", "elma", "portakal", "üzüm", "karpuz",
-               "kavun"],
+    keywords: ["fruit", "strawberry", "banana", "apple", "orange", "grape",
+               "watermelon", "mango", "cherry", "pineapple"],
     bg1: "#9F1239", bg2: "#FBBF24",      // bordo → sarı
     titleColor: "#FFFFFF", accent: "#FFE600",
   },
   tasty: {
-    keywords: ["yemek", "pizza", "hamburger", "tatlı", "dondurma", "pasta",
-               "kek", "çikolata"],
+    keywords: ["food", "pizza", "burger", "hamburger", "candy", "icecream",
+               "ice cream", "cake", "chocolate", "donut", "cookie", "snack"],
     bg1: "#7C2D12", bg2: "#F59E0B",      // koyu turuncu → amber
     titleColor: "#FFE600", accent: "#FFFFFF",
   },
   ocean: {
-    keywords: ["deniz", "balık", "köpekbalığı", "okyanus", "ahtapot", "yunus"],
+    keywords: ["sea", "fish", "shark", "ocean", "octopus", "dolphin", "whale",
+               "marine", "underwater", "coral"],
     bg1: "#0C4A6E", bg2: "#22D3EE",      // lacivert → cyan
     titleColor: "#FFE600", accent: "#FFE600",
   },
@@ -121,19 +124,19 @@ const TEMALAR = {
 };
 
 function temaSec(metin) {
-  // Türkçe "İ".toLowerCase() → "i" + U+0307 combining dot. Normalize edip
-  // birleşik dot'u kaldırıyoruz ki "DİNOZOR" → "dinozor" match etsin.
+  // Lowercase + strip combining marks (works for both Turkish and Latin diacritics).
   const m = String(metin || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-  // Kelime karakterleri (Türkçe dahil) — kelime başlangıcını yakalamak için
-  // negate edilen char class içinde kullanılır.
-  const WORD_CHARS = "a-zA-Z0-9çğıöşüâî";
+  // Word chars include Latin letters (English-first); ASCII range covers it.
+  const WORD_CHARS = "a-zA-Z0-9";
   for (const [ad, tema] of Object.entries(TEMALAR)) {
     if (ad === "royal") continue;
     const matched = tema.keywords.some((k) => {
-      const re = new RegExp(`(^|[^${WORD_CHARS}])${k}`, "i");
+      // Escape spaces in multi-word keywords ("ice cream")
+      const esc = k.replace(/\s+/g, "\\s+");
+      const re = new RegExp(`(^|[^${WORD_CHARS}])${esc}`, "i");
       return re.test(m);
     });
     if (matched) return { ad, ...tema };
@@ -172,10 +175,10 @@ async function formatTespit(jobFolderId, auth) {
 
 function vsTespit(metin) {
   const t = String(metin || "").trim();
+  // VS detection: "X VS Y" or "X vs Y" (case insensitive, period optional)
   const patterns = [
     /^(.+?)\s+vs\.?\s+(.+)$/i,
     /^(.+?)\s+vs\s+(.+)$/i,
-    /^(.+?)\s+mi\s+(.+?)\s+mi\??$/i,
   ];
   for (const p of patterns) {
     const m = t.match(p);
