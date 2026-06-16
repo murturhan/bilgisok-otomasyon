@@ -1,4 +1,4 @@
-// REV 055/16JUN26 - fix: onay1 mode-row kaldır; onay2 flu+surpriz checkbox; include_outro boolean
+// REV 056/16JUN26 - fix: include_intro/outro dispatch string olarak gönder (422 düzeltme)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -2063,8 +2063,8 @@ async function handleUretFormSubmit(request, env, ctx) {
             n_soru:         String(totalN),
             soru_tipi_json: soruTipiJson,
             dil:            dil || "English",
-            include_intro:  include_intro !== false,
-            include_outro:  include_outro !== false,
+            include_intro:  (include_intro !== false) ? "true" : "false",
+            include_outro:  (include_outro !== false) ? "true" : "false",
           },
         }),
       }

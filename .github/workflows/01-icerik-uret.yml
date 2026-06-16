@@ -1,4 +1,4 @@
-# REV 007/16JUN26 - include_intro/outro: != false -> == true (string/bool karsilastirma duzeltildi)
+# REV 008/16JUN26 - include_intro/outro: type boolean, default true (422 fix)
 name: 01 - İçerik Üret
 # REVISION: paralel dispatch'ler kaldırıldı, akış sıralı (01→02 kod tetikler) 2026-05-25
 
@@ -52,13 +52,13 @@ on:
         required: false
         default: 'English'
       include_intro:
-        description: 'İntro sahnesi olsun (true/false)'
-        required: false
-        default: 'true'
+        description: 'Include intro scene'
+        type: boolean
+        default: true
       include_outro:
-        description: 'Outro sahnesi olsun (true/false)'
-        required: false
-        default: 'true'
+        description: 'Include outro scene'
+        type: boolean
+        default: true
 
 permissions:
   actions: write
