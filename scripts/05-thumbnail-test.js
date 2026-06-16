@@ -327,38 +327,38 @@ async function main() {
   console.log("📦 Downloading Twemoji (cached)...");
 
   // 6 different theme demos
-  // 1) DINOSAURS — jurassic theme (red/amber), T-rex hero
+  // 1) Which Dinosaur? — jurassic theme (red/amber), T-rex + triceratops
   await renderTopic({
-    title: "DINOSAURS",
+    title: "Which Dinosaur?",
     konu: "dinosaur era",
-    subjectUnicodes: ["1f996"], // 🦖
+    subjectUnicodes: ["1f996", "1f995"], // 🦖 🦕
     format: "long",
     isim: "1-long-dinosaur.jpg",
   });
 
-  // 2) SPACE ADVENTURE — cosmic theme (purple/pink), planet + rocket
+  // 2) Which Planet? — cosmic theme (purple/pink), planet + rocket
   await renderTopic({
-    title: "SPACE ADVENTURE",
-    konu: "planets and rockets",
+    title: "Which Planet?",
+    konu: "planets and space",
     subjectUnicodes: ["1fa90", "1f680"], // 🪐 🚀
     format: "long",
     isim: "2-long-space.jpg",
   });
 
-  // 3) WILD ANIMALS — wild theme (red/orange), lion + elephant shorts
+  // 3) Which Animal? — wild theme (red/orange), lion + elephant shorts
   await renderTopic({
-    title: "WILD ANIMALS",
+    title: "Which Animal?",
     konu: "animal world",
     subjectUnicodes: ["1f981", "1f418"], // 🦁 🐘
     format: "shorts",
     isim: "3-shorts-animals.jpg",
   });
 
-  // 4) JUICY FRUITS — juicy theme (bordeaux/yellow), strawberry + banana + grapes
+  // 4) Which Fruit? — juicy theme (bordeaux/yellow), strawberry + banana
   await renderTopic({
-    title: "JUICY FRUITS",
+    title: "Which Fruit?",
     konu: "fruits",
-    subjectUnicodes: ["1f353", "1f34c", "1f347"], // 🍓 🍌 🍇
+    subjectUnicodes: ["1f353", "1f34c"], // 🍓 🍌
     format: "shorts",
     isim: "4-shorts-fruits.jpg",
   });

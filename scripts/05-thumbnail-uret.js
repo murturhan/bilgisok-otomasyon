@@ -1,5 +1,6 @@
+// REV 012/16JUN26 - üst başlık, which X format, 2 obje yan yana, sempatik rozetler
 /**
- * 05 - Thumbnail Üretimi v11 (GeniMini Kids Quiz - HERO-CENTRIC EDITION)
+ * 05 - Thumbnail Üretimi v12 (GeniMini Kids Quiz - TOP TITLE + 2 OBJECT EDITION)
  *
  * ──────────────────────────────────────────────────────────────────────────
  * Mimari: AYNI KALDI (sharp + SVG overlay + FLUX bg + Jess opsiyonel)
@@ -63,15 +64,16 @@ const USE_JESS = THUMB_USE_JESS === "1";
 // ─── BRAND PALET (theme.ts ile uyumlu) ────────────────────────────────────
 const HIGHLIGHT_PALETTE = ["#FFE600", "#FF5BA7", "#5BE0FF", "#7FFF7F", "#FFB347"];
 
-// CTA badges (short, curiosity-driven; deterministic selection per job)
+// CTA badges — positive/fun only (kid-friendly)
 const CTA_SLOGANS = [
-  "GUESS!",
   "WHICH ONE?",
-  "99% FAIL!",
+  "GUESS!",
   "CAN YOU?",
-  "SHOCK!",
-  "NO WAY!",
-  "TOO HARD?",
+  "FUN QUIZ!",
+  "COOL!",
+  "AMAZING!",
+  "LET'S GO!",
+  "TRY IT!",
 ];
 
 // ─── PER-TOPIC WARM CONTRAST TEMA ─────────────────────────────────────────
@@ -341,19 +343,18 @@ function renkliBaslik(satirlar, cx, startY, fontSize, strokeW, strokeColor = "#F
 // ─── LAYOUT ÜRETİCİLERİ ──────────────────────────────────────────────────
 
 /**
- * LONG 1280x720 — Konu hero, başlık ALT bant'ta
+ * LONG 1280x720 — Başlık ÜST bant'ta, konu hero ortada
  *
  * Layout:
  *   ┌──────────────────────────────────────────────────┐
- *   │ center warm glow + strong vignette               │
+ *   │ ┌──────────────────────────────────────────────┐ │
+ *   │ │  BAŞLIK · üst strip (kelime kelime renk)     │ │
+ *   │ └──────────────────────────────────────────────┘ │
  *   │                                                  │
- *   │     [ KONU GÖRSELİ - HERO - merkez 60% ]         │
+ *   │     [ KONU GÖRSELİ - HERO - merkez ]             │
  *   │     (FLUX bg veya topicImage)                    │
  *   │                                                  │
- *   │   GENIMINI TESTS · küçük üst-sol           [CTA] │
- *   │ ┌──────────────────────────────────────────────┐ │
- *   │ │   BAŞLIK · alt strip (kelime kelime renk)    │ │
- *   │ └──────────────────────────────────────────────┘ │
+ *   │  GENIMINI TESTS [alt-sol]              [CTA sağ] │
  *   └──────────────────────────────────────────────────┘
  */
 function svgLong(baslik, tema, jobSeed = "") {
@@ -361,36 +362,35 @@ function svgLong(baslik, tema, jobSeed = "") {
   const cta = ctaSec(jobSeed);
 
   const satirlar = satirlaraBol(baslik, 18);
-  const fontSize = satirlar.length === 1 ? 110 : 80;
-  const bandH = satirlar.length === 1 ? 150 : 200;
+  const fontSize = satirlar.length === 1 ? 100 : 75;
+  const bandH = satirlar.length === 1 ? 140 : 190;
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
   svg += `<defs>${sharedDefs(tema)}</defs>`;
 
-  // 1) Hafif merkez sıcak glow (konuya altın ışık)
+  // 1) Merkez warm glow
   svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#centerWarm)"/>`;
 
-  // 2) STRONG VIGNETTE (kenarları koyu — konuya odak)
+  // 2) STRONG VIGNETTE
   svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#strongVignette)"/>`;
 
-  // 3) ALT BANT (başlık için, gradient'li koyu bant)
-  const bandY = H - bandH;
-  svg += `<rect x="0" y="${bandY}" width="${W}" height="${bandH}" fill="url(#titleBand)"/>`;
-  // Üst kenar sarı çizgi (premium hissi)
-  svg += `<rect x="0" y="${bandY - 4}" width="${W}" height="6" fill="${tema.accent}"/>`;
+  // 3) ÜST BANT (başlık için)
+  svg += `<rect x="0" y="0" width="${W}" height="${bandH}" fill="url(#titleBand)"/>`;
+  // Alt kenar sarı çizgi (premium hissi)
+  svg += `<rect x="0" y="${bandH - 6}" width="${W}" height="8" fill="${tema.accent}"/>`;
 
-  // 4) BAŞLIK (alt band içinde, hafif rotate)
-  const startY = bandY + (bandH / 2) + fontSize * 0.35;
-  svg += `<g transform="rotate(-1.5, ${W / 2}, ${bandY + bandH / 2})">`;
-  svg += renkliBaslik(satirlar, W / 2, startY - (satirlar.length - 1) * fontSize * 0.5, fontSize, 14, "#FFFFFF");
+  // 4) BAŞLIK (üst band içinde)
+  const startY = (bandH / 2) + fontSize * 0.35 - (satirlar.length - 1) * fontSize * 0.5;
+  svg += `<g transform="rotate(-1.5, ${W / 2}, ${bandH / 2})">`;
+  svg += renkliBaslik(satirlar, W / 2, startY, fontSize, 14, "#FFFFFF");
   svg += `</g>`;
 
-  // 5) CTA rozeti (sağ üst köşe — küçük)
-  svg += ctaRozet(W - 110, 110, 95, cta, -10);
+  // 5) CTA rozeti (sağ alt köşe)
+  svg += ctaRozet(W - 110, H - 110, 95, cta, -10);
 
-  // 6) GENIMINI TESTS micro-watermark (sol üst)
-  svg += `<text x="36" y="56" font-family="Lilita One, Fredoka, sans-serif"
-            font-size="26" font-weight="900" fill="${tema.accent}"
+  // 6) GENIMINI TESTS micro-watermark (sol alt)
+  svg += `<text x="36" y="${H - 28}" font-family="Lilita One, Fredoka, sans-serif"
+            font-size="22" font-weight="900" fill="${tema.accent}"
             stroke="#000000" stroke-width="3" paint-order="stroke"
             letter-spacing="4">GENIMINI TESTS</text>`;
 
@@ -760,7 +760,15 @@ async function main() {
       console.log(`✓ Topic hero: ${topicImagePath}`);
     }
 
-    const prompt = job.thumbnail_prompt || job.konu;
+    const vs = vsTespit(baslikKisa) || vsTespit(job.konu || "");
+    const obje1 = job.thumbnail_obje_1;
+    const obje2 = job.thumbnail_obje_2;
+    let prompt;
+    if (!vs && obje1 && obje2) {
+      prompt = `Two large iconic ${obje1} and ${obje2} side by side, Pixar 3D animation style, kid-friendly, bright cheerful colors, no text`;
+    } else {
+      prompt = job.thumbnail_prompt || job.konu;
+    }
     console.log(`🎨 BG prompt: "${String(prompt).substring(0, 80)}..."`);
 
     let buffer;

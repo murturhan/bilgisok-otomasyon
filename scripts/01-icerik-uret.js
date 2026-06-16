@@ -1,4 +1,4 @@
-// REV 012/09JUN26 - INCLUDE_INTRO/INCLUDE_OUTRO destegi: questions.json'a skip_intro/skip_outro yaz
+// REV 013/16JUN26 - thumbnail: which X format, thumbnail_obje_1/2, 2 obje FLUX prompt
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -69,7 +69,9 @@ OUTPUT (valid JSON, no markdown):
   "intro_title": "**Would** You Rather?",
   "topic_emojis": ["🤔","🎁","✨","🎯","🎉"],
   "baslik": "Would You Rather? Kids Edition with Jess the Fox! 🤔",
-  "thumbnail_title": "WOULD YOU RATHER",
+  "thumbnail_title": "Would You Rather?",
+  "thumbnail_obje_1": "Gift Box",
+  "thumbnail_obje_2": "Question Mark",
   "thumbnail_prompt": "Colorful cartoon split screen with question marks and gift boxes, vibrant Pixar style, no characters",
   "background_prompt": "Colorful cartoon background with floating question marks and ribbons, soft blur, center empty, Pixar 3D style",
   "aciklama": "Play Would You Rather with Jess the Fox! ${QUESTION_COUNT} fun questions for kids. #WouldYouRather #KidsQuiz #JessTheFox #GeniMiniTests",
@@ -215,6 +217,10 @@ Example: "🦁 Can YOU Guess All 25 Animals? Kids Quiz with Jess the Fox!"
 **aciklama** (description): 150-250 words with hashtags
 Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
 
+**thumbnail_title**: SHORT QUESTION format like "Which Ocean Animal?", "Which Dinosaur?", "Which Planet?". Maximum 3-4 words.
+
+**thumbnail_obje_1** and **thumbnail_obje_2**: Two iconic objects from the topic (e.g. "Octopus", "Starfish"). Used for 2-object FLUX image.
+
 **thumbnail_prompt**: FLUX prompt for thumbnail background (NO CHARACTERS, just theme scenery)
 - Vibrant theme scenery only
 - NO ANIMALS, NO CHARACTERS, NO PEOPLE in the image
@@ -257,7 +263,9 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "format": "${FORMAT}",
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
   "baslik": "Long YouTube title with emoji",
-  "thumbnail_title": "2-3 WORDS MAX (uppercase, punchy)",
+  "thumbnail_title": "Which Ocean Animal? (short question format, max 3-4 words)",
+  "thumbnail_obje_1": "Octopus",
+  "thumbnail_obje_2": "Starfish",
   "thumbnail_prompt": "FLUX prompt - scenery only, NO CHARACTERS",
   "background_prompt": "FLUX prompt - blurred topic-themed background, depth of field, center empty for UI",
   "aciklama": "200 word description with hashtags",
@@ -618,8 +626,10 @@ async function main() {
       konu: konu,
       is_test_mode: IS_TEST_MODE,
       baslik: icerik.baslik,
-      thumbnail_baslik: icerik.thumbnail_title || "",  // YENİ: 2-3 kelime kısa başlık
+      thumbnail_baslik: icerik.thumbnail_title || "",
       thumbnail_alt_baslik: "",
+      thumbnail_obje_1: icerik.thumbnail_obje_1 || "",
+      thumbnail_obje_2: icerik.thumbnail_obje_2 || "",
       thumbnail_prompt: icerik.thumbnail_prompt,
       senaryo: icerik.senaryo,
       tts_telaffuz: icerik.tts_telaffuz,
