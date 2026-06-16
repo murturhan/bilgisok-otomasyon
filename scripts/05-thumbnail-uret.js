@@ -1,34 +1,44 @@
 /**
- * 05 - Thumbnail Üretimi v10 (GeniMini Kids Quiz - VIRAL EDITION)
+ * 05 - Thumbnail Üretimi v11 (GeniMini Kids Quiz - HERO-CENTRIC EDITION)
  *
  * ──────────────────────────────────────────────────────────────────────────
- * Mimari: AYNI KALDI (sharp + SVG overlay + FLUX bg + Jess PNG Drive'dan)
+ * Mimari: AYNI KALDI (sharp + SVG overlay + FLUX bg + Jess opsiyonel)
  *   - Input  : Job (Sheets) → thumbnail_baslik / konu / thumbnail_prompt
  *   - Output : 1280x720 JPG (long) veya 1080x1920 JPG (shorts)
  *   - Upload : Drive "05-thumbnail" alt klasörü + Telegram bildirimi
  *
- * v9 → v10 değişiklikleri (viral standartlar):
- *   1.  Konuya ait BÜYÜK ana görsel: FLUX bg artık kırpılmadan ortada (sadece
- *       hafif vignette + radial glow ile vurgulanıyor; karakter onun üzerinde).
- *   2.  Jess karakteri köşe/yan; abartılı şaşkın pose (correct) tercih ediliyor.
- *       Etrafına sarı starburst/burst rozeti konuyor.
- *   3.  Başlık ARTIK kelime-kelime renklendirilmiş (highlightPalette'ten döner).
- *   4.  Beyaz/sarı dış stroke + çok katmanlı drop-shadow + iç glow.
- *   5.  Vignette, radial-glow ve film-grain efektleri SVG filter'larıyla.
- *   6.  Eğri (rotate) "TAHMİN ET!" / "HANGİSİ?" / "%99 BİLEMİYOR!" gibi
- *       merak uyandıran CTA rozetleri (yıldız patlaması arka planı).
- *   7.  "X VS Y" formatı: konu içinde "vs" geçiyorsa otomatik split-screen
- *       (sol pastel pembe, sağ pastel mavi, ortada büyük sarı VS rozeti).
- *   8.  Çocuk dostu pastel palet: Sarı/Pembe/Mavi/Yeşil/Turuncu.
- *   9.  Fontlar: Lilita One / Fredoka / Baloo (sistem fallback'leri ile).
- *   10. 1280x720 (long) ve 1080x1920 (shorts) — Quiz Blitz / MrBeast Kids
- *       referans estetiği.
+ * v10 → v11 DEĞİŞİKLİKLERİ (kullanıcı feedback'i — "viral değildi, konuyu merkeze al"):
+ *   1.  KONU GÖRSELİ ARTIK HERO. FLUX bg üzerine örtük büyük panel/yan kapatma YOK.
+ *       FLUX bg'in saturasyonu artırılıyor ama BLUR uygulanmıyor — net görünmesi için.
+ *   2.  Per-topic WARM-CONTRAST tema (Brain Time / Mind Warehouse tarzı).
+ *       Keyword'e göre seçim: jurassic (yeşil/sarı), cosmic (mor/pembe), wild
+ *       (kırmızı/turuncu), juicy (kırmızı/sarı), tasty (bordo/sarı), ocean
+ *       (lacivert/cyan). Default: kraliyet moru + sarı.
+ *   3.  Opsiyonel `topicImagePath` parametresi: FLUX bg yoksa veya ek olarak
+ *       konu görseli (Twemoji/PNG) merkeze BÜYÜK olarak yerleştiriliyor (görsel
+ *       kullanılabilir alanın ~%60'ı).
+ *   4.  Ucuz badge'ler (QUIZ! daire, ? daire) KALDIRILDI. Sadece eğri CTA
+ *       starburst rozeti köşede.
+ *   5.  Başlık konuya EŞLİK ediyor — sahneyi kaplamıyor:
+ *       - LONG: BOTTOM band (~140px yükseklik) içinde tek satır
+ *       - SHORTS: TOP band içinde tek satır
+ *       - VS: her yarının üstünde isim
+ *   6.  STRONG VIGNETTE (kenar-merkez %75 koyu) — konu görseline odak.
+ *   7.  Kelime kelime renkli metin korundu (highlightPalette rotasyonu) ama
+ *       beyaz stroke 14-18px ve 3 katmanlı drop-shadow ile daha vurucu.
+ *   8.  VS layout: pembe/mavi yerine warm contrast (kırmızı / lacivert vb.)
+ *       + her tarafa konu emoji/icon yerleştirmek için yer ayrıldı.
+ *   9.  Jess karakteri opsiyonel — varsayılan KAPATILDI. Konu görseli zaten
+ *       hero. Jess istenirse `useJess=true` ile etkinleştirilir, küçük köşe
+ *       maskotu olarak yerleşir.
  *
- * NOT (uyumluluk):
- *   - jobOku / jobGuncelle / Drive upload / Telegram akışı v9 ile bire bir aynı.
+ * GERIYE UYUMLULUK:
+ *   - jobOku / jobGuncelle / Drive upload / Telegram akışı v9/v10 ile bire bir aynı.
  *   - Çıktı dosya adı formatı (`thumbnail-<format>-<ts>.jpg`) korundu.
- *   - Mevcut env değişkenleri (JOB_ID, GDRIVE_JESS_FOLDER_ID) aynı.
- *   - Sadece sunum (SVG kompozisyonu) değişti.
+ *   - Env değişkenleri aynı.
+ *   - YENİ env (opsiyonel): `THUMB_USE_JESS=1` → Jess'i geri etkinleştir.
+ *   - YENİ Sheets kolonu (opsiyonel): `thumbnail_subject_image` → Drive file ID
+ *     (verilirse FLUX bg yerine/yanında merkez hero olarak kullanılır).
  * ──────────────────────────────────────────────────────────────────────────
  */
 
@@ -46,18 +56,14 @@ import {
 } from "./lib/google.js";
 import { telegram } from "./lib/telegram.js";
 
-const { JOB_ID, GDRIVE_JESS_FOLDER_ID } = process.env;
+const { JOB_ID, GDRIVE_JESS_FOLDER_ID, THUMB_USE_JESS } = process.env;
 const TMP_DIR = "/tmp/thumbnail";
+const USE_JESS = THUMB_USE_JESS === "1";
 
-// ─── BRAND PALET (theme.ts ile bire bir) ─────────────────────────────────
-// Çoklu-renk kelime vurgusu (rotasyon ile sırayla uygulanır)
+// ─── BRAND PALET (theme.ts ile uyumlu) ────────────────────────────────────
 const HIGHLIGHT_PALETTE = ["#FFE600", "#FF5BA7", "#5BE0FF", "#7FFF7F", "#FFB347"];
 
-// Arka plan radial glow rengi (sıcak sarı)
-const GLOW_COLOR = "#FFE600";
-
-// CTA rozetleri (kısa, merak uyandıran). Bunlar abartılı, rotate edilmiş
-// yıldız patlaması üzerine yazılıyor. Her render'da rastgele birisi seçilir.
+// CTA rozetleri (kısa, merak uyandıran; deterministik seçim)
 const CTA_SLOGANS = [
   "TAHMİN ET!",
   "HANGİSİ?",
@@ -67,6 +73,73 @@ const CTA_SLOGANS = [
   "VAY CANINA!",
   "ZOR MU?",
 ];
+
+// ─── PER-TOPIC WARM CONTRAST TEMA ─────────────────────────────────────────
+// Konu keyword'ünden uygun warm-contrast palet seçer. Brain Time / Mind
+// Warehouse / Bright Side referans estetiği.
+const TEMALAR = {
+  jurassic: {
+    keywords: ["dinozor", "tarih öncesi", "jurassic", "fosil"],
+    // Volkanik gün batımı: koyu kırmızı → amber. Yeşil dinozor üzerine TAM kontrast.
+    bg1: "#7C1D1D", bg2: "#F59E0B",
+    titleColor: "#FFE600", accent: "#FFE600",
+  },
+  cosmic: {
+    keywords: ["uzay", "gezegen", "yıldız", "galaksi", "ay", "güneş", "astronot"],
+    bg1: "#1E0A5C", bg2: "#EC4899",      // derin mor → pembe
+    titleColor: "#FFE600", accent: "#5BE0FF",
+  },
+  wild: {
+    keywords: ["hayvan", "kaplan", "aslan", "fil", "zürafa", "köpek", "kedi",
+               "kurt", "ayı", "panda", "maymun", "zebra"],
+    bg1: "#7F1D1D", bg2: "#FB923C",      // koyu kırmızı → turuncu
+    titleColor: "#FFE600", accent: "#FFE600",
+  },
+  juicy: {
+    keywords: ["meyve", "çilek", "muz", "elma", "portakal", "üzüm", "karpuz",
+               "kavun"],
+    bg1: "#9F1239", bg2: "#FBBF24",      // bordo → sarı
+    titleColor: "#FFFFFF", accent: "#FFE600",
+  },
+  tasty: {
+    keywords: ["yemek", "pizza", "hamburger", "tatlı", "dondurma", "pasta",
+               "kek", "çikolata"],
+    bg1: "#7C2D12", bg2: "#F59E0B",      // koyu turuncu → amber
+    titleColor: "#FFE600", accent: "#FFFFFF",
+  },
+  ocean: {
+    keywords: ["deniz", "balık", "köpekbalığı", "okyanus", "ahtapot", "yunus"],
+    bg1: "#0C4A6E", bg2: "#22D3EE",      // lacivert → cyan
+    titleColor: "#FFE600", accent: "#FFE600",
+  },
+  royal: {
+    // Default: kraliyet moru → altın sarı (klasik viral kombo)
+    keywords: [],
+    bg1: "#3B0764", bg2: "#FBBF24",
+    titleColor: "#FFE600", accent: "#FFE600",
+  },
+};
+
+function temaSec(metin) {
+  // Türkçe "İ".toLowerCase() → "i" + U+0307 combining dot. Normalize edip
+  // birleşik dot'u kaldırıyoruz ki "DİNOZOR" → "dinozor" match etsin.
+  const m = String(metin || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  // Kelime karakterleri (Türkçe dahil) — kelime başlangıcını yakalamak için
+  // negate edilen char class içinde kullanılır.
+  const WORD_CHARS = "a-zA-Z0-9çğıöşüâî";
+  for (const [ad, tema] of Object.entries(TEMALAR)) {
+    if (ad === "royal") continue;
+    const matched = tema.keywords.some((k) => {
+      const re = new RegExp(`(^|[^${WORD_CHARS}])${k}`, "i");
+      return re.test(m);
+    });
+    if (matched) return { ad, ...tema };
+  }
+  return { ad: "royal", ...TEMALAR.royal };
+}
 
 // ─── UTILS ────────────────────────────────────────────────────────────────
 
@@ -83,21 +156,12 @@ function escapeXml(s) {
     .replace(/'/g, "&apos;");
 }
 
-/**
- * Rastgele bir CTA sloganı döndür.
- * Aynı job için deterministik olsun diye basit bir seed kullanır.
- */
 function ctaSec(seed = "") {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return CTA_SLOGANS[h % CTA_SLOGANS.length];
 }
 
-/**
- * Drive klasör adından video formatını çıkarır.
- *   - "...-shorts-..." → "shorts"
- *   - aksi               → "long"
- */
 async function formatTespit(jobFolderId, auth) {
   const drive = google.drive({ version: "v3", auth });
   const res = await drive.files.get({ fileId: jobFolderId, fields: "name" });
@@ -106,13 +170,8 @@ async function formatTespit(jobFolderId, auth) {
   return "long";
 }
 
-/**
- * Konu "X vs Y" formatında mı? Eğer öyleyse split-screen layout aktif olur.
- * "X VS Y", "X ve Y", "X mi Y mi" gibi karşılaştırma kalıpları yakalanır.
- */
 function vsTespit(metin) {
   const t = String(metin || "").trim();
-  // Tipik VS kalıpları
   const patterns = [
     /^(.+?)\s+vs\.?\s+(.+)$/i,
     /^(.+?)\s+vs\s+(.+)$/i,
@@ -130,11 +189,7 @@ function vsTespit(metin) {
   return null;
 }
 
-/**
- * Başlığı kelimelere ayırıp 1 veya 2 satıra böler.
- * Karakter sayısına göre auto-fit yapar.
- */
-function satirlaraBol(metin, tekSatirEsigi = 12) {
+function satirlaraBol(metin, tekSatirEsigi = 14) {
   const t = metin.toUpperCase().trim();
   if (t.length <= tekSatirEsigi) return [t];
   const kelimeler = t.split(/\s+/);
@@ -145,85 +200,83 @@ function satirlaraBol(metin, tekSatirEsigi = 12) {
 
 // ─── ORTAK SVG PARÇALARI ─────────────────────────────────────────────────
 
-/**
- * Tüm SVG'lerde kullanılan ortak <defs>: gradient'lar, glow filter'ı,
- * drop-shadow filter'ı ve vignette pattern'i.
- */
-function sharedDefs() {
+function sharedDefs(tema) {
   return `
-    <!-- Sıcak radial glow (merkezde, ana görsele dikkat çekmek için) -->
-    <radialGradient id="centerGlow" cx="50%" cy="50%" r="55%">
-      <stop offset="0%"  stop-color="${GLOW_COLOR}" stop-opacity="0.55"/>
-      <stop offset="50%" stop-color="${GLOW_COLOR}" stop-opacity="0.18"/>
-      <stop offset="100%" stop-color="${GLOW_COLOR}" stop-opacity="0"/>
+    <!-- Per-topic warm contrast radial bg (FLUX bg yoksa fallback) -->
+    <radialGradient id="topicBg" cx="50%" cy="50%" r="80%">
+      <stop offset="0%" stop-color="${tema.bg2}"/>
+      <stop offset="100%" stop-color="${tema.bg1}"/>
     </radialGradient>
 
-    <!-- Vignette: kenarları kararan radial overlay -->
-    <radialGradient id="vignette" cx="50%" cy="50%" r="75%">
-      <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.55"/>
+    <!-- STRONG VIGNETTE - konu görseline odaklama -->
+    <radialGradient id="strongVignette" cx="50%" cy="50%" r="75%">
+      <stop offset="40%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.78"/>
     </radialGradient>
 
-    <!-- CTA rozet arka planı (sarı→turuncu) -->
-    <linearGradient id="ctaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFE600"/>
-      <stop offset="100%" stop-color="#FFB347"/>
+    <!-- Hafif merkez glow (konuyu öne çıkarmak için sıcak ışık) -->
+    <radialGradient id="centerWarm" cx="50%" cy="50%" r="45%">
+      <stop offset="0%" stop-color="${tema.bg2}" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="${tema.bg2}" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Başlık bandı gradient (alt veya üst strip) -->
+    <linearGradient id="titleBand" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.0"/>
+      <stop offset="15%" stop-color="#000000" stop-opacity="0.85"/>
+      <stop offset="85%" stop-color="#000000" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.0"/>
     </linearGradient>
 
-    <!-- VS rozet arka planı (sarı parlak) -->
+    <!-- CTA starburst gradient -->
+    <linearGradient id="ctaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFE600"/>
+      <stop offset="100%" stop-color="#FB923C"/>
+    </linearGradient>
+
+    <!-- VS rozet gradient -->
     <radialGradient id="vsGrad" cx="50%" cy="50%" r="50%">
       <stop offset="0%" stop-color="#FFF59D"/>
       <stop offset="60%" stop-color="#FFE600"/>
-      <stop offset="100%" stop-color="#FFB347"/>
+      <stop offset="100%" stop-color="#FB923C"/>
     </radialGradient>
 
-    <!-- Sol panel (VS modu) - pastel pembe -->
+    <!-- VS sol/sağ panel (per-tema warm contrast) -->
     <linearGradient id="vsLeft" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FF8DC0"/>
-      <stop offset="100%" stop-color="#FF5BA7"/>
+      <stop offset="0%" stop-color="${tema.bg2}"/>
+      <stop offset="100%" stop-color="${tema.bg1}"/>
     </linearGradient>
-
-    <!-- Sağ panel (VS modu) - pastel mavi -->
     <linearGradient id="vsRight" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#8DE6FF"/>
-      <stop offset="100%" stop-color="#5BE0FF"/>
+      <stop offset="0%" stop-color="#1E40AF"/>
+      <stop offset="100%" stop-color="#0C4A6E"/>
     </linearGradient>
 
-    <!-- Pastel arka plan (FLUX bg yoksa fallback) -->
+    <!-- Pastel fallback gradient -->
     <linearGradient id="bgFallback" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFD86B"/>
-      <stop offset="100%" stop-color="#FF5BA7"/>
+      <stop offset="0%" stop-color="${tema.bg2}"/>
+      <stop offset="100%" stop-color="${tema.bg1}"/>
     </linearGradient>
 
-    <!-- Büyük metin için katmanlı drop-shadow: derin siyah gölge -->
+    <!-- Büyük metin için 3 katmanlı agresif drop-shadow -->
     <filter id="bigShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="10" stdDeviation="6" flood-color="#000" flood-opacity="0.65"/>
-      <feDropShadow dx="0" dy="3"  stdDeviation="2" flood-color="#000" flood-opacity="0.5"/>
+      <feDropShadow dx="0" dy="12" stdDeviation="8" flood-color="#000" flood-opacity="0.85"/>
+      <feDropShadow dx="0" dy="4"  stdDeviation="3" flood-color="#000" flood-opacity="0.65"/>
+      <feDropShadow dx="0" dy="1"  stdDeviation="1" flood-color="#000" flood-opacity="0.5"/>
     </filter>
 
-    <!-- Sarı glow halkası (rozetler için) -->
-    <filter id="yellowGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feFlood flood-color="#FFE600" flood-opacity="0.85"/>
-      <feComposite in2="blur" operator="in"/>
-      <feMerge>
-        <feMergeNode/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <!-- Karakter etrafı için yumuşak glow -->
-    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="20"/>
-    </filter>
+    <!-- Konu görseli arkası sarı glow halkası -->
+    <radialGradient id="subjectGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="${tema.accent}" stop-opacity="0.85"/>
+      <stop offset="55%" stop-color="${tema.accent}" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="${tema.accent}" stop-opacity="0"/>
+    </radialGradient>
   `;
 }
 
 /**
- * 24 köşeli yıldız patlaması (CTA rozet arka planı).
- * SVG path olarak döner, transform ile pozisyonlanır.
+ * 22 köşeli yıldız patlaması (CTA rozet arka planı).
  */
-function starburstPath(cx, cy, rOuter, rInner, points = 24) {
+function starburstPath(cx, cy, rOuter, rInner, points = 22) {
   let d = "";
   for (let i = 0; i < points * 2; i++) {
     const r = i % 2 === 0 ? rOuter : rInner;
@@ -236,23 +289,13 @@ function starburstPath(cx, cy, rOuter, rInner, points = 24) {
 }
 
 /**
- * Yıldız patlamalı CTA rozeti. Eğri (rotate) ile dinamizm sağlar.
- *
- * @param {number} cx  - merkez X
- * @param {number} cy  - merkez Y
- * @param {number} r   - dış yarıçap
- * @param {string} metin - rozet metni
- * @param {number} rotate - derece cinsinden döndürme
+ * Yıldız patlamalı CTA rozeti — küçük, köşeye sığar.
  */
 function ctaRozet(cx, cy, r, metin, rotate = -8) {
   const burst = starburstPath(0, 0, r, r * 0.78, 22);
-  const burst2 = starburstPath(0, 0, r * 1.15, r * 0.9, 22);
-  const fs = Math.max(28, Math.floor(r * 0.42));
+  const fs = Math.max(20, Math.floor(r * 0.36));
   return `
     <g transform="translate(${cx}, ${cy}) rotate(${rotate})">
-      <!-- dış halka (parlama hissi) -->
-      <path d="${burst2}" fill="#FF5722" opacity="0.55"/>
-      <!-- ana yıldız patlaması -->
       <path d="${burst}" fill="url(#ctaGrad)" stroke="#000" stroke-width="${Math.max(3, r * 0.05)}"/>
       <text x="0" y="${fs * 0.35}"
             font-family="Lilita One, Fredoka, Baloo, Impact, Arial Black, sans-serif"
@@ -266,22 +309,13 @@ function ctaRozet(cx, cy, r, metin, rotate = -8) {
 }
 
 /**
- * Çoklu-renk kelime kelime başlık metni.
- * Her satır tek bir <text> elementi; her kelime palette'ten bir renk alır.
- * White stroke + drop-shadow filter zorunlu (okunabilirlik).
- *
- * @param {string[]} satirlar - başlık satırları
- * @param {number} cx - merkez X
- * @param {number} startY - ilk satırın baseline Y'si
- * @param {number} fontSize
- * @param {number} strokeW - dış stroke kalınlığı
- * @param {string} strokeColor - dış stroke rengi (beyaz veya sarı)
+ * Çoklu-renk kelime kelime başlık metni — sahneye eşlik eder, kaplamaz.
  */
 function renkliBaslik(satirlar, cx, startY, fontSize, strokeW, strokeColor = "#FFFFFF") {
   let svg = "";
   let renkIdx = 0;
   satirlar.forEach((satir, i) => {
-    const y = startY + i * (fontSize * 1.05);
+    const y = startY + i * (fontSize * 1.02);
     const kelimeler = String(satir).split(/\s+/).filter(Boolean);
     svg += `<text x="${cx}" y="${y}"
               font-family="Lilita One, Fredoka, Baloo, Luckiest Guy, Impact, Arial Black, sans-serif"
@@ -293,8 +327,7 @@ function renkliBaslik(satirlar, cx, startY, fontSize, strokeW, strokeColor = "#F
     kelimeler.forEach((k, j) => {
       const renk = HIGHLIGHT_PALETTE[renkIdx % HIGHLIGHT_PALETTE.length];
       renkIdx++;
-      // İlk kelime: dx=0; sonraki kelimeler: dx ile boşluk
-      const dx = j === 0 ? 0 : fontSize * 0.32;
+      const dx = j === 0 ? 0 : fontSize * 0.34;
       svg += `<tspan dx="${dx}" fill="${renk}">${escapeXml(k)}</tspan>`;
     });
     svg += `</text>`;
@@ -305,147 +338,114 @@ function renkliBaslik(satirlar, cx, startY, fontSize, strokeW, strokeColor = "#F
 // ─── LAYOUT ÜRETİCİLERİ ──────────────────────────────────────────────────
 
 /**
- * LONG 1280x720 — varsayılan yatay viral layout
+ * LONG 1280x720 — Konu hero, başlık ALT bant'ta
  *
  * Layout:
- *   ┌────────────────────────────────────────────┐
- *   │ vignette + central glow                    │
- *   │ ┌── Jess (sol) ──┐  ┌── BÜYÜK BAŞLIK ───┐  │
- *   │ │   bottom-left  │  │ kelime-kelime renk │  │
- *   │ │   shocked pose │  │ stroke + shadow   │  │
- *   │ └────────────────┘  └───────────────────┘  │
- *   │ [QUIZ üst-sol]            [CTA rozet eğri] │
- *   └────────────────────────────────────────────┘
+ *   ┌──────────────────────────────────────────────────┐
+ *   │ center warm glow + strong vignette               │
+ *   │                                                  │
+ *   │     [ KONU GÖRSELİ - HERO - merkez 60% ]         │
+ *   │     (FLUX bg veya topicImage)                    │
+ *   │                                                  │
+ *   │   GENIMINI TESTS · küçük üst-sol           [CTA] │
+ *   │ ┌──────────────────────────────────────────────┐ │
+ *   │ │   BAŞLIK · alt strip (kelime kelime renk)    │ │
+ *   │ └──────────────────────────────────────────────┘ │
+ *   └──────────────────────────────────────────────────┘
  */
-function svgLong(baslik, jobSeed = "") {
+function svgLong(baslik, tema, jobSeed = "") {
   const W = 1280, H = 720;
   const cta = ctaSec(jobSeed);
 
-  const satirlar = satirlaraBol(baslik, 10);
-  const fontSize = satirlar.length === 1 ? 168 : 122;
+  const satirlar = satirlaraBol(baslik, 18);
+  const fontSize = satirlar.length === 1 ? 110 : 80;
+  const bandH = satirlar.length === 1 ? 150 : 200;
 
-  // Başlık sağ yarıda merkezde
-  const blockX = W * 0.58; // metnin merkez X'i (Jess soldaki yarımda)
-  const totalH = satirlar.length * (fontSize * 1.05);
-  const startY = (H - totalH) / 2 + fontSize - 14;
+  let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<defs>${sharedDefs(tema)}</defs>`;
 
-  let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">`;
-  svg += `<defs>${sharedDefs()}</defs>`;
+  // 1) Hafif merkez sıcak glow (konuya altın ışık)
+  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#centerWarm)"/>`;
 
-  // FLUX bg zaten composite'te alttayız; burada SADECE üst katmanı çiziyoruz.
-  // (FLUX yoksa sharp tarafında fallback bg gradient kullanılıyor.)
+  // 2) STRONG VIGNETTE (kenarları koyu — konuya odak)
+  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#strongVignette)"/>`;
 
-  // 1) Merkezde sıcak glow (ana görsele dikkat)
-  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#centerGlow)"/>`;
+  // 3) ALT BANT (başlık için, gradient'li koyu bant)
+  const bandY = H - bandH;
+  svg += `<rect x="0" y="${bandY}" width="${W}" height="${bandH}" fill="url(#titleBand)"/>`;
+  // Üst kenar sarı çizgi (premium hissi)
+  svg += `<rect x="0" y="${bandY - 4}" width="${W}" height="6" fill="${tema.accent}"/>`;
 
-  // 2) Vignette (kenarları karartma)
-  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#vignette)"/>`;
+  // 4) BAŞLIK (alt band içinde, hafif rotate)
+  const startY = bandY + (bandH / 2) + fontSize * 0.35;
+  svg += `<g transform="rotate(-1.5, ${W / 2}, ${bandY + bandH / 2})">`;
+  svg += renkliBaslik(satirlar, W / 2, startY - (satirlar.length - 1) * fontSize * 0.5, fontSize, 14, "#FFFFFF");
+  svg += `</g>`;
 
-  // 3) Sağ tarafa hafif yarı saydam panel: metin okunurluğu için
-  svg += `<rect x="${W * 0.46}" y="40" width="${W * 0.52}" height="${H - 80}"
-            rx="40" ry="40"
-            fill="rgba(91, 44, 140, 0.55)"
-            stroke="#FFE600" stroke-width="6"/>`;
+  // 5) CTA rozeti (sağ üst köşe — küçük)
+  svg += ctaRozet(W - 110, 110, 95, cta, -10);
 
-  // 4) BAŞLIK (kelime kelime renkli, stroke + shadow)
-  svg += renkliBaslik(satirlar, blockX + 10, startY, fontSize, 12, "#FFFFFF");
-
-  // 5) Sol üst QUIZ rozeti (yuvarlak, kırmızı)
-  svg += `<g transform="translate(110, 100) rotate(-6)">
-    <circle cx="0" cy="0" r="78" fill="#FF5722" stroke="#FFFFFF" stroke-width="8" filter="url(#bigShadow)"/>
-    <text x="0" y="20" font-family="Lilita One, Fredoka, sans-serif"
-          font-size="46" font-weight="900" fill="#FFFFFF" text-anchor="middle"
-          stroke="#000000" stroke-width="3" paint-order="stroke">QUIZ!</text>
-  </g>`;
-
-  // 6) CTA rozeti (sağ alt köşe, eğri)
-  svg += ctaRozet(W - 160, H - 130, 120, cta, -10);
-
-  // 7) Yan kenarda dikey GENIMINI TESTS şeridi (brand)
-  svg += `<g transform="translate(36, ${H / 2}) rotate(-90)">
-    <text x="0" y="0" font-family="Lilita One, Fredoka, sans-serif"
-          font-size="34" font-weight="900" fill="#FFE600" text-anchor="middle"
-          stroke="#000000" stroke-width="3" paint-order="stroke" letter-spacing="6">
-      GENIMINI TESTS
-    </text>
-  </g>`;
+  // 6) GENIMINI TESTS micro-watermark (sol üst)
+  svg += `<text x="36" y="56" font-family="Lilita One, Fredoka, sans-serif"
+            font-size="26" font-weight="900" fill="${tema.accent}"
+            stroke="#000000" stroke-width="3" paint-order="stroke"
+            letter-spacing="4">GENIMINI TESTS</text>`;
 
   svg += `</svg>`;
   return svg;
 }
 
 /**
- * SHORTS 1080x1920 — dikey viral layout
- *
- * Layout (üstten alta):
- *   - 0..240   : QUIZ + ? rozetleri
- *   - 240..720 : BÜYÜK BAŞLIK (kelime-kelime renkli)
- *   - 720..1600: Jess + FLUX merkez görsel (glow ile vurgu)
- *   - 1600..1920: CTA rozet + soru sayısı rozeti
+ * SHORTS 1080x1920 — Konu hero, başlık ÜST bant'ta
  */
-function svgShorts(baslik, jobSeed = "") {
+function svgShorts(baslik, tema, jobSeed = "") {
   const W = 1080, H = 1920;
   const cta = ctaSec(jobSeed);
 
-  const satirlar = satirlaraBol(baslik, 11);
-  const fontSize = satirlar.length === 1 ? 220 : 168;
+  const satirlar = satirlaraBol(baslik, 14);
+  const fontSize = satirlar.length === 1 ? 170 : 130;
+  const bandH = satirlar.length === 1 ? 280 : 380;
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
-  svg += `<defs>${sharedDefs()}</defs>`;
+  svg += `<defs>${sharedDefs(tema)}</defs>`;
 
-  // 1) Merkez glow (Jess + bg vurgusu)
-  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#centerGlow)"/>`;
-  // 2) Vignette
-  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#vignette)"/>`;
+  // 1) Merkez warm glow
+  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#centerWarm)"/>`;
+  // 2) STRONG VIGNETTE
+  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#strongVignette)"/>`;
 
-  // 3) ÜST başlık paneli (transparan, sarı stroke'lu pill)
-  svg += `<rect x="40" y="240" width="${W - 80}" height="480"
-            rx="48" ry="48"
-            fill="rgba(91, 44, 140, 0.62)"
-            stroke="#FFE600" stroke-width="8"/>`;
+  // 3) ÜST BANT (başlık)
+  svg += `<rect x="0" y="0" width="${W}" height="${bandH}" fill="url(#titleBand)"/>`;
+  svg += `<rect x="0" y="${bandH - 6}" width="${W}" height="8" fill="${tema.accent}"/>`;
 
-  // 4) BÜYÜK BAŞLIK (kelime-kelime renkli)
-  const totalH = satirlar.length * (fontSize * 1.05);
-  const startY = 240 + (480 - totalH) / 2 + fontSize - 24;
-  svg += renkliBaslik(satirlar, W / 2, startY, fontSize, 16, "#FFFFFF");
+  // 4) BAŞLIK
+  const startY = (bandH / 2) + fontSize * 0.35 - (satirlar.length - 1) * fontSize * 0.5;
+  svg += `<g transform="rotate(-1.5, ${W / 2}, ${bandH / 2})">`;
+  svg += renkliBaslik(satirlar, W / 2, startY, fontSize, 18, "#FFFFFF");
+  svg += `</g>`;
 
-  // 5) Sol-üst "?" rozeti
-  svg += `<g transform="translate(150, 140) rotate(-8)">
-    <circle cx="0" cy="0" r="105" fill="#4FC3F7" stroke="#FFFFFF" stroke-width="10" filter="url(#bigShadow)"/>
-    <text x="0" y="48" font-family="Lilita One, sans-serif"
-          font-size="140" font-weight="900" fill="#FFFFFF" text-anchor="middle"
-          stroke="#000000" stroke-width="5" paint-order="stroke">?</text>
-  </g>`;
-
-  // 6) Sağ-üst QUIZ rozeti
-  svg += `<g transform="translate(${W - 150}, 140) rotate(8)">
-    <circle cx="0" cy="0" r="105" fill="#FF5722" stroke="#FFFFFF" stroke-width="10" filter="url(#bigShadow)"/>
-    <text x="0" y="24" font-family="Lilita One, sans-serif"
-          font-size="60" font-weight="900" fill="#FFFFFF" text-anchor="middle"
-          stroke="#000000" stroke-width="4" paint-order="stroke">QUIZ!</text>
-  </g>`;
-
-  // 7) Sağ alt CTA rozeti (eğri)
+  // 5) CTA rozeti (sağ alt)
   svg += ctaRozet(W - 200, H - 220, 175, cta, -12);
 
-  // 8) Sol alt soru sayısı rozeti
-  svg += `<g transform="translate(180, ${H - 200}) rotate(6)">
-    <circle cx="0" cy="0" r="120" fill="#FFE600" stroke="#000000" stroke-width="10" filter="url(#bigShadow)"/>
-    <text x="0" y="-14" font-family="Lilita One, sans-serif"
-          font-size="90" font-weight="900" fill="#1A1A2E" text-anchor="middle">15</text>
-    <text x="0" y="46" font-family="Lilita One, sans-serif"
-          font-size="36" font-weight="900" fill="#1A1A2E" text-anchor="middle">SORU</text>
-  </g>`;
+  // 6) GENIMINI TESTS micro-watermark (sol alt)
+  svg += `<text x="60" y="${H - 60}" font-family="Lilita One, Fredoka, sans-serif"
+            font-size="38" font-weight="900" fill="${tema.accent}"
+            stroke="#000000" stroke-width="4" paint-order="stroke"
+            letter-spacing="5">GENIMINI TESTS</text>`;
 
   svg += `</svg>`;
   return svg;
 }
 
 /**
- * VS LAYOUT — "X vs Y" konuları için (her iki formatta da çalışır)
- * Split-screen: sol pastel pembe, sağ pastel mavi, ortada büyük sarı VS rozeti
+ * VS LAYOUT — Per-tema warm contrast split, isimler subject'in yanında
+ *
+ * NOT: Split bg rectangles ARTIK BU FONKSIYONDA YOK — çağıran kod (thumbnailUret
+ * veya test) split bg'yi ayrı bir layer olarak render etmeli. Bu SVG sadece
+ * vignette + VS rozet + isimler + CTA overlay'i. Aksi halde subject icon'larını
+ * kapatırdı.
  */
-function svgVS(vsObj, format, jobSeed = "") {
+function svgVS(vsObj, tema, format, jobSeed = "") {
   const isShorts = format === "shorts";
   const W = isShorts ? 1080 : 1280;
   const H = isShorts ? 1920 : 720;
@@ -453,102 +453,111 @@ function svgVS(vsObj, format, jobSeed = "") {
   const sol = vsObj.sol;
   const sag = vsObj.sag;
 
-  // İki tarafın font'unu otomatik küçült (uzun kelimeler için)
   const maxLen = Math.max(sol.length, sag.length);
-  const baseFs = isShorts ? 200 : 130;
+  const baseFs = isShorts ? 170 : 110;
   const fs = maxLen > 8 ? Math.floor(baseFs * (8 / maxLen)) : baseFs;
-  const fsClamped = Math.max(isShorts ? 110 : 70, fs);
+  const fsClamped = Math.max(isShorts ? 90 : 60, fs);
 
   const cta = ctaSec(jobSeed);
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
-  svg += `<defs>${sharedDefs()}</defs>`;
+  svg += `<defs>${sharedDefs(tema)}</defs>`;
+
+  // Vignette (subject'leri merkeze çekmek için)
+  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#strongVignette)"/>`;
 
   if (isShorts) {
-    // ÜST yarı: pembe / ALT yarı: mavi (dikey split)
-    svg += `<rect x="0" y="0" width="${W}" height="${H / 2}" fill="url(#vsLeft)"/>`;
-    svg += `<rect x="0" y="${H / 2}" width="${W}" height="${H / 2}" fill="url(#vsRight)"/>`;
-    // Üst metin
-    svg += renkliBaslik([sol], W / 2, H * 0.25 + fsClamped / 2, fsClamped, 14, "#FFFFFF");
-    // Alt metin
-    svg += renkliBaslik([sag], W / 2, H * 0.75 + fsClamped / 2, fsClamped, 14, "#FFFFFF");
+    // Üst yarı isim
+    svg += renkliBaslik([sol], W / 2, H * 0.16 + fsClamped / 2, fsClamped, 16, "#FFFFFF");
+    // Alt yarı isim
+    svg += renkliBaslik([sag], W / 2, H * 0.92, fsClamped, 16, "#FFFFFF");
   } else {
-    // SOL yarı: pembe / SAĞ yarı: mavi (yatay split)
-    svg += `<rect x="0" y="0" width="${W / 2}" height="${H}" fill="url(#vsLeft)"/>`;
-    svg += `<rect x="${W / 2}" y="0" width="${W / 2}" height="${H}" fill="url(#vsRight)"/>`;
-    // Sol metin
-    svg += renkliBaslik([sol], W * 0.25, H / 2 + fsClamped / 3, fsClamped, 12, "#FFFFFF");
-    // Sağ metin
-    svg += renkliBaslik([sag], W * 0.75, H / 2 + fsClamped / 3, fsClamped, 12, "#FFFFFF");
+    // Sol isim üstte
+    svg += renkliBaslik([sol], W * 0.25, H * 0.14 + fsClamped / 2, fsClamped, 14, "#FFFFFF");
+    // Sağ isim üstte
+    svg += renkliBaslik([sag], W * 0.75, H * 0.14 + fsClamped / 2, fsClamped, 14, "#FFFFFF");
   }
 
-  // Vignette
-  svg += `<rect x="0" y="0" width="${W}" height="${H}" fill="url(#vignette)"/>`;
-
-  // ORTADA büyük VS rozeti
+  // VS rozeti — merkezde
   const cx = W / 2;
   const cy = H / 2;
-  const r = isShorts ? 200 : 140;
+  const r = isShorts ? 180 : 120;
   svg += `<g transform="translate(${cx}, ${cy}) rotate(-6)">
-    <circle cx="0" cy="0" r="${r * 1.1}" fill="#000" opacity="0.25"/>
+    <circle cx="0" cy="0" r="${r * 1.12}" fill="#000" opacity="0.5"/>
     <circle cx="0" cy="0" r="${r}" fill="url(#vsGrad)" stroke="#000" stroke-width="${r * 0.06}" filter="url(#bigShadow)"/>
     <text x="0" y="${r * 0.32}"
           font-family="Lilita One, Fredoka, sans-serif"
-          font-size="${r * 1.1}" font-weight="900" fill="#1A1A2E" text-anchor="middle"
+          font-size="${r * 1.05}" font-weight="900" fill="#1A1A2E" text-anchor="middle"
           stroke="#FFFFFF" stroke-width="${r * 0.08}" paint-order="stroke">VS</text>
   </g>`;
 
-  // CTA rozeti (üst orta-sağ)
-  svg += ctaRozet(W - (isShorts ? 200 : 160), isShorts ? 180 : 120, isShorts ? 150 : 100, cta, -10);
+  // CTA — alt sağ köşe (VS modunda üst köşeler title metnine ait)
+  svg += ctaRozet(
+    W - (isShorts ? 180 : 130),
+    H - (isShorts ? 200 : 110),
+    isShorts ? 130 : 90,
+    cta,
+    -10
+  );
 
-  // Sol üst QUIZ rozeti
-  svg += `<g transform="translate(${isShorts ? 140 : 100}, ${isShorts ? 150 : 100}) rotate(-6)">
-    <circle cx="0" cy="0" r="${isShorts ? 95 : 70}" fill="#FF5722" stroke="#FFFFFF" stroke-width="8" filter="url(#bigShadow)"/>
-    <text x="0" y="${isShorts ? 20 : 16}" font-family="Lilita One, sans-serif"
-          font-size="${isShorts ? 54 : 40}" font-weight="900" fill="#FFFFFF" text-anchor="middle"
-          stroke="#000000" stroke-width="3" paint-order="stroke">QUIZ!</text>
-  </g>`;
+  svg += `</svg>`;
+  return svg;
+}
 
+/**
+ * VS bg üretici: Production ve test'in ortak kullandığı split-screen bg.
+ * Sol yarı tema bg2→bg1, sağ yarı complementary blue bg2→bg1.
+ * Shorts'ta yatay yerine dikey split.
+ */
+function svgVSBackground(tema, format) {
+  const isShorts = format === "shorts";
+  const W = isShorts ? 1080 : 1280;
+  const H = isShorts ? 1920 : 720;
+
+  let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<defs>${sharedDefs(tema)}</defs>`;
+
+  if (isShorts) {
+    svg += `<rect x="0" y="0" width="${W}" height="${H / 2}" fill="url(#vsLeft)"/>`;
+    svg += `<rect x="0" y="${H / 2}" width="${W}" height="${H / 2}" fill="url(#vsRight)"/>`;
+    // Orta yatay ayırıcı sarı çizgi
+    svg += `<rect x="0" y="${H / 2 - 6}" width="${W}" height="12" fill="${tema.accent}"/>`;
+  } else {
+    svg += `<rect x="0" y="0" width="${W / 2}" height="${H}" fill="url(#vsLeft)"/>`;
+    svg += `<rect x="${W / 2}" y="0" width="${W / 2}" height="${H}" fill="url(#vsRight)"/>`;
+    // Orta dikey ayırıcı sarı çizgi
+    svg += `<rect x="${W / 2 - 6}" y="0" width="12" height="${H}" fill="${tema.accent}"/>`;
+  }
   svg += `</svg>`;
   return svg;
 }
 
 // ─── FLUX BG ──────────────────────────────────────────────────────────────
 
-/**
- * FLUX ile konuya ait sahne arka planı üretir.
- * - "EMPTY" prompt ile canlı yaratık/karakter olmadan saf sahne
- * - Pixar 3D style, kid-friendly, bright daylight
- */
 async function fluxBgUret(prompt, hesap, format) {
   const dim = format === "shorts"
     ? { width: 1024, height: 1792 }
     : { width: 1280, height: 720 };
 
+  // v11: prompt artık "subject hero" odaklı — FLUX bg konu görseli olarak
+  // kullanılacak, sahne değil. Subject merkeze gelecek, dramatik açı.
   const promptIyilestirilmis =
-    `Empty scenic background only depicting ${prompt}, EMPTY LANDSCAPE, ` +
-    `ABSOLUTELY NO LIVING CREATURES, NO ANIMALS WHATSOEVER, NO HUMANS, ` +
-    `NO CARTOON CHARACTERS, NO MASCOTS, just empty natural environment with ` +
-    `terrain, plants, sky, water, or man-made structures. Pixar 3D animation ` +
-    `style background environment, kid-friendly, bright cheerful colors, ` +
-    `daylight, high contrast, vibrant saturated pastel palette. ` +
-    `${format === "shorts" ? "9:16 vertical aspect ratio, vertical composition" : "16:9 cinematic widescreen"}. ` +
-    `NO TEXT, NO WORDS, NO LETTERS, NO LOGOS. Style: like an empty Pixar scene before characters enter.`;
+    `${prompt}, EPIC HERO SHOT, dramatic close-up composition, ` +
+    `subject fills 60-70% of frame, centered, vibrant saturated colors, ` +
+    `strong rim light, Pixar 3D animation style, kid-friendly cartoon, ` +
+    `cinematic depth of field, slight low-angle wow shot, ` +
+    `high contrast warm palette, glowing background, ` +
+    `${format === "shorts" ? "9:16 vertical poster composition" : "16:9 cinematic widescreen"}. ` +
+    `NO TEXT, NO WORDS, NO LETTERS, NO LOGOS, NO WATERMARKS. ` +
+    `Style: like a movie poster centerpiece for a children's quiz video.`;
 
   const buffer = await fluxCagri(promptIyilestirilmis, hesap, dim);
   console.log(`  ✓ FLUX bg: ${(buffer.length / 1024).toFixed(0)}KB (${dim.width}x${dim.height})`);
   return buffer;
 }
 
-// ─── JESS PNG INDIR ───────────────────────────────────────────────────────
+// ─── JESS PNG (OPSİYONEL) ─────────────────────────────────────────────────
 
-/**
- * Drive'dan Jess karakterinin "correct" / "intro" pose'unu indirir.
- * Öncelik:
- *   1. "correct" içeren PNG  (eller havada coşkulu → thumbnail için ideal)
- *   2. "intro"   içeren PNG  (tipik selamlama pose)
- *   3. ilk PNG (fallback)
- */
 async function jessIntroIndir(auth, hedefYol) {
   if (!GDRIVE_JESS_FOLDER_ID) return null;
   const drive = google.drive({ version: "v3", auth });
@@ -558,14 +567,12 @@ async function jessIntroIndir(auth, hedefYol) {
     pageSize: 50,
   });
   if (!res.data.files) return null;
-
   const lower = (n) => (n || "").toLowerCase();
-  let target =
+  const target =
     res.data.files.find((f) => lower(f.name).includes("correct") && lower(f.name).endsWith(".png")) ||
     res.data.files.find((f) => lower(f.name).includes("intro")   && lower(f.name).endsWith(".png")) ||
     res.data.files.find((f) => lower(f.name).endsWith(".png"));
   if (!target) return null;
-
   const stream = await drive.files.get(
     { fileId: target.id, alt: "media" },
     { responseType: "stream" }
@@ -580,135 +587,124 @@ async function jessIntroIndir(auth, hedefYol) {
 // ─── ANA ÜRETIM ───────────────────────────────────────────────────────────
 
 /**
- * Tüm parçaları birleştirir:
- *   1. FLUX bg üret (sahne arka planı)
- *   2. Sharp ile hedef boyuta resize + hafif blur (ana görselin yumuşaması)
- *   3. SVG overlay üret (layout'a göre normal/VS, format'a göre long/shorts)
- *   4. Jess PNG'sini overlay olarak ekle (etrafında sarı glow + drop shadow)
- *   5. JPEG composite return
- *
- * @param {string} prompt - FLUX bg prompt
- * @param {string} jessYol - Jess PNG yolu (null olabilir)
- * @param {string} baslikKisa - kısa başlık
- * @param {string} format - "shorts" | "long"
- * @param {string} konu - VS tespiti için ham konu
- * @param {object} hesap - Cloudflare hesabı
- * @param {string} jobSeed - CTA seçimi için seed
+ * @param {object} opts
+ *  - prompt       : FLUX bg prompt
+ *  - jessYol      : Jess PNG yolu (opsiyonel, USE_JESS ile aktif)
+ *  - baslikKisa   : başlık
+ *  - format       : "long" | "shorts"
+ *  - konu         : VS + tema tespiti için ham konu
+ *  - hesap        : Cloudflare hesabı
+ *  - jobSeed      : CTA seed
+ *  - topicImagePath : opsiyonel PNG/SVG hero overlay (FLUX bg üstüne)
  */
-async function thumbnailUret(prompt, jessYol, baslikKisa, format, konu, hesap, jobSeed) {
+async function thumbnailUret({
+  prompt, jessYol, baslikKisa, format, konu, hesap, jobSeed, topicImagePath,
+}) {
   const isShorts = format === "shorts";
   const finalW = isShorts ? 1080 : 1280;
   const finalH = isShorts ? 1920 : 720;
 
-  // VS modu tespiti (önce başlığa, sonra konuya bakar)
   const vs = vsTespit(baslikKisa) || vsTespit(konu);
+  const tema = temaSec(`${baslikKisa} ${konu}`);
+  console.log(`  🎨 Tema: ${tema.ad} (bg: ${tema.bg1} → ${tema.bg2})`);
 
-  // ── 1) FLUX background ──
+  // ── 1) FLUX background (konu hero) ──
   let bgBuffer;
   try {
     bgBuffer = await fluxBgUret(prompt, hesap, format);
   } catch (e) {
-    console.warn(`  ⚠ FLUX hata: ${e.message} → fallback gradient kullanılıyor`);
+    console.warn(`  ⚠ FLUX hata: ${e.message} → tema gradient fallback`);
     bgBuffer = null;
   }
 
-  // ── 2) BG'yi hedef boyuta resize ──
-  // Hafif blur + saturation boost: ana karakter ve metin öne çıksın
+  // ── 2) BG hedef boyuta — BLUR YOK! Konu net görünmeli ──
   let bgResized;
-  if (bgBuffer) {
+  if (vs) {
+    // VS modunda: FLUX bg değil, split-screen warm contrast bg üretiyoruz.
+    // (FLUX bg her iki subject'in bg'sini doğru çizemez; clean split daha güçlü.)
+    const vsBgSvg = svgVSBackground(tema, format);
+    bgResized = await sharp(Buffer.from(vsBgSvg)).png().toBuffer();
+  } else if (bgBuffer) {
     bgResized = await sharp(bgBuffer)
       .resize(finalW, finalH, { fit: "cover" })
-      .modulate({ saturation: 1.15, brightness: 1.05 })
-      .blur(1.4) // çok hafif blur — ana görsel hala anlaşılır
+      .modulate({ saturation: 1.25, brightness: 1.05 })
       .toBuffer();
   } else {
-    // FLUX patlarsa: SVG fallback gradient
+    // FLUX yoksa per-tema radial gradient
     const fbSvg =
       `<svg width="${finalW}" height="${finalH}" xmlns="http://www.w3.org/2000/svg">` +
-      `<defs>${sharedDefs()}</defs>` +
-      `<rect width="100%" height="100%" fill="url(#bgFallback)"/>` +
+      `<defs>${sharedDefs(tema)}</defs>` +
+      `<rect width="100%" height="100%" fill="url(#topicBg)"/>` +
       `</svg>`;
     bgResized = await sharp(Buffer.from(fbSvg)).png().toBuffer();
   }
 
-  // ── 3) SVG overlay üret ──
-  let svg;
-  if (vs) {
-    console.log(`  🆚 VS modu: "${vs.sol}" vs "${vs.sag}"`);
-    svg = svgVS(vs, format, jobSeed);
-  } else if (isShorts) {
-    svg = svgShorts(baslikKisa, jobSeed);
-  } else {
-    svg = svgLong(baslikKisa, jobSeed);
-  }
-  const svgBuffer = Buffer.from(svg);
-
-  // ── 4) Jess overlay ──
-  // VS modunda Jess yok (tam VS layout'u koruyalım). Normal modda var.
+  // ── 3) (opsiyonel) Topic hero image overlay ──
+  // FLUX bg konuyu zaten gösterdiyse bu adım atlanır.
+  // topicImagePath verilirse merkeze BÜYÜK (yüksekliğin %60'ı) yerleştirilir.
   const layers = [];
 
-  if (!vs && jessYol && fs.existsSync(jessYol)) {
-    // Format'a göre Jess konum/boyut
-    let jessW, jessTop, jessLeft;
-
-    if (isShorts) {
-      // SHORTS: Jess BÜYÜK orta-alt
-      jessW = 900;
-      const jessMeta = await sharp(jessYol).resize(jessW, jessW, { fit: "inside" }).metadata();
-      jessLeft = (finalW - jessMeta.width) / 2;
-      jessTop = 760;
-      if (jessTop + jessMeta.height > finalH - 380) {
-        jessTop = finalH - jessMeta.height - 380;
-      }
-    } else {
-      // LONG: Jess sol alt (sağda metin paneli olduğu için)
-      jessW = 560;
-      const jessMeta = await sharp(jessYol).resize(jessW, jessW, { fit: "inside" }).metadata();
-      jessLeft = 10;
-      jessTop = finalH - jessMeta.height + 20; // hafif taşma (dramatik)
-    }
-
-    // Jess'in arkasına sarı glow halkası (radial)
-    const glowR = Math.floor(jessW * 0.5);
-    const glowSvg =
-      `<svg width="${jessW}" height="${jessW}" xmlns="http://www.w3.org/2000/svg">` +
-      `<defs>` +
-      `<radialGradient id="jg" cx="50%" cy="50%" r="50%">` +
-      `<stop offset="0%" stop-color="#FFE600" stop-opacity="0.95"/>` +
-      `<stop offset="60%" stop-color="#FFB347" stop-opacity="0.4"/>` +
-      `<stop offset="100%" stop-color="#FFB347" stop-opacity="0"/>` +
-      `</radialGradient>` +
-      `</defs>` +
-      `<circle cx="${jessW / 2}" cy="${jessW / 2}" r="${glowR}" fill="url(#jg)"/>` +
-      `</svg>`;
-    const glowBuf = await sharp(Buffer.from(glowSvg)).png().toBuffer();
-
-    layers.push({
-      input: glowBuf,
-      top: Math.round(jessTop),
-      left: Math.round(jessLeft),
-    });
-
-    // Jess'in kendisini resize et + hafif drop shadow için PNG'yi olduğu gibi koy
-    const jessResized = await sharp(jessYol)
-      .resize(jessW, jessW, {
-        fit: "inside",
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
-      })
+  if (topicImagePath && fs.existsSync(topicImagePath)) {
+    // Hero görseli yükseklikten %60 alacak şekilde resize
+    const heroH = Math.floor(finalH * (isShorts ? 0.55 : 0.62));
+    const heroBuf = await sharp(topicImagePath)
+      .resize(heroH, heroH, { fit: "inside", background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer();
+    const heroMeta = await sharp(heroBuf).metadata();
 
+    // Merkez (long için y biraz yukarıda — alt başlık bandı için yer bırak)
+    const heroX = Math.round((finalW - heroMeta.width) / 2);
+    const heroY = Math.round(
+      isShorts
+        ? (finalH - heroMeta.height) / 2 + 60         // ortada
+        : (finalH - heroMeta.height) / 2 - 60          // başlık altı için yukarı kaydır
+    );
+
+    // Konu arkasına sarı glow halkası (radial)
+    const glowD = Math.floor(Math.max(heroMeta.width, heroMeta.height) * 1.3);
+    const glowSvg =
+      `<svg width="${glowD}" height="${glowD}" xmlns="http://www.w3.org/2000/svg">` +
+      `<defs>${sharedDefs(tema)}</defs>` +
+      `<circle cx="${glowD / 2}" cy="${glowD / 2}" r="${glowD / 2}" fill="url(#subjectGlow)"/>` +
+      `</svg>`;
+    const glowBuf = await sharp(Buffer.from(glowSvg)).png().toBuffer();
     layers.push({
-      input: jessResized,
-      top: Math.round(jessTop),
-      left: Math.round(jessLeft),
+      input: glowBuf,
+      top: Math.round(heroY + heroMeta.height / 2 - glowD / 2),
+      left: Math.round(heroX + heroMeta.width / 2 - glowD / 2),
+    });
+
+    layers.push({ input: heroBuf, top: heroY, left: heroX });
+  }
+
+  // ── 4) SVG overlay (vignette + bant + başlık + CTA) ──
+  let svg;
+  if (vs) {
+    console.log(`  🆚 VS: "${vs.sol}" vs "${vs.sag}"`);
+    svg = svgVS(vs, tema, format, jobSeed);
+  } else if (isShorts) {
+    svg = svgShorts(baslikKisa, tema, jobSeed);
+  } else {
+    svg = svgLong(baslikKisa, tema, jobSeed);
+  }
+  layers.push({ input: Buffer.from(svg), top: 0, left: 0 });
+
+  // ── 5) (opsiyonel) Jess overlay - USE_JESS=1 ile aktif, varsayılan KAPALI ──
+  if (USE_JESS && !vs && jessYol && fs.existsSync(jessYol)) {
+    const jessW = isShorts ? 380 : 240;
+    const jessBuf = await sharp(jessYol)
+      .resize(jessW, jessW, { fit: "inside", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png()
+      .toBuffer();
+    const jessMeta = await sharp(jessBuf).metadata();
+    layers.push({
+      input: jessBuf,
+      top: finalH - jessMeta.height - (isShorts ? 280 : 160),
+      left: 30,
     });
   }
 
-  // SVG (en üst katman: text + rozetler)
-  layers.push({ input: svgBuffer, top: 0, left: 0 });
-
-  // ── 5) Compose final ──
   const final = await sharp(bgResized)
     .composite(layers)
     .jpeg({ quality: 92 })
@@ -717,12 +713,11 @@ async function thumbnailUret(prompt, jessYol, baslikKisa, format, konu, hesap, j
   return final;
 }
 
-// ─── MAIN (v9 ile aynı akış) ─────────────────────────────────────────────
+// ─── MAIN ─────────────────────────────────────────────────────────────────
 
 async function main() {
   try {
     console.log(`Job: ${JOB_ID}`);
-
     const job = await jobOku(JOB_ID);
     if (!job) throw new Error("Job bulunamadı");
 
@@ -730,32 +725,36 @@ async function main() {
     fs.mkdirSync(TMP_DIR, { recursive: true });
 
     const saAuth = getServiceAccountAuth();
-
     const format = await formatTespit(job.drive_folder_id, saAuth);
     console.log(`📺 Format: ${format}`);
 
-    // Kısa başlık - Sheets'teki thumbnail_baslik kolonundan al
-    // Yoksa konu'dan otomatik üret
     let baslikKisa = job.thumbnail_baslik;
     if (!baslikKisa || baslikKisa.length < 3) {
       const konuTemiz = (job.konu || "").replace(/[:!?].*$/g, "").trim();
-      const kelimeler = konuTemiz.split(/\s+/).slice(0, 2);
-      baslikKisa = (kelimeler.join(" ") + " QUIZ").toUpperCase();
+      const kelimeler = konuTemiz.split(/\s+/).slice(0, 3);
+      baslikKisa = kelimeler.join(" ").toUpperCase();
     }
-    console.log(`📝 Thumbnail başlığı: "${baslikKisa}"`);
+    console.log(`📝 Başlık: "${baslikKisa}"`);
 
     await jobGuncelle(JOB_ID, { thumb_status: "running" });
 
     const hesaplar = getCfAccounts();
     if (hesaplar.length === 0) throw new Error("Cloudflare hesap yok");
 
-    // Jess PNG indir (correct pose tercih)
-    const jessYol = path.join(TMP_DIR, "jess.png");
-    const jessIndirildi = await jessIntroIndir(saAuth, jessYol);
-    if (jessIndirildi) {
-      console.log("✓ Jess karakteri indirildi");
-    } else {
-      console.log("⚠ Jess karakteri yok");
+    // Jess (opsiyonel, USE_JESS ile)
+    let jessIndirildi = null;
+    if (USE_JESS) {
+      const jessYol = path.join(TMP_DIR, "jess.png");
+      jessIndirildi = await jessIntroIndir(saAuth, jessYol);
+      console.log(jessIndirildi ? "✓ Jess indirildi (USE_JESS=1)" : "⚠ Jess yok");
+    }
+
+    // Topic hero image (opsiyonel): thumbnail_subject_image Sheets kolonu ya
+    // Drive file ID ya da public URL içerir. Şimdilik path olarak alıyoruz.
+    let topicImagePath = null;
+    if (job.thumbnail_subject_image && fs.existsSync(job.thumbnail_subject_image)) {
+      topicImagePath = job.thumbnail_subject_image;
+      console.log(`✓ Topic hero: ${topicImagePath}`);
     }
 
     const prompt = job.thumbnail_prompt || job.konu;
@@ -764,15 +763,16 @@ async function main() {
     let buffer;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        buffer = await thumbnailUret(
+        buffer = await thumbnailUret({
           prompt,
-          jessIndirildi,
+          jessYol: jessIndirildi,
           baslikKisa,
           format,
-          job.konu || "",
-          hesaplar[attempt % hesaplar.length],
-          String(JOB_ID || baslikKisa)
-        );
+          konu: job.konu || "",
+          hesap: hesaplar[attempt % hesaplar.length],
+          jobSeed: String(JOB_ID || baslikKisa),
+          topicImagePath,
+        });
         break;
       } catch (e) {
         console.error(`Deneme ${attempt + 1}: ${e.message}`);
@@ -781,7 +781,6 @@ async function main() {
       }
     }
 
-    // Drive'a yükle
     const filename = `thumbnail-${format}-${Date.now()}.jpg`;
     const filepath = path.join(TMP_DIR, filename);
     fs.writeFileSync(filepath, buffer);
@@ -803,7 +802,6 @@ async function main() {
     );
 
     fs.rmSync(TMP_DIR, { recursive: true, force: true });
-
     await jobGuncelle(JOB_ID, { thumb_status: `completed:${(buffer.length / 1024).toFixed(0)}KB` });
 
     await telegram(
@@ -824,26 +822,25 @@ async function main() {
       await jobGuncelle(JOB_ID, { thumb_status: `error: ${error.message.substring(0, 100)}` });
       await telegram(job.chat_id, `❌ *05-Thumbnail error:* ${error.message.substring(0, 300)}`);
     } catch (e) {
-      // Telegram/Sheets fail olursa pipeline'ı kırmıyoruz; sadece çık.
+      // pipeline'ı kırmamak için sessiz geç
     }
     process.exit(1);
   }
 }
 
-// Modül olarak doğrudan çalıştırılırsa main()'i tetikle.
-// (Test/standalone kullanım için thumbnailUret + SVG üreticileri export'lu)
 const isDirect = import.meta.url === `file://${process.argv[1]}`;
-if (isDirect) {
-  main();
-}
+if (isDirect) main();
 
 export {
   thumbnailUret,
   svgLong,
   svgShorts,
   svgVS,
+  svgVSBackground,
   vsTespit,
   satirlaraBol,
+  temaSec,
   ctaSec,
   HIGHLIGHT_PALETTE,
+  TEMALAR,
 };
