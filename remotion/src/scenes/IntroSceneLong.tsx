@@ -1,4 +1,4 @@
-// REV 007/09JUN26 - Scene1 Jess konusma yazisi animasyonlu (item1): word-by-word, all colored, pop sfx
+// REV 008/16JUN26 - Scene1Long: greeting cerceve/arka plan kaldirildi, word pop SFX kaldirildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -145,11 +145,7 @@ const Scene1Long: React.FC<{ sfx_pop_single?: string }> = ({ sfx_pop_single }) =
         <div style={{
           opacity: greetingOpacity,
           transform: `scale(${greetingScale}) translateY(${greetingFloat}px) rotate(${greetingTilt}deg)`,
-          backgroundColor: BRAND.white,
-          padding: "22px 40px", borderRadius: 36,
           fontSize: 54, fontFamily: FONTS.display, fontWeight: 900,
-          border: `5px solid ${BRAND.yellow}`,
-          boxShadow: `0 10px 25px rgba(0,0,0,0.45), 0 0 40px ${BRAND.yellow}`,
           maxWidth: "95%", textAlign: "center", letterSpacing: 0.5,
           lineHeight: 1.3, textTransform: "uppercase",
         }}>
@@ -184,12 +180,6 @@ const Scene1Long: React.FC<{ sfx_pop_single?: string }> = ({ sfx_pop_single }) =
         />
       </div>
 
-      {/* Word pop SFX - her kelime girişinde pop_single */}
-      {sfx_pop_single && words.map((_, idx) => (
-        <Sequence key={`wpop-${idx}`} from={WORD_START_FRAME + idx * WORD_STAGGER} durationInFrames={20}>
-          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
-        </Sequence>
-      ))}
     </>
   );
 };

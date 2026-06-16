@@ -1,4 +1,4 @@
-# REV 006/10JUN26 - job_id workflow_dispatch input eklendi (/uret formundan geliyor)
+# REV 007/16JUN26 - include_intro/outro: != false -> == true (string/bool karsilastirma duzeltildi)
 name: 01 - İçerik Üret
 # REVISION: paralel dispatch'ler kaldırıldı, akış sıralı (01→02 kod tetikler) 2026-05-25
 
@@ -102,8 +102,8 @@ jobs:
             echo "n_soru=${{ github.event.client_payload.n_soru }}" >> $GITHUB_OUTPUT
             echo "dil=${{ github.event.client_payload.dil || 'English' }}" >> $GITHUB_OUTPUT
             printf 'soru_tipi_json=%s\n' '${{ github.event.client_payload.soru_tipi_json }}' >> $GITHUB_OUTPUT
-            echo "include_intro=${{ github.event.client_payload.include_intro != false && 'true' || 'false' }}" >> $GITHUB_OUTPUT
-            echo "include_outro=${{ github.event.client_payload.include_outro != false && 'true' || 'false' }}" >> $GITHUB_OUTPUT
+            echo "include_intro=${{ github.event.client_payload.include_intro == true && 'true' || 'false' }}" >> $GITHUB_OUTPUT
+            echo "include_outro=${{ github.event.client_payload.include_outro == true && 'true' || 'false' }}" >> $GITHUB_OUTPUT
           else
             echo "tarih=${{ github.event.inputs.tarih }}" >> $GITHUB_OUTPUT
             echo "index=${{ github.event.inputs.index }}" >> $GITHUB_OUTPUT

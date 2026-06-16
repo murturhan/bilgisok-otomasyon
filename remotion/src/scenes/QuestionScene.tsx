@@ -1,4 +1,4 @@
-// REV 020/07JUN26 - flu modu icin de fitil aktif (onceden sadece surpriz)
+// REV 021/16JUN26 - gozluk 300px absolute bottom center, whoosh volume 1.0 +5frame erken
 import React from "react";
 import {
   AbsoluteFill,
@@ -213,13 +213,13 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           <Audio src={staticFile(sfx_correct)} volume={0.5} />
         </Sequence>
       )}
-      {/* WHOOSH - güçlendirilmiş transition için biraz daha erken + yüksek volume */}
+      {/* WHOOSH - 5 frame erken, +10 frame uzun, volume 1.0 */}
       {sfx_whoosh && (
         <Sequence
-          from={Math.max(0, phases.transition - 3)}
-          durationInFrames={FIXED_FRAMES.transition + 6}
+          from={Math.max(0, phases.transition - 5)}
+          durationInFrames={FIXED_FRAMES.transition + 10}
         >
-          <Audio src={staticFile(sfx_whoosh)} volume={0.85} />
+          <Audio src={staticFile(sfx_whoosh)} volume={1.0} />
         </Sequence>
       )}
       {/* POP - şıklar çıkarken: card[0]=show+8, card[1]=show+26, card[2]=show+44 (ENTRY_OFFSET=8, STAGGER=18) */}
@@ -1087,8 +1087,7 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
     isVertical ? 96 : 110,  // max
   );
   
-  // Gözlük boyutu — KULLANICI TALEBİ: 500
-  const glassesSize = 500;
+  const glassesSize = 300;
   
   return (
     <div
@@ -1137,13 +1136,10 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
       
       {/* Gözlük - PNG, animasyonlu göz bebekleri (hideGlasses true ise gizle - long fact yan yana layout için) */}
       {!hideGlasses && (
-        <div
-          style={{
-            transform: `scale(${glassesScale}) rotate(${glassesRotate}deg) translateY(${glassesIdleBounce}px)`,
-            opacity: glassesOpacity,
-          }}
-        >
-          <AnimatedGlasses width={glassesSize} height={Math.floor(glassesSize / (458 / 223))} frame={frame} />
+        <div style={{ position: "absolute", bottom: 30, left: 0, right: 0, display: "flex", justifyContent: "center", opacity: glassesOpacity }}>
+          <div style={{ transform: `scale(${glassesScale}) rotate(${glassesRotate}deg) translateY(${glassesIdleBounce}px)` }}>
+            <AnimatedGlasses width={glassesSize} height={Math.floor(glassesSize / (458 / 223))} frame={frame} />
+          </div>
         </div>
       )}
     </div>
