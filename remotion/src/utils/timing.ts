@@ -122,8 +122,11 @@ export function outroStartFrame(
 export function totalDurationFrames(
   introAudioDuration: number,
   outroAudioDuration: number,
-  questions: AnyQuestion[]
+  questions: AnyQuestion[],
+  skipOutro: boolean = false
 ): number {
+  const questionsEnd = outroStartFrame(introAudioDuration, questions);
+  if (skipOutro) return questionsEnd;
   const outroFrames = Math.ceil(outroAudioDuration * FPS);
-  return outroStartFrame(introAudioDuration, questions) + outroFrames + APPLAUSE_DELAY_FRAMES;
+  return questionsEnd + outroFrames + APPLAUSE_DELAY_FRAMES;
 }

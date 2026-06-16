@@ -1,4 +1,4 @@
-// REV 021/16JUN26 - gozluk 300px absolute bottom center, whoosh volume 1.0 +5frame erken
+// REV 022/16JUN26 - gozluk 240px (%15 maxH), video loop=true explicit
 import React from "react";
 import {
   AbsoluteFill,
@@ -739,6 +739,23 @@ const AnswerStack: React.FC<AnswerStackProps> = ({
   );
 };
 
+// OffthreadVideo loop prop is not in Remotion 4.0.300 types; use Sequence trick to simulate loop.
+// Each 5-second Sequence resets useCurrentFrame()→0, restarting the video from the beginning.
+const LoopedVideo: React.FC<{ src: string; style: React.CSSProperties }> = ({ src, style }) => {
+  const { fps } = useVideoConfig();
+  const LOOP_FRAMES = Math.floor(5 * fps); // 5-second segments
+  const MAX_LOOPS = 40;
+  return (
+    <>
+      {Array.from({ length: MAX_LOOPS }).map((_, i) => (
+        <Sequence key={i} from={i * LOOP_FRAMES} durationInFrames={LOOP_FRAMES}>
+          <OffthreadVideo src={src} muted style={style} />
+        </Sequence>
+      ))}
+    </>
+  );
+};
+
 interface ImageCardProps {
   src: string;
   videoSrc?: string;
@@ -856,16 +873,7 @@ const ImageCard: React.FC<ImageCardProps> = ({
             }}>?</div>
           </div>
         ) : videoSrc ? (
-          <OffthreadVideo
-            src={videoSrc}
-            muted
-            loop
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
+          <LoopedVideo src={videoSrc} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : src ? (
           <Img
             src={src}
@@ -1044,8 +1052,8 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
   hideGlasses,
 }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  
+  const { fps, height } = useVideoConfig();
+
   // Kart enter animasyonu
   const cardAnim = spring({
     frame: frame - showFrame,
@@ -1087,7 +1095,8 @@ const FunFactPanel: React.FC<FunFactPanelProps> = ({
     isVertical ? 96 : 110,  // max
   );
   
-  const glassesSize = 300;
+  const glassesMaxH = Math.floor(height * 0.15);
+  const glassesSize = Math.min(240, glassesMaxH);
   
   return (
     <div

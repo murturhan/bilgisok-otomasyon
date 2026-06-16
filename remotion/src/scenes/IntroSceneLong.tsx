@@ -1,4 +1,4 @@
-// REV 008/16JUN26 - Scene1Long: greeting cerceve/arka plan kaldirildi, word pop SFX kaldirildi
+// REV 009/16JUN26 - kelime bazinda siyah panel (kontrast garanti)
 import React from "react";
 import {
   AbsoluteFill,
@@ -162,6 +162,9 @@ const Scene1Long: React.FC<{ sfx_pop_single?: string }> = ({ sfx_pop_single }) =
                 transformOrigin: "center bottom",
                 color: WORD_COLORS[idx % WORD_COLORS.length],
                 marginRight: "0.18em",
+                backgroundColor: "rgba(0,0,0,0.35)",
+                padding: "2px 8px",
+                borderRadius: 6,
               }}>{word}</span>
             );
           })}

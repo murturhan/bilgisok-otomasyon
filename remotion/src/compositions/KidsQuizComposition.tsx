@@ -1,4 +1,4 @@
-// REV 015/09JUN26 - uploaded_image_url priority (item5): uploaded beats flux image_url
+// REV 016/16JUN26 - skip_outro guard (subscribe dahil), whoosh ducking, video loop
 import React from "react";
 import {
   AbsoluteFill,
@@ -7,7 +7,7 @@ import {
   useVideoConfig,
   staticFile,
 } from "remotion";
-import { FPS, MUSIC_DUCK_FRAMES, getThemeForQuestion } from "../styles/theme";
+import { FPS, FIXED_FRAMES, MUSIC_DUCK_FRAMES, getThemeForQuestion } from "../styles/theme";
 import { QuizCompositionProps } from "../types/schemas";
 import { IntroSceneShorts } from "../scenes/IntroSceneShorts";
 import { IntroSceneLong } from "../scenes/IntroSceneLong";
@@ -53,6 +53,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   channel_name,
   topic_emojis,
   is_test_mode = false,
+  skip_outro = false,
 }) => {
   const { width, height } = useVideoConfig();
   const isVertical = height > width;
@@ -107,12 +108,38 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
     return false;
   };
   
+  // Whoosh sahnesi geçiş frameleri: transition-5 → transition+10 frame arası
+  const isWhooshPlaying = (f: number): boolean => {
+    let scanFrame = introFrames;
+    for (let i = 0; i < questions.length; i++) {
+      const qDuration = computeAnyQuestionEnd(questions[i] as any);
+      const qStart = scanFrame;
+      const qEnd = scanFrame + qDuration;
+      if (f >= qStart && f < qEnd) {
+        const localFrame = f - qStart;
+        const isWyr = (questions[i] as any).question_type === "would_you_rather";
+        let transStart: number;
+        if (isWyr) {
+          transStart = computeWyrPhases(questions[i] as unknown as WouldYouRatherQuestion).transition;
+        } else {
+          transStart = computeQuestionPhases(questions[i] as any).transition;
+        }
+        const whooshFrom = Math.max(0, transStart - 5);
+        const whooshTo = transStart + FIXED_FRAMES.transition + 10;
+        if (localFrame >= whooshFrom && localFrame < whooshTo) return true;
+      }
+      scanFrame = qEnd;
+    }
+    return false;
+  };
+
   const musicVolume = (f: number): number => {
     const speaking = isJessSpeaking(f);
-    
+    const whooshing = isWhooshPlaying(f);
+
     let prevSpeaking = speaking;
     let framesSinceChange = MUSIC_DUCK_FRAMES;
-    
+
     for (let lookback = 1; lookback <= MUSIC_DUCK_FRAMES; lookback++) {
       const prev = isJessSpeaking(Math.max(0, f - lookback));
       if (prev !== speaking) {
@@ -121,15 +148,15 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         break;
       }
     }
-    
-    const targetVol = speaking ? 0.05 : 0.09;
+
+    const targetVol = whooshing ? 0.03 : (speaking ? 0.05 : 0.09);
     const startVol = prevSpeaking ? 0.05 : 0.09;
-    
+
     if (framesSinceChange < MUSIC_DUCK_FRAMES) {
       const t = framesSinceChange / MUSIC_DUCK_FRAMES;
       return startVol + (targetVol - startVol) * t;
     }
-    
+
     return targetVol;
   };
   
@@ -258,8 +285,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         );
       })}
       
-      {/* OUTRO - test modunda atlanır */}
-      {!is_test_mode && (
+      {/* OUTRO (kutlama + subscribe) - test modunda ve skip_outro=true ise atlanır */}
+      {!is_test_mode && !skip_outro && (
         <Sequence from={outroStart} durationInFrames={outroFrames + APPLAUSE_DELAY_FRAMES}>
           <OutroSceneComponent
             channelName={channel_name}
@@ -271,14 +298,14 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         </Sequence>
       )}
 
-      {!is_test_mode && outro_audio_path && (
+      {!is_test_mode && !skip_outro && outro_audio_path && (
         <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES + 20} durationInFrames={outroFrames}>
           <Audio src={staticFile(outro_audio_path)} volume={2.2} />
         </Sequence>
       )}
 
-      {/* OUTRO ANNOUNCE - test modunda atlanır */}
-      {!is_test_mode && outro_announce_path && (
+      {/* OUTRO ANNOUNCE - test modunda ve skip_outro=true ise atlanır */}
+      {!is_test_mode && !skip_outro && outro_announce_path && (
         <Sequence
           from={outroStart + APPLAUSE_DELAY_FRAMES + Math.ceil(jess_outro_video_duration * FPS) + Math.floor(FPS * 0.4)}
           durationInFrames={Math.ceil(outro_announce_duration * FPS)}
@@ -287,8 +314,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         </Sequence>
       )}
 
-      {/* OUTRO ALKIŞ - test modunda atlanır */}
-      {!is_test_mode && sfx_applause && (
+      {/* OUTRO ALKIŞ - test modunda ve skip_outro=true ise atlanır */}
+      {!is_test_mode && !skip_outro && sfx_applause && (
         <Sequence from={outroStart} durationInFrames={Math.floor(FPS * 3)}>
           <Audio src={staticFile(sfx_applause)} volume={0.6} />
         </Sequence>

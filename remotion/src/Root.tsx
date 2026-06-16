@@ -9,7 +9,8 @@ function calculateTotalFrames(props: typeof defaultQuizProps): number {
   return totalDurationFrames(
     props.intro_audio_duration,
     props.outro_audio_duration,
-    props.questions
+    props.questions,
+    props.skip_outro ?? false
   );
 }
 

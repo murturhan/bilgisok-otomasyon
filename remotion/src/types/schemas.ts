@@ -140,6 +140,9 @@ export const quizCompositionSchema = z.object({
 
   // Test modunda intro/outro render edilmez, sadece sorular
   is_test_mode: z.boolean().optional().default(false),
+
+  // skip_outro=true ise outro kutlama + subscribe sahneleri render edilmez
+  skip_outro: z.boolean().optional().default(false),
 });
 
 export type QuizCompositionProps = z.infer<typeof quizCompositionSchema>;
@@ -175,4 +178,6 @@ export const defaultQuizProps: QuizCompositionProps = {
       answer_audio_duration: 8.0,
     },
   ],
+  is_test_mode: false,
+  skip_outro: false,
 };

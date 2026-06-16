@@ -1,4 +1,4 @@
-// REV 011/02JUN26 - video_url desteği: OffthreadVideo visible+surprise slotlarda
+// REV 012/16JUN26 - LoopedVideo: Sequence trick yerine loop prop kaldırıldı (TS hatası)
 import React from "react";
 import {
   AbsoluteFill,
@@ -20,6 +20,21 @@ import { LiquidProgressBar } from "../components/LiquidProgressBar";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { AnimatedBackground, getPatternForQuestion } from "../components/AnimatedBackground";
 import { computeWyrPhases, WYR_COUNTDOWN_FRAMES } from "../utils/timing";
+
+const LoopedVideo: React.FC<{ src: string; style: React.CSSProperties }> = ({ src, style }) => {
+  const { fps } = useVideoConfig();
+  const LOOP_FRAMES = Math.floor(5 * fps);
+  const MAX_LOOPS = 40;
+  return (
+    <>
+      {Array.from({ length: MAX_LOOPS }).map((_, i) => (
+        <Sequence key={i} from={i * LOOP_FRAMES} durationInFrames={LOOP_FRAMES}>
+          <OffthreadVideo src={src} muted style={style} />
+        </Sequence>
+      ))}
+    </>
+  );
+};
 
 interface WouldYouRatherSceneProps {
   question: WouldYouRatherQuestion;
@@ -234,12 +249,7 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
         }}>
           <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
             {visibleVideoSrc ? (
-              <OffthreadVideo
-                src={visibleVideoSrc}
-                muted
-                loop
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
+              <LoopedVideo src={visibleVideoSrc} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             ) : visibleImageSrc ? (
               <Img
                 src={visibleImageSrc}
@@ -324,12 +334,7 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
             {(surpriseVideoSrc || surpriseImageSrc) && (
               <div style={{ position: "absolute", inset: 0, opacity: surpriseOpacity }}>
                 {surpriseVideoSrc ? (
-                  <OffthreadVideo
-                    src={surpriseVideoSrc}
-                    muted
-                    loop
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
+                  <LoopedVideo src={surpriseVideoSrc} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   <Img
                     src={surpriseImageSrc}
