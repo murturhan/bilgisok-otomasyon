@@ -1,4 +1,4 @@
-// REV 016/09JUN26 - skip_intro/skip_outro destegi: questions.json'dan okuyup intro/outro surecini atla
+// REV 017/17JUN26 - skip_outro inputProps'a geciliyor (onceki rev sadece audio_duration=0 yapiyordu)
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -673,7 +673,8 @@ async function main() {
       intro_audio_duration: SKIP_INTRO ? 0 : introMinDuration,
       outro_audio_duration: SKIP_OUTRO ? 0 : outroMinDuration,
       is_test_mode: IS_TEST_MODE,
-      
+      skip_outro: SKIP_OUTRO,
+
       // Jess video gerçek süreleri (composition Sahne 1 / Sahne 2 ayrım noktası için)
       jess_intro_video_duration: jessSureleri.introDuration,
       jess_outro_video_duration: jessSureleri.outroDuration,

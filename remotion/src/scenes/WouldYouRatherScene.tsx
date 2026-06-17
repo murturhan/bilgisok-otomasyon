@@ -1,4 +1,4 @@
-// REV 012/16JUN26 - LoopedVideo: Sequence trick yerine loop prop kaldırıldı (TS hatası)
+// REV 013/17JUN26 - whoosh SFX WYR transition'a eklendi
 import React from "react";
 import {
   AbsoluteFill,
@@ -211,6 +211,14 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
       {sfx_drum && inSilentPause && (
         <Sequence from={phases.timerEnd} durationInFrames={Math.floor(FPS * 0.8)}>
           <Audio src={staticFile(sfx_drum)} volume={0.8} />
+        </Sequence>
+      )}
+      {sfx_whoosh && (
+        <Sequence
+          from={Math.max(0, phases.transition - 5)}
+          durationInFrames={FIXED_FRAMES.transition + 10}
+        >
+          <Audio src={staticFile(sfx_whoosh)} volume={1.0} />
         </Sequence>
       )}
 

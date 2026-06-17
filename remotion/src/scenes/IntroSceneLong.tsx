@@ -1,4 +1,4 @@
-// REV 009/16JUN26 - kelime bazinda siyah panel (kontrast garanti)
+// REV 010/17JUN26 - kelime stagger: dis container scale/opacity kaldirildi, panel koyu yapildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -143,8 +143,7 @@ const Scene1Long: React.FC<{ sfx_pop_single?: string }> = ({ sfx_pop_single }) =
         </div>
 
         <div style={{
-          opacity: greetingOpacity,
-          transform: `scale(${greetingScale}) translateY(${greetingFloat}px) rotate(${greetingTilt}deg)`,
+          transform: `translateY(${greetingFloat}px) rotate(${greetingTilt}deg)`,
           fontSize: 54, fontFamily: FONTS.display, fontWeight: 900,
           maxWidth: "95%", textAlign: "center", letterSpacing: 0.5,
           lineHeight: 1.3, textTransform: "uppercase",
@@ -162,9 +161,10 @@ const Scene1Long: React.FC<{ sfx_pop_single?: string }> = ({ sfx_pop_single }) =
                 transformOrigin: "center bottom",
                 color: WORD_COLORS[idx % WORD_COLORS.length],
                 marginRight: "0.18em",
-                backgroundColor: "rgba(0,0,0,0.35)",
-                padding: "2px 8px",
+                backgroundColor: "rgba(0,0,0,0.65)",
+                padding: "2px 10px",
                 borderRadius: 6,
+                border: "1px solid rgba(255,255,255,0.3)",
               }}>{word}</span>
             );
           })}

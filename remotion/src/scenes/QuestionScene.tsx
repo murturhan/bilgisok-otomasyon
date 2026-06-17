@@ -1,4 +1,4 @@
-// REV 022/16JUN26 - gozluk 240px (%15 maxH), video loop=true explicit
+// REV 023/17JUN26 - show_image=true → flu (blur→reveal) modu; WYR whoosh eklendi
 import React from "react";
 import {
   AbsoluteFill,
@@ -397,7 +397,7 @@ const LongLayout: React.FC<LayoutProps> = ({
   // ─── Görsel mod ───
   // net: resim hep net; flu: reveal'a kadar bulanık; surpriz: "?" placeholder
   const showMode: string = (question as any).image_show_mode
-    || (question.show_image === false ? 'surpriz' : 'net');
+    || (question.show_image === false ? 'surpriz' : 'flu');
   const showImageClear = showMode !== 'surpriz';
   const afterReveal = localFrame >= phases.reveal;
   const blurAmount = showMode === 'flu' && !afterReveal ? 18 : 0;
@@ -541,7 +541,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   // ─── Görsel mod ───
   // net: resim hep net; flu: reveal'a kadar bulanık; surpriz: "?" placeholder
   const showMode: string = (question as any).image_show_mode
-    || (question.show_image === false ? 'surpriz' : 'net');
+    || (question.show_image === false ? 'surpriz' : 'flu');
   const showImageClear = showMode !== 'surpriz';
   const afterReveal = localFrame >= phases.reveal;
   const blurAmount = showMode === 'flu' && !afterReveal ? 18 : 0;

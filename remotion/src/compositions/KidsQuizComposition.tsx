@@ -1,4 +1,4 @@
-// REV 016/16JUN26 - skip_outro guard (subscribe dahil), whoosh ducking, video loop
+// REV 017/17JUN26 - whoosh duck 0.2 (0.03'ten), skip_outro inputProps'tan geliyor
 import React from "react";
 import {
   AbsoluteFill,
@@ -149,7 +149,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       }
     }
 
-    const targetVol = whooshing ? 0.03 : (speaking ? 0.05 : 0.09);
+    const targetVol = whooshing ? 0.20 : (speaking ? 0.05 : 0.09);
     const startVol = prevSpeaking ? 0.05 : 0.09;
 
     if (framesSinceChange < MUSIC_DUCK_FRAMES) {
