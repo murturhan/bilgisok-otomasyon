@@ -1,4 +1,4 @@
-// REV 013/16JUN26 - thumbnail: which X format, thumbnail_obje_1/2, 2 obje FLUX prompt
+// REV 014/20JUN26 - gorsel_stili per-slot (6 stil, FLUX prompt append)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -19,6 +19,7 @@ import {
   driveDosyaYukle,
 } from "./lib/google.js";
 import { telegram } from "./lib/telegram.js";
+import { GORSEL_STILLERI, DEFAULT_STIL } from "./lib/gorsel-stilleri.js";
 
 const {
   GEMINI_API_KEY,
@@ -43,6 +44,7 @@ const DIL = process.env.DIL || "English";
 const SORU_TIPI_JSON_STR = process.env.SORU_TIPI_JSON || null;
 const INCLUDE_INTRO = process.env.INCLUDE_INTRO !== "false";
 const INCLUDE_OUTRO = process.env.INCLUDE_OUTRO !== "false";
+const GORSEL_STILI_ENV = process.env.GORSEL_STILI || DEFAULT_STIL;
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -402,9 +404,13 @@ TOPIC EMOJIS (for intro screen emoji band)
           q.question_type = "would_you_rather"; // Gemini bazen unutuyor, garantile
           if (!q.visible_option) q.visible_option = { label: "Option A" };
           if (!q.surprise_option) q.surprise_option = { label: "Sürpriz Kutu", surprise_outcome: "Surprise!", surprise_is_good: true };
-          // WYR için ai_gorsel_prompts prompt'larını yükle
-          const vp = q.visible_option.image_prompt || `Pixar-style image of ${q.visible_option.label}, kid-friendly`;
-          const sp = q.surprise_option.surprise_image_prompt || `Pixar-style image of ${q.surprise_option.surprise_outcome}, kid-friendly`;
+          // WYR: stil per-slot kaydet
+          q.visible_option.image_stili = GORSEL_STILI_ENV;
+          q.surprise_option.surprise_image_stili = GORSEL_STILI_ENV;
+          // WYR için ai_gorsel_prompts prompt'larını yükle (stil suffix ile)
+          const stilSuffix = GORSEL_STILLERI[GORSEL_STILI_ENV]?.promptAppend || "";
+          const vp = (q.visible_option.image_prompt || `Pixar-style image of ${q.visible_option.label}, kid-friendly`) + stilSuffix;
+          const sp = (q.surprise_option.surprise_image_prompt || `Pixar-style image of ${q.surprise_option.surprise_outcome}, kid-friendly`) + stilSuffix;
           json.ai_gorsel_prompts = json.ai_gorsel_prompts || [];
           json.ai_gorsel_prompts.push(vp);
           json.ai_gorsel_prompts.push(sp);
@@ -418,6 +424,10 @@ TOPIC EMOJIS (for intro screen emoji band)
         if (!q.difficulty) q.difficulty = "medium";
         if (!q.fun_fact) q.fun_fact = "";
         
+        // MC: stil per-slot kaydet
+        q.question_image_stili = GORSEL_STILI_ENV;
+        q.fact_image_stili = GORSEL_STILI_ENV;
+
         // fun_fact_image_prompt fallback - Gemini vermediyse, question image prompt + fun fact birleştir
         if (!q.fun_fact_image_prompt) {
           if (q.fun_fact) {
@@ -504,9 +514,10 @@ TOPIC EMOJIS (for intro screen emoji band)
       // WYR: q1_visible, q1_surprise, ..., background
       if (!effectiveIsWyr) {
         json.ai_gorsel_prompts = [];
+        const stilSuffix = GORSEL_STILLERI[GORSEL_STILI_ENV]?.promptAppend || "";
         for (const q of json.questions) {
-          json.ai_gorsel_prompts.push(q.image_prompt);
-          json.ai_gorsel_prompts.push(q.fun_fact_image_prompt);
+          json.ai_gorsel_prompts.push((q.image_prompt || "") + stilSuffix);
+          json.ai_gorsel_prompts.push((q.fun_fact_image_prompt || "") + stilSuffix);
         }
       } else {
         // WYR: ai_gorsel_prompts already built in validation loop above

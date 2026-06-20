@@ -1,4 +1,4 @@
-# REV 008/16JUN26 - include_intro/outro: type boolean, default true (422 fix)
+# REV 009/20JUN26 - gorsel_stili input eklendi (6 stil secenegi)
 name: 01 - İçerik Üret
 # REVISION: paralel dispatch'ler kaldırıldı, akış sıralı (01→02 kod tetikler) 2026-05-25
 
@@ -59,6 +59,10 @@ on:
         description: 'Include outro scene'
         type: boolean
         default: true
+      gorsel_stili:
+        description: 'Gorsel stili: pixar_3d, realistik, anime, karikatur, suluboya, karakalem'
+        required: false
+        default: 'pixar_3d'
 
 permissions:
   actions: write
@@ -104,6 +108,7 @@ jobs:
             printf 'soru_tipi_json=%s\n' '${{ github.event.client_payload.soru_tipi_json }}' >> $GITHUB_OUTPUT
             echo "include_intro=${{ github.event.client_payload.include_intro == true && 'true' || 'false' }}" >> $GITHUB_OUTPUT
             echo "include_outro=${{ github.event.client_payload.include_outro == true && 'true' || 'false' }}" >> $GITHUB_OUTPUT
+            echo "gorsel_stili=${{ github.event.client_payload.gorsel_stili || 'pixar_3d' }}" >> $GITHUB_OUTPUT
           else
             echo "tarih=${{ github.event.inputs.tarih }}" >> $GITHUB_OUTPUT
             echo "index=${{ github.event.inputs.index }}" >> $GITHUB_OUTPUT
@@ -118,6 +123,7 @@ jobs:
             printf 'soru_tipi_json=%s\n' '${{ github.event.inputs.soru_tipi_json }}' >> $GITHUB_OUTPUT
             echo "include_intro=${{ github.event.inputs.include_intro || 'true' }}" >> $GITHUB_OUTPUT
             echo "include_outro=${{ github.event.inputs.include_outro || 'true' }}" >> $GITHUB_OUTPUT
+            echo "gorsel_stili=${{ github.event.inputs.gorsel_stili || 'pixar_3d' }}" >> $GITHUB_OUTPUT
           fi
       
       - name: İçerik üret
@@ -144,6 +150,7 @@ jobs:
           DIL: ${{ steps.params.outputs.dil }}
           INCLUDE_INTRO: ${{ steps.params.outputs.include_intro }}
           INCLUDE_OUTRO: ${{ steps.params.outputs.include_outro }}
+          GORSEL_STILI: ${{ steps.params.outputs.gorsel_stili }}
           WORKFLOW_DISPATCH_TOKEN: ${{ secrets.WORKFLOW_DISPATCH_TOKEN }}
           GITHUB_REPO_OWNER: ${{ github.repository_owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}

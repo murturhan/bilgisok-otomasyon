@@ -1,4 +1,4 @@
-// REV 006/07JUN26 - GECİCİ: ilk ses uretime "yeniden" deme; ses_status kontrolu
+// REV 007/20JUN26 - gorsel stili FLUX regen'a uygula (stage=2 per-slot dropdown)
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -23,6 +23,7 @@ import {
 } from "./lib/google.js";
 import { fluxRotationCagri } from "./lib/cloudflare.js";
 import { telegram } from "./lib/telegram.js";
+import { GORSEL_STILLERI, DEFAULT_STIL } from "./lib/gorsel-stilleri.js";
 
 const {
   JOB_ID,
@@ -324,6 +325,9 @@ async function main() {
       if (typeof edit.image_prompt === "string") q.image_prompt = edit.image_prompt;
       if (typeof edit.fun_fact_image_prompt === "string") q.fun_fact_image_prompt = edit.fun_fact_image_prompt;
       if (Array.isArray(edit.option_flags) && edit.option_flags.length === 3) q.option_flags = edit.option_flags;
+      // MC: stili guncelle
+      if (typeof edit.regen_question_stili === "string" && edit.regen_question_stili) q.question_image_stili = edit.regen_question_stili;
+      if (typeof edit.regen_fact_stili === "string" && edit.regen_fact_stili) q.fact_image_stili = edit.regen_fact_stili;
 
       // WYR: ayrı alanlar + audio text'i atla
       if (edit.question_type === "would_you_rather") {
@@ -368,6 +372,16 @@ async function main() {
         }
 
         // WYR custom image upload (aynı slotlar: visible=question, surprise=fact)
+        // WYR: stili guncelle (kullanici dropdown'dan degistirdiyse)
+        if (typeof edit.regen_visible_stili === "string" && edit.regen_visible_stili) {
+          if (!q.visible_option) q.visible_option = {};
+          q.visible_option.image_stili = edit.regen_visible_stili;
+        }
+        if (typeof edit.regen_surprise_stili === "string" && edit.regen_surprise_stili) {
+          if (!q.surprise_option) q.surprise_option = {};
+          q.surprise_option.surprise_image_stili = edit.regen_surprise_stili;
+        }
+
         if (edit.custom_visible_image) {
           const decoded = base64ToBuffer(edit.custom_visible_image);
           if (decoded) {
@@ -385,7 +399,9 @@ async function main() {
             }
           }
         } else if (edit.regen_visible_image) {
-          regenQuestionImages.push({ index: idx, prompt: q.visible_option?.image_prompt || "" });
+          const vStili = q.visible_option?.image_stili || DEFAULT_STIL;
+          const vSuffix = GORSEL_STILLERI[vStili]?.promptAppend || "";
+          regenQuestionImages.push({ index: idx, prompt: (q.visible_option?.image_prompt || "") + vSuffix });
         }
 
         if (edit.custom_surprise_image) {
@@ -405,7 +421,9 @@ async function main() {
             }
           }
         } else if (edit.regen_surprise_image) {
-          regenFactImages.push({ index: idx, prompt: q.surprise_option?.surprise_image_prompt || "" });
+          const sStili = q.surprise_option?.surprise_image_stili || DEFAULT_STIL;
+          const sSuffix = GORSEL_STILLERI[sStili]?.promptAppend || "";
+          regenFactImages.push({ index: idx, prompt: (q.surprise_option?.surprise_image_prompt || "") + sSuffix });
         }
 
         continue;
@@ -462,10 +480,11 @@ async function main() {
           }
         }
       } else if (edit.regen_question_image) {
-        // FLUX ile yeniden üret
-        regenQuestionImages.push({ index: idx, prompt: q.image_prompt });
+        const qStili = q.question_image_stili || DEFAULT_STIL;
+        const qSuffix = GORSEL_STILLERI[qStili]?.promptAppend || "";
+        regenQuestionImages.push({ index: idx, prompt: (q.image_prompt || "") + qSuffix });
       }
-      
+
       if (edit.custom_fact_image) {
         const decoded = base64ToBuffer(edit.custom_fact_image);
         if (decoded) {
@@ -484,7 +503,9 @@ async function main() {
           }
         }
       } else if (edit.regen_fact_image) {
-        regenFactImages.push({ index: idx, prompt: q.fun_fact_image_prompt });
+        const fStili = q.fact_image_stili || DEFAULT_STIL;
+        const fSuffix = GORSEL_STILLERI[fStili]?.promptAppend || "";
+        regenFactImages.push({ index: idx, prompt: (q.fun_fact_image_prompt || "") + fSuffix });
       }
     }
     

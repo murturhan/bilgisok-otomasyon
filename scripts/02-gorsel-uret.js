@@ -1,4 +1,4 @@
-// REV 003/07JUN26 - GECİCİ: Shorts format girerse hata firlat
+// REV 004/20JUN26 - gorsel stili FLUX prompt'a uygula (per-slot, partialRegen)
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -21,6 +21,7 @@ import {
 } from "./lib/google.js";
 import { fluxRotationCagri } from "./lib/cloudflare.js";
 import { telegram } from "./lib/telegram.js";
+import { GORSEL_STILLERI, DEFAULT_STIL } from "./lib/gorsel-stilleri.js";
 
 const {
   JOB_ID,
@@ -342,19 +343,35 @@ async function partialRegenMain() {
     const isWyr = q.question_type === "would_you_rather";
     if (isWyr) {
       if (q.flux_visible_image !== false && !q.uploaded_visible_url) {
-        const prompt = q.visible_option?.image_prompt;
-        if (prompt) fluxSlots.push({ questionIdx: i, slotType: "visible", prompt, gorselNum: 2 * i + 1 });
+        const basePrompt = q.visible_option?.image_prompt;
+        if (basePrompt) {
+          const stili = q.visible_option?.image_stili || DEFAULT_STIL;
+          const suffix = GORSEL_STILLERI[stili]?.promptAppend || "";
+          fluxSlots.push({ questionIdx: i, slotType: "visible", prompt: basePrompt + suffix, gorselNum: 2 * i + 1 });
+        }
       }
       if (q.flux_surprise_image !== false && !q.uploaded_surprise_url) {
-        const prompt = q.surprise_option?.surprise_image_prompt;
-        if (prompt) fluxSlots.push({ questionIdx: i, slotType: "surprise", prompt, gorselNum: 2 * i + 2 });
+        const basePrompt = q.surprise_option?.surprise_image_prompt;
+        if (basePrompt) {
+          const stili = q.surprise_option?.surprise_image_stili || DEFAULT_STIL;
+          const suffix = GORSEL_STILLERI[stili]?.promptAppend || "";
+          fluxSlots.push({ questionIdx: i, slotType: "surprise", prompt: basePrompt + suffix, gorselNum: 2 * i + 2 });
+        }
       }
     } else {
       if (q.flux_image !== false && !q.uploaded_image_url) {
-        if (q.image_prompt) fluxSlots.push({ questionIdx: i, slotType: "question", prompt: q.image_prompt, gorselNum: 2 * i + 1 });
+        if (q.image_prompt) {
+          const stili = q.question_image_stili || DEFAULT_STIL;
+          const suffix = GORSEL_STILLERI[stili]?.promptAppend || "";
+          fluxSlots.push({ questionIdx: i, slotType: "question", prompt: q.image_prompt + suffix, gorselNum: 2 * i + 1 });
+        }
       }
       if (q.flux_fact_image !== false && !q.uploaded_fact_image_url) {
-        if (q.fun_fact_image_prompt) fluxSlots.push({ questionIdx: i, slotType: "fact", prompt: q.fun_fact_image_prompt, gorselNum: 2 * i + 2 });
+        if (q.fun_fact_image_prompt) {
+          const stili = q.fact_image_stili || DEFAULT_STIL;
+          const suffix = GORSEL_STILLERI[stili]?.promptAppend || "";
+          fluxSlots.push({ questionIdx: i, slotType: "fact", prompt: q.fun_fact_image_prompt + suffix, gorselNum: 2 * i + 2 });
+        }
       }
     }
   });

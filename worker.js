@@ -1,4 +1,4 @@
-// REV 056/16JUN26 - fix: include_intro/outro dispatch string olarak gönder (422 düzeltme)
+// REV 057/20JUN26 - gorsel stil secimi (global /uret formu + per-slot onay sayfalari, 6 stil)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -20,6 +20,23 @@
 
 const REPO_OWNER = "murturhan";
 const REPO_NAME  = "bilgisok-otomasyon";
+
+// Görsel stil tanımları — gorsel-stilleri.js ile senkron tutulmalı
+const GORSEL_STILLERI_WORKER = [
+  { v: "pixar_3d",  l: "🎨 Pixar 3D" },
+  { v: "realistik", l: "📷 Realistik" },
+  { v: "anime",     l: "🌸 Anime" },
+  { v: "karikatur", l: "🖌️ Karikatür" },
+  { v: "suluboya",  l: "💧 Suluboya" },
+  { v: "karakalem", l: "✏️ Karakalem" },
+];
+
+function stilOptsServer(selected) {
+  const sel = selected || "pixar_3d";
+  return GORSEL_STILLERI_WORKER.map(s =>
+    `<option value="${s.v}"${sel === s.v ? " selected" : ""}>${s.l}</option>`
+  ).join("");
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -649,6 +666,8 @@ async function submit_(level, applyEdits){
           surprise_box_image_url:selectedSurpriseBoxes[i]||null,
           regen_visible_image:chk("q"+i+"_rv"),
           regen_surprise_image:chk("q"+i+"_rs"),
+          regen_visible_stili:val("q"+i+"_stili_v")||"pixar_3d",
+          regen_surprise_stili:val("q"+i+"_stili_s")||"pixar_3d",
           custom_visible_image:customImages["cv"+i]||null,
           custom_surprise_image:customImages["cs"+i]||null,
           custom_visible_video:customVideos["cvv"+i]||null,
@@ -668,6 +687,8 @@ async function submit_(level, applyEdits){
           fact_image_show_mode:chk("q"+i+"_fsurp")?"surpriz":(chk("q"+i+"_fflu")?"flu":"net"),
           regen_question_image:chk("q"+i+"_rq"),
           regen_fact_image:chk("q"+i+"_rf"),
+          regen_question_stili:val("q"+i+"_stili_q")||"pixar_3d",
+          regen_fact_stili:val("q"+i+"_stili_f")||"pixar_3d",
           custom_question_image:customImages["cq"+i]||null,
           custom_fact_image:customImages["cf"+i]||null,
           custom_question_video:customVideos["cqv"+i]||null,
@@ -724,7 +745,10 @@ function buildQuestionCard(q, i) {
     image_show_mode = "net", fact_image_show_mode = "net",
     uploaded_video_url = null, uploaded_image_url = null,
     uploaded_fact_video_url = null, uploaded_fact_image_url = null,
+    question_image_stili = "pixar_3d", fact_image_stili = "pixar_3d",
   } = q;
+  const qStiliOpts = GORSEL_STILLERI_WORKER.map(s => `<option value="${s.v}"${question_image_stili === s.v ? " selected" : ""}>${s.l}</option>`).join("");
+  const fStiliOpts = GORSEL_STILLERI_WORKER.map(s => `<option value="${s.v}"${fact_image_stili === s.v ? " selected" : ""}>${s.l}</option>`).join("");
 
   const flagInputs = (q.option_flags || ["","",""]).map((f, j) =>
     `<div class="emoji-cell"><button type="button" class="emoji-pick-btn" id="q${i}_f${j}_btn" onclick="editEmoji('q${i}_f${j}')">${esc(f)||"❓"}</button><input type="text" class="emoji-edit-inp" id="q${i}_f${j}" value="${esc(f)}" maxlength="8"><span class="emoji-hint">${["A","B","C"][j]}</span></div>`
@@ -787,6 +811,7 @@ function buildQuestionCard(q, i) {
         <input type="file" id="q${i}_cq_file" accept="image/*" onchange="handleFileChange(this,'q${i}_qimg','cq${i}',false)">
         <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_cqv_file">🎬 Video</label>
         <input type="file" id="q${i}_cqv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_qimg','cqv${i}',true)">
+        <select id="q${i}_stili_q" style="padding:3px 5px;font-size:.76em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:4px">${qStiliOpts}</select>
         <button type="button" class="btn-sm btn-regen" id="q${i}_rq_btn" onclick="toggleRegen('q${i}_rq','q${i}_rq_btn','cq${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rq" style="display:none">
       </div>
@@ -817,6 +842,7 @@ function buildQuestionCard(q, i) {
         <input type="file" id="q${i}_cf_file" accept="image/*" onchange="handleFileChange(this,'q${i}_fimg','cf${i}',false)">
         <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_cfv_file">🎬 Video</label>
         <input type="file" id="q${i}_cfv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_fimg','cfv${i}',true)">
+        <select id="q${i}_stili_f" style="padding:3px 5px;font-size:.76em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:4px">${fStiliOpts}</select>
         <button type="button" class="btn-sm btn-regen" id="q${i}_rf_btn" onclick="toggleRegen('q${i}_rf','q${i}_rf_btn','cf${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rf" style="display:none">
       </div>
@@ -834,8 +860,10 @@ function buildWyrCard(q, i) {
     surprise_box_urls: sbUrls = [],
     jess_reaction = "",
   } = q;
-  const { label: vLabel = "", image_url: vImgUrl = null, image_prompt: vPrompt = "" } = visible_option;
-  const { label: sLabel = "Sürpriz Kutu", surprise_outcome: sOutcome = "", surprise_image_url: sImgUrl = null, surprise_image_prompt: sPrompt = "", surprise_is_good: sGood = true } = surprise_option;
+  const { label: vLabel = "", image_url: vImgUrl = null, image_prompt: vPrompt = "", image_stili: vStili = "pixar_3d" } = visible_option;
+  const { label: sLabel = "Sürpriz Kutu", surprise_outcome: sOutcome = "", surprise_image_url: sImgUrl = null, surprise_image_prompt: sPrompt = "", surprise_is_good: sGood = true, surprise_image_stili: sStili = "pixar_3d" } = surprise_option;
+  const vStiliOpts = GORSEL_STILLERI_WORKER.map(s => `<option value="${s.v}"${vStili === s.v ? " selected" : ""}>${s.l}</option>`).join("");
+  const sStiliOpts = GORSEL_STILLERI_WORKER.map(s => `<option value="${s.v}"${sStili === s.v ? " selected" : ""}>${s.l}</option>`).join("");
 
   const vImgContent = vImgUrl ? `<img src="${esc(vImgUrl)}" alt="visible" style="max-height:86px;max-width:100%;border-radius:8px">` : `<div class="no-img">Görsel yok</div>`;
   const sImgContent = sImgUrl ? `<img src="${esc(sImgUrl)}" alt="surprise" style="max-height:86px;max-width:100%;border-radius:8px">` : `<div class="no-img">Görsel yok</div>`;
@@ -859,6 +887,7 @@ function buildWyrCard(q, i) {
         <input type="file" id="q${i}_cv_file" accept="image/*" onchange="handleFileChange(this,'q${i}_vimg','cv${i}',false)">
         <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_cvv_file">🎬 Video</label>
         <input type="file" id="q${i}_cvv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_vimg','cvv${i}',true)">
+        <select id="q${i}_stili_v" style="padding:3px 5px;font-size:.76em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:4px">${vStiliOpts}</select>
         <button type="button" class="btn-sm btn-regen" id="q${i}_rv_btn" onclick="toggleRegen('q${i}_rv','q${i}_rv_btn','cv${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rv" style="display:none">
       </div>
@@ -883,6 +912,7 @@ function buildWyrCard(q, i) {
         <input type="file" id="q${i}_cs_file" accept="image/*" onchange="handleFileChange(this,'q${i}_simg','cs${i}',false)">
         <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_csv_file">🎬 Video</label>
         <input type="file" id="q${i}_csv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_simg','csv${i}',true)">
+        <select id="q${i}_stili_s" style="padding:3px 5px;font-size:.76em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:4px">${sStiliOpts}</select>
         <button type="button" class="btn-sm btn-regen" id="q${i}_rs_btn" onclick="toggleRegen('q${i}_rs','q${i}_rs_btn','cs${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rs" style="display:none">
       </div>
@@ -1075,10 +1105,11 @@ async function handleContentApprovalPage(request, env, url) {
       `<option value="${k}"${qtype === k ? ' selected' : ''}>${k === 'multiple_choice' ? 'Çoktan Seçmeli' : 'Hangisini Tercih Edersin'}</option>`
     ).join('');
 
-  const imgSlotHtml = (i, slotKey, slotLabel, prompt, size, showMode, fluxChecked = true) => {
+  const imgSlotHtml = (i, slotKey, slotLabel, prompt, size, showMode, fluxChecked = true, currentStil = 'pixar_3d') => {
     return `<div class="img-slot"><div class="img-slot-title">🖼 ${esc(slotLabel)}${size ? `<span style="font-size:.72em;color:#6b7280;font-weight:400;margin-left:6px">${esc(size)}</span>` : ''}</div>` +
     `<label class="lbl">Görsel Prompt (FLUX için)</label>` +
     `<textarea id="q${i}_p_${slotKey}">${esc(prompt || '')}</textarea>` +
+    `<div class="stil-row" style="display:flex;align-items:center;gap:6px;margin:5px 0"><label style="font-size:.74em;color:#9ca3af;flex-shrink:0">🎨 Stil:</label><select id="q${i}_s_${slotKey}" style="flex:1;padding:3px 6px;font-size:.8em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:5px">${stilOptsServer(currentStil)}</select></div>` +
     `<div class="flux-row"><label><input type="checkbox" id="q${i}_flux_${slotKey}"${fluxChecked ? ' checked' : ''} style="accent-color:#f59e0b"> 🎨 FLUX ile üret</label></div>` +
     `<div class="preview-box" id="q${i}_prev_${slotKey}"><span style="color:#6b7280">Önizleme yok</span></div>` +
     `<div class="upload-row">` +
@@ -1105,8 +1136,8 @@ async function handleContentApprovalPage(request, env, url) {
       `<input type="hidden" id="q${i}_ca" value="${q.correct_answer || 0}">` +
       `<label class="lbl">Fun Fact</label>` +
       `<textarea id="q${i}_ff">${esc(q.fun_fact || '')}</textarea>` +
-      imgSlotHtml(i, 'image', 'Soru Görseli', q.image_prompt, '1920x1080', q.show_image === false ? 'surpriz' : (q.image_show_mode || 'net'), q.flux_image !== false) +
-      imgSlotHtml(i, 'fact_image', 'Fact Görseli', q.fun_fact_image_prompt, '1920x1080', q.fact_image_show_mode || 'net', q.flux_fact_image !== false);
+      imgSlotHtml(i, 'image', 'Soru Görseli', q.image_prompt, '1920x1080', q.show_image === false ? 'surpriz' : (q.image_show_mode || 'net'), q.flux_image !== false, q.question_image_stili || 'pixar_3d') +
+      imgSlotHtml(i, 'fact_image', 'Fact Görseli', q.fun_fact_image_prompt, '1920x1080', q.fact_image_show_mode || 'net', q.flux_fact_image !== false, q.fact_image_stili || 'pixar_3d');
   };
 
   const wyrCardHtml = (q, i) => {
@@ -1115,12 +1146,12 @@ async function handleContentApprovalPage(request, env, url) {
     return `<div class="row2">` +
       `<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>` +
       `<label class="lbl">Etiket</label><input type="text" id="q${i}_vl" value="${esc(vis.label || '')}" placeholder="Görünür seçenek">` +
-      imgSlotHtml(i, 'visible_image', 'Görünür Görsel', vis.image_prompt, '1920x1080', vis.show_mode || 'net', q.flux_visible_image !== false) + `</div>` +
+      imgSlotHtml(i, 'visible_image', 'Görünür Görsel', vis.image_prompt, '1920x1080', vis.show_mode || 'net', q.flux_visible_image !== false, vis.image_stili || 'pixar_3d') + `</div>` +
       `<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>` +
       `<label class="lbl">Kapalı etiket</label><input type="text" id="q${i}_sl" value="${esc(sur.label || 'Surprise Box')}">` +
       `<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q${i}_so" value="${esc(sur.surprise_outcome || '')}">` +
       `<label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:.8em"><input type="checkbox" id="q${i}_sg"${sur.surprise_is_good !== false ? ' checked' : ''} style="accent-color:#10b981"> İyi sürpriz</label>` +
-      imgSlotHtml(i, 'surprise_image', 'Sürpriz Reveal Görseli', sur.surprise_image_prompt, '1920x1080', sur.show_mode || 'net', q.flux_surprise_image !== false) + `</div></div>` +
+      imgSlotHtml(i, 'surprise_image', 'Sürpriz Reveal Görseli', sur.surprise_image_prompt, '1920x1080', sur.show_mode || 'net', q.flux_surprise_image !== false, sur.surprise_image_stili || 'pixar_3d') + `</div></div>` +
       `<label class="lbl">Jess Reaksiyon</label><textarea id="q${i}_jr">${esc(q.jess_reaction || '')}</textarea>`;
   };
 
@@ -1266,6 +1297,8 @@ const uploadedUrls = {}; // key: "i_slot" → url
 const s1VideoUrls = {}; // key: "i_slot" → video url (prob6 fix — ayri track)
 const S1_CARD_BG=['rgba(255,248,225,0.07)','rgba(232,245,233,0.07)','rgba(252,228,236,0.07)','rgba(225,245,254,0.07)','rgba(255,243,224,0.07)'];
 const S1_CARD_BORDER=['#FFF8E1','#E8F5E9','#FCE4EC','#E1F5FE','#FFF3E0'];
+const STIL_OPTS=${JSON.stringify(GORSEL_STILLERI_WORKER)};
+function stilOptsHtml(sel){sel=sel||'pixar_3d';return STIL_OPTS.map(s=>'<option value="'+s.v+'"'+(sel===s.v?' selected':'')+'>'+s.l+'</option>').join('');}
 
 function esc1(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function val(id){const e=document.getElementById(id);return e?e.value:'';}
@@ -1304,8 +1337,8 @@ function buildMcFields(q,i){
     +'<input type="hidden" id="q'+i+'_ca" value="'+(q.correct_answer||0)+'">'
     +'<label class="lbl">Fun Fact</label>'
     +'<textarea id="q'+i+'_ff">'+esc1(q.fun_fact)+'</textarea>'
-    +buildImgSlot(i,'image','Soru Görseli',q.image_prompt,'1920x1080',q.image_show_mode||(q.show_image===false?'surpriz':'net'),q.flux_image!==false)
-    +buildImgSlot(i,'fact_image','Fact Görseli',q.fun_fact_image_prompt,'1920x1080',q.fact_image_show_mode||'net',q.flux_fact_image!==false);
+    +buildImgSlot(i,'image','Soru Görseli',q.image_prompt,'1920x1080',q.image_show_mode||(q.show_image===false?'surpriz':'net'),q.flux_image!==false,q.question_image_stili||'pixar_3d')
+    +buildImgSlot(i,'fact_image','Fact Görseli',q.fun_fact_image_prompt,'1920x1080',q.fact_image_show_mode||'net',q.flux_fact_image!==false,q.fact_image_stili||'pixar_3d');
 }
 
 function buildWyrFields(q,i){
@@ -1314,17 +1347,18 @@ function buildWyrFields(q,i){
   return '<div class="row2">'
     +'<div class="wyr-side"><div class="section-title">✅ Görünür Seçenek</div>'
     +'<label class="lbl">Etiket</label><input type="text" id="q'+i+'_vl" value="'+esc1(vis.label||'')+'" placeholder="Görünür seçenek">'
-    +buildImgSlot(i,'visible_image','Görünür Görsel',vis.image_prompt,'1920x1080',vis.show_mode||'net',q.flux_visible_image!==false)+'</div>'
+    +buildImgSlot(i,'visible_image','Görünür Görsel',vis.image_prompt,'1920x1080',vis.show_mode||'net',q.flux_visible_image!==false,vis.image_stili||'pixar_3d')+'</div>'
     +'<div class="wyr-side"><div class="section-title">🎁 Sürpriz Seçenek</div>'
     +'<label class="lbl">Kapalı etiket</label><input type="text" id="q'+i+'_sl" value="'+esc1(sur.label||'Surprise Box')+'">'
     +'<label class="lbl">Açılınca ne çıkıyor?</label><input type="text" id="q'+i+'_so" value="'+esc1(sur.surprise_outcome||'')+'">'
     +'<label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:.8em"><input type="checkbox" id="q'+i+'_sg"'+(sur.surprise_is_good!==false?' checked':'')+' style="accent-color:#10b981"> İyi sürpriz</label>'
-    +buildImgSlot(i,'surprise_image','Sürpriz Reveal Görseli',sur.surprise_image_prompt,'1920x1080',sur.show_mode||'net',q.flux_surprise_image!==false)+'</div></div>'
+    +buildImgSlot(i,'surprise_image','Sürpriz Reveal Görseli',sur.surprise_image_prompt,'1920x1080',sur.show_mode||'net',q.flux_surprise_image!==false,sur.surprise_image_stili||'pixar_3d')+'</div></div>'
     +'<label class="lbl">Jess Reaksiyon</label><textarea id="q'+i+'_jr">'+esc1(q.jess_reaction||'')+'</textarea>';
 }
 
-function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode,fluxChecked){
+function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode,fluxChecked,currentStil){
   if(fluxChecked===undefined)fluxChecked=true;
+  if(!currentStil)currentStil='pixar_3d';
   const uploadKey=i+'_'+slotKey;
   const previewHtml=uploadedUrls[uploadKey]?'<img src="'+uploadedUrls[uploadKey]+'" style="max-height:80px;border-radius:5px">':'<span>Onizleme yok</span>';
   const sizeHtml=size?'<span style="font-size:.72em;color:#6b7280;font-weight:400;margin-left:6px">'+esc1(size)+'</span>':'';
@@ -1336,6 +1370,7 @@ function buildImgSlot(i,slotKey,slotLabel,prompt,size,showMode,fluxChecked){
   return '<div class="img-slot"><div class="img-slot-title">Gorsel: '+esc1(slotLabel)+sizeHtml+'</div>'+
     '<label class="lbl">Gorsel Prompt (FLUX icin)</label>'
     +'<textarea id="q'+i+'_p_'+slotKey+'">'+esc1(prompt||'')+'</textarea>'
+    +'<div class="stil-row" style="display:flex;align-items:center;gap:6px;margin:5px 0"><label style="font-size:.74em;color:#9ca3af;flex-shrink:0">Stil:</label><select id="q'+i+'_s_'+slotKey+'" style="flex:1;padding:3px 6px;font-size:.8em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:5px">'+stilOptsHtml(currentStil)+'</select></div>'
     +'<div class="flux-row"><label><input type="checkbox" id="q'+i+'_flux_'+slotKey+'"'+(fluxChecked?' checked':'')+' style="accent-color:#f59e0b"> FLUX ile uret</label></div>'
     +'<div class="preview-box" id="q'+i+'_prev_'+slotKey+'">'+previewHtml+'</div>'
     +'<div class="upload-row">'
@@ -1524,8 +1559,8 @@ function collectSorular(){
         ...q,
         question_type:'would_you_rather',
         question_text:'Pick One!',
-        visible_option:{...(q.visible_option||{}),label:val('q'+i+'_vl'),image_prompt:val('q'+i+'_p_visible_image'),show_mode:visMode},
-        surprise_option:{...(q.surprise_option||{}),label:val('q'+i+'_sl'),surprise_outcome:val('q'+i+'_so'),surprise_image_prompt:val('q'+i+'_p_surprise_image'),surprise_is_good:chk('q'+i+'_sg'),show_mode:surMode},
+        visible_option:{...(q.visible_option||{}),label:val('q'+i+'_vl'),image_prompt:val('q'+i+'_p_visible_image'),image_stili:val('q'+i+'_s_visible_image')||'pixar_3d',show_mode:visMode},
+        surprise_option:{...(q.surprise_option||{}),label:val('q'+i+'_sl'),surprise_outcome:val('q'+i+'_so'),surprise_image_prompt:val('q'+i+'_p_surprise_image'),surprise_image_stili:val('q'+i+'_s_surprise_image')||'pixar_3d',surprise_is_good:chk('q'+i+'_sg'),show_mode:surMode},
         jess_reaction:val('q'+i+'_jr'),
         flux_visible_image:chk('q'+i+'_flux_visible_image'),
         flux_surprise_image:chk('q'+i+'_flux_surprise_image'),
@@ -1552,6 +1587,8 @@ function collectSorular(){
         option_flags:[val('q'+i+'_f0'),val('q'+i+'_f1'),val('q'+i+'_f2')],
         image_prompt:val('q'+i+'_p_image'),
         fun_fact_image_prompt:val('q'+i+'_p_fact_image'),
+        question_image_stili:val('q'+i+'_s_image')||'pixar_3d',
+        fact_image_stili:val('q'+i+'_s_fact_image')||'pixar_3d',
         image_show_mode:imgMode,
         fact_image_show_mode:factMode,
         show_image:imgMode!=='surpriz', // backward compat
@@ -1966,6 +2003,12 @@ textarea{min-height:80px}
   </select>
 </div>
 <div class="card">
+  <label class="lbl">Görsel Stili</label>
+  <select id="gorsel_stili">
+    ${stilOptsServer("pixar_3d")}
+  </select>
+</div>
+<div class="card">
   <label class="lbl">Sahne Seçenekleri</label>
   <label class="chk-row"><input type="checkbox" id="include_intro" checked> 🎬 İntro sahnesi olsun</label>
   <label class="chk-row"><input type="checkbox" id="include_outro" checked> 🏆 Outro sahnesi olsun</label>
@@ -1984,6 +2027,7 @@ async function submitForm(){
   var mc=parseInt(document.getElementById('mc_count').value)||0;
   var wyr=parseInt(document.getElementById('wyr_count').value)||0;
   var dil=document.getElementById('dil').value;
+  var gorsel_stili=document.getElementById('gorsel_stili').value;
   var include_intro=document.getElementById('include_intro').checked;
   var include_outro=document.getElementById('include_outro').checked;
   var st=document.getElementById('status');
@@ -1994,7 +2038,7 @@ async function submitForm(){
   st.style.display='block';st.className='';st.textContent='⏳ Gönderiliyor...';
   try{
     var r=await fetch('/uret-form-submit',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({konu,mc_count:mc,wyr_count:wyr,n_soru:mc+wyr,dil,chat_id:CHAT_ID,include_intro,include_outro})});
+      body:JSON.stringify({konu,mc_count:mc,wyr_count:wyr,n_soru:mc+wyr,dil,gorsel_stili,chat_id:CHAT_ID,include_intro,include_outro})});
     var d=await r.json();
     if(d.ok){
       st.className='ok';
@@ -2018,7 +2062,7 @@ async function submitForm(){
 async function handleUretFormSubmit(request, env, ctx) {
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
-  const { konu, mc_count, wyr_count, n_soru, dil, chat_id, include_intro, include_outro } = body;
+  const { konu, mc_count, wyr_count, n_soru, dil, gorsel_stili, chat_id, include_intro, include_outro } = body;
   if (!konu || !chat_id) return json({ ok: false, error: "konu ve chat_id zorunlu" }, 400);
 
   const now = new Date();
@@ -2065,6 +2109,7 @@ async function handleUretFormSubmit(request, env, ctx) {
             dil:            dil || "English",
             include_intro:  (include_intro !== false) ? "true" : "false",
             include_outro:  (include_outro !== false) ? "true" : "false",
+            gorsel_stili:   gorsel_stili || "pixar_3d",
           },
         }),
       }
@@ -2084,7 +2129,7 @@ async function handleUretFormSubmit(request, env, ctx) {
 
   if (dispatchStatus === 204) {
     ctx.waitUntil(telegramMesajAt(String(chat_id),
-      `Icerik uretiliyor!\n\nKonu: ${konu}\nSoru: ${totalN} (MC:${mcN} WYR:${wyrN})\nDil: ${dil || "English"}\n\nJob ID: ${jobId}\n\nHazir olunca link gelecek...`, env));
+      `Icerik uretiliyor!\n\nKonu: ${konu}\nSoru: ${totalN} (MC:${mcN} WYR:${wyrN})\nDil: ${dil || "English"}\nStil: ${gorsel_stili || "pixar_3d"}\n\nJob ID: ${jobId}\n\nHazir olunca link gelecek...`, env));
     return json({ ok: true, job_id: jobId });
   } else {
     ctx.waitUntil(telegramMesajAt(String(chat_id),
