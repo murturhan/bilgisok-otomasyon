@@ -1,4 +1,4 @@
-// REV 059/20JUN26 - onay sayfasindan blur/surpriz kutu checkbox kaldirildi, collectSorular hardcode
+// REV 060/21JUN26 - _renderBayrak onerror escape duzeltildi (data-dn pattern)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -575,7 +575,7 @@ function _renderBayrak(){
     var code=b[0],name=b[1],name_en=b[2].toLowerCase();
     var url=_bayrakUrl(code);
     var emoji=_bayrakEmoji(code);
-    h+='<button type="button" class="e-btn" title="'+name+' ('+b[2]+')" data-code="'+code+'" data-name="'+name.toLowerCase()+'" data-name_en="'+name_en+'" data-emoji="'+emoji+'" data-url="'+url+'" onclick="_pickBayrak(this)"><img src="'+url+'" loading="lazy" style="width:32px;height:32px;object-fit:contain" onerror="this.parentNode.style.display=\'none\'"></button>';
+    h+='<button type="button" class="e-btn" title="'+name+' ('+b[2]+')" data-code="'+code+'" data-name="'+name.toLowerCase()+'" data-name_en="'+name_en+'" data-emoji="'+emoji+'" data-url="'+url+'" onclick="_pickBayrak(this)"><img src="'+url+'" loading="lazy" style="width:32px;height:32px;object-fit:contain" data-dn="none" onerror="this.parentNode.style.display=this.dataset.dn"></button>';
   });
   h+='</div>';
   c.innerHTML=h;
