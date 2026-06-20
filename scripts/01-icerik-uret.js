@@ -1,4 +1,4 @@
-// REV 014/20JUN26 - gorsel_stili per-slot (6 stil, FLUX prompt append)
+// REV 015/20JUN26 - gemini prompt'tan stil ve jess/fox referanslarini temizle
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -48,6 +48,17 @@ const GORSEL_STILI_ENV = process.env.GORSEL_STILI || DEFAULT_STIL;
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function cleanPrompt(p) {
+  if (!p) return "";
+  // Remove Jess/fox character references first (before style cleanup)
+  p = p.replace(/jess\s*(the\s*)?fox|jess\s*karakteri?|fox\s*character|fox\s*mascot|the\s*fox\s*mascot|cartoon\s+fox|a\s+fox\s+wearing|a\s+fox\s+holding|a\s+fox\s+presenting|fox\s+holding|fox\s+presenting/gi, "");
+  // Remove empty parentheses left after character removal
+  p = p.replace(/\(\s*\)/g, "");
+  // Remove style keywords — style is appended separately via gorsel-stilleri.js
+  p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic/gi, "");
+  return p.replace(/,\s*,+/g, ",").replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
 }
 
 function wyrGeminiPrompt(konu, QUESTION_COUNT, FORMAT) {
@@ -105,6 +116,9 @@ CRITICAL:
 - All content kid-safe (ages 4-12)
 - question_text MUST be exactly "Pick One!" — do not change it
 - reveal_audio_text = jess_reaction as natural speech
+- image_prompt and surprise_image_prompt MUST describe ONLY the option/outcome subject. NO style keywords ("Pixar 3D", "cartoon style", "photorealistic", "anime style", "watercolor", "pencil sketch") — style is applied at render time. NO character/fox/Jess references.
+- IMPORTANT: Image prompts should describe ONLY the scene content (subjects, objects, action, environment, colors). DO NOT include any style keywords like "Pixar 3D", "cartoon style", "photorealistic", "anime style", "watercolor", "pencil sketch". Style will be applied separately at render time.
+- IMPORTANT — Image prompt rules: DO NOT include any characters, mascots, foxes, or animals UNLESS the question is specifically about that animal. DO NOT mention "Jess", "Jess the Fox", "fox character", "mascot", "cartoon character", or any character presenting/holding/showing things. Image should be the subject alone. BAD: "a fox presenting a gift box". GOOD: "a colorful gift box with ribbons, sparkles around it". The mascot will be added separately during rendering.
 `;
 }
 
@@ -318,6 +332,8 @@ CRITICAL:
   * TRUE — image is a visual *clue* (blurred during guess, revealed with confetti). Examples: cross-sections, silhouettes, partial views, mood scenes.
   * FALSE — image would obviously reveal the answer ("What is this?" with clear apple photo → false). Shows fancy "?" placeholder instead.
   * Default to FALSE when uncertain. Better hidden than spoiled.
+- IMPORTANT: Image prompts should describe ONLY the scene content (subjects, objects, action, environment, colors). DO NOT include any style keywords like "Pixar 3D", "cartoon style", "photorealistic", "anime style", "watercolor", "pencil sketch". Style will be applied separately at render time.
+- IMPORTANT — Image prompt rules: DO NOT include any characters, mascots, foxes, or animals UNLESS the question is specifically about that animal. DO NOT mention "Jess", "Jess the Fox", "fox character", "mascot", "cartoon character", or any character presenting/holding/showing things. Image should be the subject of the question alone, in its natural environment. BAD: "a fox wearing a chef hat holding a pizza". GOOD: "a delicious pepperoni pizza on a wooden peel, vibrant colors, kitchen background". BAD: "Jess the Fox standing next to a planet". GOOD: "planet Saturn with its rings, cosmic background". The mascot will be added separately during rendering. Image prompts must NEVER contain characters unless the question is specifically about an animal species.
 
 ═══════════════════════════════════════════════════
 HIGHLIGHTED WORDS (for animated text on screen)
@@ -409,8 +425,8 @@ TOPIC EMOJIS (for intro screen emoji band)
           q.surprise_option.surprise_image_stili = GORSEL_STILI_ENV;
           // WYR için ai_gorsel_prompts prompt'larını yükle (stil suffix ile)
           const stilSuffix = GORSEL_STILLERI[GORSEL_STILI_ENV]?.promptAppend || "";
-          const vp = (q.visible_option.image_prompt || `Pixar-style image of ${q.visible_option.label}, kid-friendly`) + stilSuffix;
-          const sp = (q.surprise_option.surprise_image_prompt || `Pixar-style image of ${q.surprise_option.surprise_outcome}, kid-friendly`) + stilSuffix;
+          const vp = cleanPrompt(q.visible_option.image_prompt || `image of ${q.visible_option.label}, kid-friendly, vibrant colors`) + stilSuffix;
+          const sp = cleanPrompt(q.surprise_option.surprise_image_prompt || `image of ${q.surprise_option.surprise_outcome}, kid-friendly, vibrant colors`) + stilSuffix;
           json.ai_gorsel_prompts = json.ai_gorsel_prompts || [];
           json.ai_gorsel_prompts.push(vp);
           json.ai_gorsel_prompts.push(sp);
@@ -516,8 +532,8 @@ TOPIC EMOJIS (for intro screen emoji band)
         json.ai_gorsel_prompts = [];
         const stilSuffix = GORSEL_STILLERI[GORSEL_STILI_ENV]?.promptAppend || "";
         for (const q of json.questions) {
-          json.ai_gorsel_prompts.push((q.image_prompt || "") + stilSuffix);
-          json.ai_gorsel_prompts.push((q.fun_fact_image_prompt || "") + stilSuffix);
+          json.ai_gorsel_prompts.push(cleanPrompt(q.image_prompt || "") + stilSuffix);
+          json.ai_gorsel_prompts.push(cleanPrompt(q.fun_fact_image_prompt || "") + stilSuffix);
         }
       } else {
         // WYR: ai_gorsel_prompts already built in validation loop above

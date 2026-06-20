@@ -1,4 +1,4 @@
-// REV 004/20JUN26 - gorsel stili FLUX prompt'a uygula (per-slot, partialRegen)
+// REV 005/20JUN26 - FLUX prompt'tan eski stil ve jess/fox referanslarini temizle
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -22,6 +22,17 @@ import {
 import { fluxRotationCagri } from "./lib/cloudflare.js";
 import { telegram } from "./lib/telegram.js";
 import { GORSEL_STILLERI, DEFAULT_STIL } from "./lib/gorsel-stilleri.js";
+
+function cleanGorselPrompt(p) {
+  if (!p) return "";
+  // Remove Jess/fox character references first
+  p = p.replace(/jess\s*(the\s*)?fox|jess\s*karakteri?|fox\s*character|fox\s*mascot|the\s*fox\s*mascot|cartoon\s+fox|a\s+fox\s+wearing|a\s+fox\s+holding|a\s+fox\s+presenting|fox\s+holding|fox\s+presenting/gi, "");
+  // Remove empty parentheses left after character removal
+  p = p.replace(/\(\s*\)/g, "");
+  // Remove stale style keywords — correct style appended via gorsel-stilleri.js
+  p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic/gi, "");
+  return p.replace(/,\s*,+/g, ",").replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
+}
 
 const {
   JOB_ID,
@@ -133,7 +144,7 @@ async function main() {
     for (let i = 0; i < job.ai_gorsel_prompts.length; i++) {
       const oneBased = i + 1;
       if (!mevcutIndexler.has(oneBased) && !videoSlotlar.has(oneBased)) {
-        eksikPromptlar.push(job.ai_gorsel_prompts[i]);
+        eksikPromptlar.push(cleanGorselPrompt(job.ai_gorsel_prompts[i]));
         eksikOrijinalIndexler.push(i);
       }
     }
@@ -347,7 +358,7 @@ async function partialRegenMain() {
         if (basePrompt) {
           const stili = q.visible_option?.image_stili || DEFAULT_STIL;
           const suffix = GORSEL_STILLERI[stili]?.promptAppend || "";
-          fluxSlots.push({ questionIdx: i, slotType: "visible", prompt: basePrompt + suffix, gorselNum: 2 * i + 1 });
+          fluxSlots.push({ questionIdx: i, slotType: "visible", prompt: cleanGorselPrompt(basePrompt) + suffix, gorselNum: 2 * i + 1 });
         }
       }
       if (q.flux_surprise_image !== false && !q.uploaded_surprise_url) {
@@ -355,7 +366,7 @@ async function partialRegenMain() {
         if (basePrompt) {
           const stili = q.surprise_option?.surprise_image_stili || DEFAULT_STIL;
           const suffix = GORSEL_STILLERI[stili]?.promptAppend || "";
-          fluxSlots.push({ questionIdx: i, slotType: "surprise", prompt: basePrompt + suffix, gorselNum: 2 * i + 2 });
+          fluxSlots.push({ questionIdx: i, slotType: "surprise", prompt: cleanGorselPrompt(basePrompt) + suffix, gorselNum: 2 * i + 2 });
         }
       }
     } else {
@@ -363,14 +374,14 @@ async function partialRegenMain() {
         if (q.image_prompt) {
           const stili = q.question_image_stili || DEFAULT_STIL;
           const suffix = GORSEL_STILLERI[stili]?.promptAppend || "";
-          fluxSlots.push({ questionIdx: i, slotType: "question", prompt: q.image_prompt + suffix, gorselNum: 2 * i + 1 });
+          fluxSlots.push({ questionIdx: i, slotType: "question", prompt: cleanGorselPrompt(q.image_prompt) + suffix, gorselNum: 2 * i + 1 });
         }
       }
       if (q.flux_fact_image !== false && !q.uploaded_fact_image_url) {
         if (q.fun_fact_image_prompt) {
           const stili = q.fact_image_stili || DEFAULT_STIL;
           const suffix = GORSEL_STILLERI[stili]?.promptAppend || "";
-          fluxSlots.push({ questionIdx: i, slotType: "fact", prompt: q.fun_fact_image_prompt + suffix, gorselNum: 2 * i + 2 });
+          fluxSlots.push({ questionIdx: i, slotType: "fact", prompt: cleanGorselPrompt(q.fun_fact_image_prompt) + suffix, gorselNum: 2 * i + 2 });
         }
       }
     }
