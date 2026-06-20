@@ -1,8 +1,22 @@
-// REV 003/28MAY26 - Fluent Emoji ile değiştirildi, twemoji kaldırıldı
+// REV 004/20JUN26 - Bayrak emoji algılama eklendi (regional indicator → Twemoji CDN)
 import React from "react";
 import fluentMapRaw from "../data/fluent-emoji-map.json";
 
 const FLUENT_BASE = "https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/";
+const TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/";
+
+function isFlagEmoji(grapheme: string): boolean {
+  const cp = grapheme.codePointAt(0);
+  return cp !== undefined && cp >= 0x1f1e6 && cp <= 0x1f1ff;
+}
+
+function flagToTwemojiUrl(grapheme: string): string {
+  const parts: string[] = [];
+  for (const ch of grapheme) {
+    parts.push(ch.codePointAt(0)!.toString(16));
+  }
+  return TWEMOJI_BASE + parts.join("-") + ".png";
+}
 const fluentMap = fluentMapRaw as Record<string, { name: string; slug: string }>;
 
 interface FluentEmojiTextProps {
@@ -14,6 +28,7 @@ interface FluentEmojiTextProps {
 type ParsedPart =
   | { type: "custom"; code: string }
   | { type: "emoji"; char: string }
+  | { type: "flag"; char: string }
   | { type: "text"; text: string };
 
 function parseText(input: string): ParsedPart[] {
@@ -45,7 +60,10 @@ function parseText(input: string): ParsedPart[] {
       ? Array.from((segmenter as any).segment(seg.value), (s: any) => s.segment)
       : Array.from(seg.value);
     for (const g of graphemes) {
-      if (fluentMap[g]) {
+      if (isFlagEmoji(g)) {
+        if (textBuf) { result.push({ type: "text", text: textBuf }); textBuf = ""; }
+        result.push({ type: "flag", char: g });
+      } else if (fluentMap[g]) {
         if (textBuf) { result.push({ type: "text", text: textBuf }); textBuf = ""; }
         result.push({ type: "emoji", char: g });
       } else {
@@ -74,6 +92,10 @@ export const FluentEmojiText: React.FC<FluentEmojiTextProps> = ({ text, style, c
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           );
+        }
+        if (part.type === "flag") {
+          const url = flagToTwemojiUrl(part.char);
+          return <img key={i} src={url} alt={part.char} style={IMG_STYLE} />;
         }
         if (part.type === "emoji") {
           const entry = fluentMap[part.char];
