@@ -1,4 +1,4 @@
-// REV 005/20JUN26 - FLUX prompt'tan eski stil ve jess/fox referanslarini temizle
+// REV 006/20JUN26 - cartoon/3d animation/stylized regex'e eklendi
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -30,7 +30,7 @@ function cleanGorselPrompt(p) {
   // Remove empty parentheses left after character removal
   p = p.replace(/\(\s*\)/g, "");
   // Remove stale style keywords — correct style appended via gorsel-stilleri.js
-  p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic/gi, "");
+  p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic|3d\s+animation|stylized|\bcartoon\b/gi, "");
   return p.replace(/,\s*,+/g, ",").replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
 }
 

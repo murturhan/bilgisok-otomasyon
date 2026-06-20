@@ -1,4 +1,4 @@
-// REV 058/20JUN26 - emoji picker bayrak tab (twemoji, 249 ulke)
+// REV 059/20JUN26 - onay sayfasindan blur/surpriz kutu checkbox kaldirildi, collectSorular hardcode
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -717,9 +717,9 @@ async function submit_(level, applyEdits){
           image_prompt:val("q"+i+"_ip"),
           fun_fact_image_prompt:val("q"+i+"_fp"),
           option_flags:[val("q"+i+"_f0"),val("q"+i+"_f1"),val("q"+i+"_f2")],
-          show_image:chk("q"+i+"_si"),
-          image_show_mode:chk("q"+i+"_surp")?"surpriz":(chk("q"+i+"_flu")?"flu":"net"),
-          fact_image_show_mode:chk("q"+i+"_fsurp")?"surpriz":(chk("q"+i+"_fflu")?"flu":"net"),
+          show_image:true,
+          image_show_mode:"net",
+          fact_image_show_mode:"net",
           regen_question_image:chk("q"+i+"_rq"),
           regen_fact_image:chk("q"+i+"_rf"),
           regen_question_stili:val("q"+i+"_stili_q")||"pixar_3d",
@@ -825,18 +825,6 @@ function buildQuestionCard(q, i) {
     <div>
       <div style="font-size:.72em;color:#6b7280;margin-bottom:4px">📸 Soru Görseli</div>
       <div class="img-box" id="q${i}_qimg">${qImgContent}</div>
-      <label style="display:flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer">
-        <input type="checkbox" id="q${i}_si" ${show_image?"checked":""} style="width:15px;height:15px;accent-color:#10b981;cursor:pointer">
-        <span style="font-size:.76em;color:#d1d5db">Görseli göster <span style="color:#6b7280">(blur/açık)</span></span>
-      </label>
-      <label style="display:flex;align-items:center;gap:5px;margin-top:3px;cursor:pointer">
-        <input type="checkbox" id="q${i}_flu" ${image_show_mode==="flu"?"checked":""} style="width:14px;height:14px;accent-color:#3b82f6;cursor:pointer">
-        <span style="font-size:.75em;color:#93c5fd">🌫️ Flu göster</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:5px;margin-top:2px;cursor:pointer">
-        <input type="checkbox" id="q${i}_surp" ${image_show_mode==="surpriz"?"checked":""} style="width:14px;height:14px;accent-color:#f59e0b;cursor:pointer">
-        <span style="font-size:.75em;color:#fcd34d">❓ Sürpriz kutu</span>
-      </label>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px">
       <label class="lbl" style="margin:0">Soru görseli prompt</label>
@@ -860,14 +848,6 @@ function buildQuestionCard(q, i) {
     <div>
       <div style="font-size:.72em;color:#6b7280;margin-bottom:4px">🌟 Fact Görseli</div>
       <div class="img-box" id="q${i}_fimg">${fImgContent}</div>
-      <label style="display:flex;align-items:center;gap:5px;margin-top:4px;cursor:pointer">
-        <input type="checkbox" id="q${i}_fflu" ${fact_image_show_mode==="flu"?"checked":""} style="width:14px;height:14px;accent-color:#3b82f6;cursor:pointer">
-        <span style="font-size:.75em;color:#93c5fd">🌫️ Flu göster</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:5px;margin-top:2px;cursor:pointer">
-        <input type="checkbox" id="q${i}_fsurp" ${fact_image_show_mode==="surpriz"?"checked":""} style="width:14px;height:14px;accent-color:#f59e0b;cursor:pointer">
-        <span style="font-size:.75em;color:#fcd34d">❓ Sürpriz kutu</span>
-      </label>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px">
       <label class="lbl" style="margin:0">Fact görseli prompt</label>

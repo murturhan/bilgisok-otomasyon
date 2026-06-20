@@ -1,4 +1,4 @@
-// REV 015/20JUN26 - gemini prompt'tan stil ve jess/fox referanslarini temizle
+// REV 016/20JUN26 - gemini prompt'tan cartoon/Pixar/3D stil sirintisi kaldirildi
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -57,13 +57,13 @@ function cleanPrompt(p) {
   // Remove empty parentheses left after character removal
   p = p.replace(/\(\s*\)/g, "");
   // Remove style keywords — style is appended separately via gorsel-stilleri.js
-  p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic/gi, "");
+  p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic|3d\s+animation|stylized|\bcartoon\b/gi, "");
   return p.replace(/,\s*,+/g, ",").replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
 }
 
 function wyrGeminiPrompt(konu, QUESTION_COUNT, FORMAT) {
   return `You are creating "Would You Rather?" questions for a kids YouTube quiz channel (ages 4-12).
-Host: Jess the Fox (cute Pixar-style fox)
+Host: Jess the Fox (cute friendly fox)
 
 TASK: Generate ${QUESTION_COUNT} "Would You Rather?" questions.
 
@@ -85,8 +85,8 @@ OUTPUT (valid JSON, no markdown):
   "thumbnail_title": "Would You Rather?",
   "thumbnail_obje_1": "Gift Box",
   "thumbnail_obje_2": "Question Mark",
-  "thumbnail_prompt": "Colorful cartoon split screen with question marks and gift boxes, vibrant Pixar style, no characters",
-  "background_prompt": "Colorful cartoon background with floating question marks and ribbons, soft blur, center empty, Pixar 3D style",
+  "thumbnail_prompt": "Colorful split screen with question marks and gift boxes, vibrant colors, no characters",
+  "background_prompt": "Colorful background with floating question marks and ribbons, soft blur, center empty, vibrant colors",
   "aciklama": "Play Would You Rather with Jess the Fox! ${QUESTION_COUNT} fun questions for kids. #WouldYouRather #KidsQuiz #JessTheFox #GeniMiniTests",
   "questions": [
     {
@@ -94,12 +94,12 @@ OUTPUT (valid JSON, no markdown):
       "question_text": "Pick One!",
       "visible_option": {
         "label": "Short label (1-5 words)",
-        "image_prompt": "Pixar-style image showing the visible option item"
+        "image_prompt": "Image showing the visible option item clearly (describe subject/scene, NO style words)"
       },
       "surprise_option": {
         "label": "Sürpriz Kutu",
         "surprise_outcome": "Short reveal label (1-6 words)",
-        "surprise_image_prompt": "Pixar-style image showing the surprise outcome",
+        "surprise_image_prompt": "Image showing the surprise outcome (describe what is revealed, NO style words)",
         "surprise_is_good": true
       },
       "jess_reaction": "What Jess says when revealing (excited for good, funny for bad)",
@@ -116,7 +116,7 @@ CRITICAL:
 - All content kid-safe (ages 4-12)
 - question_text MUST be exactly "Pick One!" — do not change it
 - reveal_audio_text = jess_reaction as natural speech
-- image_prompt and surprise_image_prompt MUST describe ONLY the option/outcome subject. NO style keywords ("Pixar 3D", "cartoon style", "photorealistic", "anime style", "watercolor", "pencil sketch") — style is applied at render time. NO character/fox/Jess references.
+- image_prompt and surprise_image_prompt MUST describe ONLY the option/outcome subject. CRITICAL: NEVER use style keywords. Forbidden words: cartoon, Pixar, 3D, animation, anime, watercolor, sketch, photorealistic, realistic, stylized. Style is applied at render time. NO character/fox/Jess references.
 - IMPORTANT: Image prompts should describe ONLY the scene content (subjects, objects, action, environment, colors). DO NOT include any style keywords like "Pixar 3D", "cartoon style", "photorealistic", "anime style", "watercolor", "pencil sketch". Style will be applied separately at render time.
 - IMPORTANT — Image prompt rules: DO NOT include any characters, mascots, foxes, or animals UNLESS the question is specifically about that animal. DO NOT mention "Jess", "Jess the Fox", "fox character", "mascot", "cartoon character", or any character presenting/holding/showing things. Image should be the subject alone. BAD: "a fox presenting a gift box". GOOD: "a colorful gift box with ribbons, sparkles around it". The mascot will be added separately during rendering.
 `;
@@ -134,7 +134,7 @@ async function icerikUret(konu, nSoruArg = null, isWyrArg = null) {
   const dilNote = effectiveDil !== "English" ? `\n- Language: Write ALL content in ${effectiveDil} (question_text, options, fun_fact, audio texts, baslik, aciklama). Keep field names in English.` : "";
   const prompt = effectiveIsWyr ? wyrGeminiPrompt(konu, effectiveCount, FORMAT) : `You are an expert content creator for "GeniMini Tests" - educational quiz YouTube channel for kids ages 4-12.
 
-Channel mascot: **Jess the Fox** - cute, friendly Pixar-style fox who hosts the quiz.
+Channel mascot: **Jess the Fox** - cute, friendly fox who hosts the quiz.
 
 TOPIC: "${konu}"
 FORMAT: ${FORMAT === "shorts" ? "YouTube Shorts (60-90 seconds, 5 quick questions)" : "Long video (10-12 minutes, 25 questions with mixed difficulty)"}
@@ -215,7 +215,8 @@ QUESTION OBJECT FORMAT
 
 Each question object MUST have ALL these fields:
 - **question_text**: Short text shown on screen — MAX 6 WORDS (e.g., "Which animal is this?")
-- **image_prompt**: FLUX prompt for question's image (Pixar-style, kid-friendly)
+- **image_prompt**: FLUX prompt for question's image — describe scene content ONLY (NO style words: cartoon, Pixar, 3D, anime, watercolor, realistic)
+- CRITICAL: image_prompt and fun_fact_image_prompt MUST NEVER contain ANY style adjectives. Forbidden words: cartoon, Pixar, 3D, animation, anime, watercolor, sketch, photorealistic, realistic, stylized. Just describe what the image shows (subject, action, environment, mood).
 - **options**: Array of 3 short answers (1-3 words each)
 - **correct_answer**: Index 0, 1, 2, or 3
 - **difficulty**: "easy", "medium", or "hard"
@@ -241,29 +242,29 @@ Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
 - Vibrant theme scenery only
 - NO ANIMALS, NO CHARACTERS, NO PEOPLE in the image
 - Right third should be empty for text overlay
-- 16:9, Pixar 3D style, NO TEXT
+- 16:9, NO TEXT, vibrant colors
 
 **background_prompt**: FLUX prompt for VIDEO BACKGROUND (will be used behind all UI in the video)
 - Empty scenic environment related to the topic
 - HEAVY blur / soft focus / depth of field (it's a BACKGROUND, must not distract)
-- Pixar 3D cartoon style with vibrant colors
+- Vibrant colors, kid-friendly atmosphere
 - NO characters, NO animals, NO people, NO faces
 - NO text, NO logos
 - Center area MUST be soft/empty (UI elements go there)
 - Edges can have subtle thematic decorative elements (e.g. for food: blurred utensils on edges; for space: distant stars)
 - Kid-friendly atmosphere
 - Examples:
-  * Food topic: "Cozy blurred cartoon kitchen interior, warm orange lighting, decorative pans hanging on edges, center empty wall, NO food in view"
+  * Food topic: "Cozy blurred kitchen interior, warm orange lighting, decorative pans on edges, center empty, NO food"
   * Ocean topic: "Underwater scene with blurred coral on edges, deep teal-blue gradient, light rays from above, center open water, NO sea creatures"
   * Space topic: "Cosmic galaxy with swirling purple nebula at edges, golden stars scattered, deep dark center, NO planets in center"
-  * Animals topic: "Stylized cartoon savanna at sunset with blurred acacia trees on edges, warm orange-purple sky, center empty grassland, NO animals"
+  * Animals topic: "Savanna at sunset with blurred acacia trees on edges, warm orange-purple sky, center open grassland, NO animals"
 
 ═══════════════════════════════════════════════════
 SAFETY (Made for Kids)
 ═══════════════════════════════════════════════════
 
 - NO scary content, violence, weapons
-- All Pixar/Disney 3D cartoon style, vibrant colors
+- All visuals vibrant, colorful, kid-friendly atmosphere
 - All content appropriate for ages 4-12
 
 ═══════════════════════════════════════════════════
@@ -289,8 +290,8 @@ JSON OUTPUT (must be valid JSON, no markdown):
     {
       "question_text": "Short on-screen text",
       "show_image": true,
-      "image_prompt": "Pixar-style image prompt for the QUESTION",
-      "fun_fact_image_prompt": "Pixar-style image prompt for the FUN FACT (different scene illustrating the fun fact - e.g. if fun_fact is 'Pizza invented in Naples 1889', show a chef in Naples 1889 cartoon style)",
+      "image_prompt": "image showing the question subject — describe what you see, NO style words",
+      "fun_fact_image_prompt": "image illustrating the fun fact (different scene — e.g. if fun_fact is 'Pizza invented in Naples 1889', show a chef in Naples 1889)",
       "options": ["A_short", "B_short", "C_short"],
       "option_flags": ["🇮🇹", "🇹🇷", "🇫🇷", "🇪🇸"],
       "correct_answer": 0,
@@ -310,8 +311,8 @@ CRITICAL:
 - Answers SHORT (1-3 words)
 - question_audio_text MUST include all 3 options spoken out loud
 - answer_audio_text MUST include fun_fact at the end
-- **fun_fact_image_prompt MUST illustrate the fun fact narrative** (different scene from question image - e.g. if fun fact is about Eiffel Tower being 330m tall, show a Pixar-style Eiffel Tower with measurement; if about pizza invented in Naples 1889, show a cartoon chef in old Naples kitchen)
-- fun_fact_image_prompt should be Pixar 3D style, NO TEXT, kid-friendly
+- **fun_fact_image_prompt MUST illustrate the fun fact narrative** (different scene from question image - e.g. if fun fact is about Eiffel Tower being 330m tall, show the Eiffel Tower with measurement; if about pizza invented in Naples 1889, show a chef in old Naples kitchen)
+- fun_fact_image_prompt should describe the scene content only, NO TEXT, NO style words
 - **option_flags**: ALWAYS include flag emojis array (4 items). Logic:
   * If options are COUNTRIES (e.g. "Italy", "France", "Japan", "Brazil"): use country flag emojis ["🇮🇹","🇫🇷","🇯🇵"]
   * If options relate to COUNTRY-ORIGIN (e.g. "Pizza" → Italy, "Sushi" → Japan, "Croissant" → France): use the related country flag
@@ -447,7 +448,7 @@ TOPIC EMOJIS (for intro screen emoji band)
         // fun_fact_image_prompt fallback - Gemini vermediyse, question image prompt + fun fact birleştir
         if (!q.fun_fact_image_prompt) {
           if (q.fun_fact) {
-            q.fun_fact_image_prompt = `Pixar 3D cartoon illustration: ${q.fun_fact}, kid-friendly, vibrant colors, NO TEXT`;
+            q.fun_fact_image_prompt = `${q.fun_fact} — illustrated scene, vibrant colors, NO TEXT`;
           } else {
             // Soru görselini reuse
             q.fun_fact_image_prompt = q.image_prompt;
@@ -516,7 +517,7 @@ TOPIC EMOJIS (for intro screen emoji band)
       console.log(`Thumbnail title: "${json.thumbnail_title}"`);
       
       if (!json.thumbnail_prompt) {
-        json.thumbnail_prompt = `Vibrant ${konu} themed background scenery, Pixar 3D style, NO CHARACTERS, NO ANIMALS, NO PEOPLE, kid-friendly, bright colors, NO TEXT`;
+        json.thumbnail_prompt = `Vibrant ${konu} themed background scenery, NO CHARACTERS, NO ANIMALS, NO PEOPLE, bright colors, NO TEXT`;
       }
       
       // background_prompt validation - yoksa konu'dan üret
