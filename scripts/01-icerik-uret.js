@@ -1,4 +1,4 @@
-// REV 018/21JUN26 - thumbnail_optionlar (2-3 obje dizisi) + soru formatlı baslik + Quiz Blitz layout
+// REV 019/21JUN26 - thumbnail_question + thumbnail_options_visual (bayrak/flux per-seçenek) + markdown temizlik
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -20,6 +20,7 @@ import {
 } from "./lib/google.js";
 import { telegram } from "./lib/telegram.js";
 import { GORSEL_STILLERI, DEFAULT_STIL } from "./lib/gorsel-stilleri.js";
+import { BAYRAKLAR } from "./lib/bayraklar.js";
 
 const {
   GEMINI_API_KEY,
@@ -83,7 +84,12 @@ OUTPUT (valid JSON, no markdown):
   "topic_emojis": ["🤔","🎁","✨","🎯","🎉"],
   "baslik": "Would You Rather? Kids Edition with Jess the Fox! 🤔",
   "thumbnail_title": "Would You Rather?",
+  "thumbnail_question": "Would you rather choose this OR the mystery box?",
   "thumbnail_optionlar": ["Gift Box", "Mystery Box"],
+  "thumbnail_options_visual": [
+    {"label": "Gift Box", "type": "flux", "prompt": "colorful gift box with ribbons and bow, isolated on plain white background"},
+    {"label": "Mystery Box", "type": "flux", "prompt": "closed mystery box with question mark symbol, isolated on plain white background"}
+  ],
   "thumbnail_prompt": "Colorful abstract background with question marks and ribbons, vibrant colors, no characters",
   "background_prompt": "Colorful background with floating question marks and ribbons, soft blur, center empty, vibrant colors",
   "aciklama": "Play Would You Rather with Jess the Fox! ${QUESTION_COUNT} fun questions for kids. #WouldYouRather #KidsQuiz #JessTheFox #GeniMiniTests",
@@ -235,7 +241,19 @@ Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
 
 **thumbnail_title**: QUESTION format — short, punchy, curiosity-gap. Examples: "Whose Bite Is Strongest?", "Which Is Faster?", "The Most Dangerous?" Maximum 5 words. Must end with ? or !
 
-**thumbnail_optionlar**: Array of 2 OR 3 iconic objects from the topic. Each gets its own FLUX image shown side-by-side (e.g. ["Shark", "Alligator"] or ["Lion", "Tiger", "Bear"]). Objects must be visually distinct and clearly recognizable as isolated subjects.
+**thumbnail_question**: Generalized version of the FIRST question (hide specific named object, keep it generic):
+- "Where did pizza first come from?" → "Where did this food come from?"
+- "What color is a strawberry?" → "What color is this fruit?"
+- "Who painted the Mona Lisa?" → "Who painted this artwork?"
+- "What animal has 8 arms?" → KEEP AS-IS (already generic)
+- If already generic, keep unchanged. NEVER include markdown **, just plain text.
+
+**thumbnail_optionlar**: Array of 2 OR 3 iconic objects for the thumbnail (e.g. ["Shark", "Alligator"]).
+
+**thumbnail_options_visual**: Array matching the FIRST QUESTION'S OPTIONS (2-3 items). For each option:
+- If option is a COUNTRY NAME → use type "flag" with ISO 3166-1 alpha-2 code. Example: {"label": "Italy", "type": "flag", "code": "IT"}
+- Otherwise → use type "flux" with a plain white background prompt. Example: {"label": "Octopus", "type": "flux", "prompt": "octopus isolated on plain white background, vivid colors, no text"}
+- ALWAYS 2 or 3 items matching the first question's options array
 
 **thumbnail_prompt**: FLUX prompt for thumbnail background (NO CHARACTERS, just theme scenery)
 - Vibrant theme scenery only
@@ -280,7 +298,13 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
   "baslik": "Long YouTube title with emoji",
   "thumbnail_title": "Which Ocean Animal?",
+  "thumbnail_question": "Which animal lives in the ocean?",
   "thumbnail_optionlar": ["Octopus", "Starfish"],
+  "thumbnail_options_visual": [
+    {"label": "Octopus", "type": "flux", "prompt": "octopus isolated on plain white background, vivid colors"},
+    {"label": "Starfish", "type": "flux", "prompt": "starfish isolated on plain white background, vivid colors"},
+    {"label": "Jellyfish", "type": "flux", "prompt": "jellyfish isolated on plain white background, vivid colors"}
+  ],
   "thumbnail_prompt": "Underwater scenery, vibrant ocean background, NO animals, NO characters",
   "background_prompt": "FLUX prompt - blurred topic-themed background, depth of field, center empty for UI",
   "aciklama": "200 word description with hashtags",
@@ -522,6 +546,30 @@ TOPIC EMOJIS (for intro screen emoji band)
       }
       console.log(`Thumbnail title: "${json.thumbnail_title}"`);
 
+      // thumbnail_question validate + markdown temizle
+      if (!json.thumbnail_question) {
+        const firstMC = json.questions?.find(q => !q.question_type || q.question_type === "multiple_choice");
+        json.thumbnail_question = firstMC?.question_text || json.thumbnail_title || "";
+      }
+      json.thumbnail_question = String(json.thumbnail_question)
+        .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1")
+        .replace(/__([^_]+)__/g, "$1").trim();
+
+      // thumbnail_options_visual validate/fallback
+      if (!Array.isArray(json.thumbnail_options_visual) || json.thumbnail_options_visual.length < 2) {
+        const firstMC = json.questions?.find(q => !q.question_type || q.question_type === "multiple_choice");
+        const opts = (firstMC?.options || []).slice(0, 3);
+        json.thumbnail_options_visual = opts.map((opt) => {
+          const bayrak = BAYRAKLAR.find(
+            b => b.name_en.toLowerCase() === opt.toLowerCase() || b.name.toLowerCase() === opt.toLowerCase()
+          );
+          if (bayrak) return { label: opt, type: "flag", code: bayrak.code };
+          return { label: opt, type: "flux", prompt: `${opt} isolated on plain white background, vivid colors, no text` };
+        });
+      }
+      console.log(`Thumbnail question: "${json.thumbnail_question}"`);
+      console.log(`Thumbnail options visual: ${JSON.stringify(json.thumbnail_options_visual)}`);
+
       // thumbnail_optionlar validate
       if (!Array.isArray(json.thumbnail_optionlar) || json.thumbnail_optionlar.length < 2) {
         // Fallback: obje_1/obje_2 veya konu'dan üret
@@ -676,6 +724,8 @@ async function main() {
       is_test_mode: IS_TEST_MODE,
       baslik: icerik.baslik,
       thumbnail_baslik: icerik.thumbnail_title || "",
+      thumbnail_question: icerik.thumbnail_question || "",
+      thumbnail_options_visual: JSON.stringify(icerik.thumbnail_options_visual || []),
       thumbnail_optionlar: JSON.stringify(icerik.thumbnail_optionlar || []),
       thumbnail_obje_1: (icerik.thumbnail_optionlar || [])[0] || icerik.thumbnail_obje_1 || "",
       thumbnail_obje_2: (icerik.thumbnail_optionlar || [])[1] || icerik.thumbnail_obje_2 || "",

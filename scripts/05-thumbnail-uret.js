@@ -1,18 +1,22 @@
-// REV 013/21JUN26 - Quiz Blitz layout: soru üstte bant + ABC seçenek görselleri altta yan yana
+// REV 014/21JUN26 - Soru kapağı: jenerik soru üstte bant + A/B/C bayrak-ya-da-FLUX şıklar altta
 /**
- * 05 - Thumbnail Üretimi v13 (Quiz Blitz Layout)
+ * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
  * Layout (1280x720 long):
- *   ┌─────────────────────────────────────────────────────────┐
- *   │   SARI/KIRMIZI BANT  │  "Whose Bite Is Strongest?"     │  ~28%
- *   ├──────────────────────┼──────────────────────────────────┤
- *   │   [A]  SHARK         │  [B]  ALLIGATOR                 │  ~72%
- *   │   FLUX per-seçenek   │  FLUX per-seçenek               │
- *   └──────────────────────┴──────────────────────────────────┘
+ *   ┌────────────────────────────────────────────────────────┐
+ *   │  SARI BANT │ "Where did this food come from?"         │  ~20%
+ *   ├────────────┬───────────────────┬────────────────────── ┤
+ *   │ [A] Italy  │  [B] France       │  [C] USA             │  ~80%
+ *   │  🇮🇹 flag  │   🇫🇷 flag       │   🇺🇸 flag           │
+ *   │   ITALY    │    FRANCE         │    USA               │
+ *   └────────────┴───────────────────┴──────────────────────┘
  *
- * Input:  job.thumbnail_baslik (soru metni), job.thumbnail_optionlar (JSON dizi)
- * Output: 1280x720 JPG (long) — Shorts format şimdilik devre dışı (CLAUDE.md)
- * Upload: Drive "05-thumbnail" alt klasörü + Telegram bildirimi
+ * Input:
+ *   job.thumbnail_question      — jenerik soru metni (** temizlenmiş)
+ *   job.thumbnail_options_visual — JSON: [{label, type:"flag"|"flux", code|prompt}, ...]
+ * Fallback: thumbnail_baslik + thumbnail_optionlar (önceki format)
+ *
+ * Upload: Drive "05-thumbnail" + Telegram bildirimi
  */
 
 import fs from "fs";
@@ -33,10 +37,6 @@ const { JOB_ID } = process.env;
 const TMP_DIR = "/tmp/thumbnail";
 
 const BADGE_LETTERS = ["A", "B", "C"];
-// Band rengi seed'e göre seçilir
-const BAND_COLORS = ["#FFD600", "#E63946"];
-// Arka plan rengi (seçenek görsellerin arkasında görünen)
-const BG_COLORS = ["#5BE0FF", "#7FFF7F", "#FFB347"];
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 
@@ -59,95 +59,125 @@ function seedHash(str) {
   return h;
 }
 
+/** ** ve * markdown işaretlerini temizle */
+function cleanMarkdown(text) {
+  return String(text || "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .trim();
+}
+
 async function formatTespit(jobFolderId, auth) {
   const drive = google.drive({ version: "v3", auth });
   const res = await drive.files.get({ fileId: jobFolderId, fields: "name" });
-  const klasorAdi = res.data.name || "";
-  if (klasorAdi.toLowerCase().includes("-shorts-")) return "shorts";
-  return "long";
+  return (res.data.name || "").toLowerCase().includes("-shorts-") ? "shorts" : "long";
 }
 
-// ─── FLUX PER-OPTİON ─────────────────────────────────────────────────────────
+// ─── GÖRSEL KAYNAK ────────────────────────────────────────────────────────────
 
-async function fluxOptionUret(option, hesap) {
-  const prompt =
-    `${option}, dramatic hero pose, isolated subject on plain light background, ` +
-    `vivid saturated colors, bright studio lighting, sharp focus, photorealistic, ` +
-    `no text, no watermarks, no logos, kid-friendly`;
-  const buffer = await fluxCagri(prompt, hesap, { width: 512, height: 512 });
-  console.log(`  ✓ FLUX "${option}": ${(buffer.length / 1024).toFixed(0)}KB`);
-  return buffer;
+/** ISO kodu → Twemoji SVG URL */
+function flagSvgUrl(isoCode) {
+  const upper = isoCode.toUpperCase();
+  const cp1 = (0x1f1e6 + upper.charCodeAt(0) - 65).toString(16);
+  const cp2 = (0x1f1e6 + upper.charCodeAt(1) - 65).toString(16);
+  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/${cp1}-${cp2}.svg`;
+}
+
+/** URL'den buffer indir (fetch — Node 18+) */
+async function downloadImage(url) {
+  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/**
+ * Seçenek için görsel buffer üret.
+ * type:"flag" → Twemoji SVG indir + sharp render
+ * type:"flux" → FLUX çağrısı
+ */
+async function renderOptionImage(opt, hesap) {
+  if (opt.type === "flag" && opt.code) {
+    const url = flagSvgUrl(opt.code);
+    console.log(`  🏳 Bayrak indir: ${opt.label} (${opt.code}) → ${url}`);
+    const svgBuf = await downloadImage(url);
+    // density=1200 → ~600px (36px viewBox * 1200/72)
+    return await sharp(svgBuf, { density: 1200 }).png().toBuffer();
+  }
+
+  if (opt.type === "flux" && opt.prompt) {
+    const fullPrompt =
+      `${opt.prompt}, isolated subject, plain white or very light gray background, ` +
+      `vivid saturated colors, sharp focus, photorealistic, no text, no watermarks`;
+    console.log(`  🎨 FLUX: ${opt.label}`);
+    return await fluxCagri(fullPrompt, hesap, { width: 512, height: 512 });
+  }
+
+  // Fallback: beyaz boş resim
+  console.warn(`  ⚠ Görsel kaynağı belirsiz (${opt.label}), boş kullanılıyor`);
+  return await sharp({
+    create: { width: 512, height: 512, channels: 3, background: { r: 240, g: 240, b: 240 } },
+  }).png().toBuffer();
 }
 
 // ─── SVG HELPERS ──────────────────────────────────────────────────────────────
 
 /**
- * Soru metnini bant yüksekliğine göre 1 veya 2 satıra böler.
- * fontSize hesaplar: tek satır ≥70px tutabiliyorsa 1 satır, değilse 2.
+ * Üst bant SVG (tam kanvas boyutunda, sadece bant alanı dolu — alt şeffaf).
+ * bandH ≈ %20 × H
  */
-function calcBaslikLayout(text, W, bandH) {
-  const upper = String(text).toUpperCase().trim();
-  const words = upper.split(/\s+/);
+function svgTopBand(question, W, H, bandH) {
+  const text = cleanMarkdown(question).toUpperCase();
 
-  const fsSingle = Math.min(88, Math.floor((W * 0.88) / (upper.length * 0.56)));
-  if (fsSingle >= 68 || words.length <= 3) {
-    return { lines: [upper], fontSize: Math.max(56, fsSingle) };
+  // Font boyutu: tek satıra sığdır, max 88px
+  const fsSingle = Math.min(88, Math.floor((W * 0.86) / Math.max(text.length * 0.56, 1)));
+  let lines, fontSize;
+  if (fsSingle >= 62 || text.split(/\s+/).length <= 3) {
+    lines = [text];
+    fontSize = Math.max(52, fsSingle);
+  } else {
+    const words = text.split(/\s+/);
+    const mid = Math.ceil(words.length / 2);
+    lines = [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+    const maxLen = Math.max(lines[0].length, lines[1].length);
+    fontSize = Math.max(40, Math.min(70, Math.floor((W * 0.86) / Math.max(maxLen * 0.56, 1))));
   }
 
-  // 2 satır
-  const mid = Math.ceil(words.length / 2);
-  const line1 = words.slice(0, mid).join(" ");
-  const line2 = words.slice(mid).join(" ");
-  const maxLen = Math.max(line1.length, line2.length);
-  const fs2 = Math.min(72, Math.floor((W * 0.88) / (maxLen * 0.56)));
-  return { lines: [line1, line2], fontSize: Math.max(44, fs2) };
-}
-
-/**
- * Üst bant SVG (W×H tam boyut, sadece üst bant alanı dolu — alt kısım şeffaf).
- */
-function svgTopBand(baslik, W, H, bandH, bandColor) {
-  const { lines, fontSize } = calcBaslikLayout(baslik, W, bandH);
   const lineH = fontSize * 1.05;
-  const totalTextH = lines.length * lineH;
-  const startY = (bandH - totalTextH) / 2 + fontSize * 0.82;
-
-  // Bant metin rengi: sarı bantta koyu, kırmızı bantta beyaz
-  const textFill = bandColor === "#FFD600" ? "#1A1A1A" : "#FFFFFF";
-  const strokeColor = bandColor === "#FFD600" ? "#FFFFFF" : "#000000";
+  const totalH = lines.length * lineH;
+  const startY = (bandH - totalH) / 2 + fontSize * 0.82;
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
-  // Bant arka planı
-  svg += `<rect x="0" y="0" width="${W}" height="${bandH}" fill="${bandColor}"/>`;
-  // Alt kenarda siyah şerit (ayrıcı)
-  svg += `<rect x="0" y="${bandH - 8}" width="${W}" height="8" fill="#1A1A1A"/>`;
-
-  // Soru metni
+  // Sarı bant
+  svg += `<rect x="0" y="0" width="${W}" height="${bandH}" fill="#FFD600"/>`;
+  // Kalın siyah alt çerçeve
+  svg += `<rect x="0" y="${bandH - 10}" width="${W}" height="10" fill="#1A1A1A"/>`;
+  // Soru metni — kalın, siyah, beyaz strok
   lines.forEach((line, i) => {
     const y = startY + i * lineH;
     svg += `<text
       x="${W / 2}" y="${y}"
       font-family="Lilita One, Fredoka, Impact, Arial Black, sans-serif"
-      font-size="${fontSize}" font-weight="900" fill="${textFill}"
+      font-size="${fontSize}" font-weight="900" fill="#1A1A1A"
       text-anchor="middle"
-      stroke="${strokeColor}" stroke-width="5" paint-order="stroke"
+      stroke="#FFFFFF" stroke-width="5" paint-order="stroke"
     >${escapeXml(line)}</text>`;
   });
-
   svg += `</svg>`;
   return svg;
 }
 
 /**
- * Seçenek overlay SVG: A/B/C rozetleri + alt etiket + dikey ayraçlar.
- * Tam boyut (W×H), şeffaf arka plan.
+ * Seçenek overlay SVG: A/B/C rozetler + alt sarı etiket + dikey siyah ayraçlar.
+ * Şeffaf arka plan — compositing'de option görselleri üstüne bindirilir.
  */
-function svgOptionLabels(optionlar, W, H, bandH) {
+function svgOptionOverlay(optionlar, W, H, bandH) {
   const n = optionlar.length;
   const colW = Math.floor(W / n);
   const bottomH = H - bandH;
-  const BADGE_R = 42;
-  const LABEL_H = 72;
+  const BADGE_R = 46;
+  const LABEL_H = 78;
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
 
@@ -155,40 +185,33 @@ function svgOptionLabels(optionlar, W, H, bandH) {
     const colX = i * colW;
     const thisColW = i === n - 1 ? W - colX : colW;
 
-    // Dikey ayraç (ilk sütundan sonra)
+    // Dikey siyah ayraç
     if (i > 0) {
-      svg += `<rect x="${colX - 4}" y="${bandH}" width="8" height="${bottomH}" fill="#1A1A1A"/>`;
+      svg += `<rect x="${colX - 5}" y="${bandH}" width="10" height="${bottomH}" fill="#1A1A1A"/>`;
     }
 
-    // A/B/C rozeti — sütunun sol üst köşesinde
-    const bCX = colX + BADGE_R + 18;
-    const bCY = bandH + BADGE_R + 18;
-    // Siyah çember (kontur)
-    svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R + 7}" fill="#1A1A1A"/>`;
-    // Sarı iç
+    // A/B/C rozeti — sol üst köşe
+    const bCX = colX + BADGE_R + 16;
+    const bCY = bandH + BADGE_R + 16;
+    svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R + 8}" fill="#1A1A1A"/>`;
     svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R}" fill="#FFD600"/>`;
-    // Harf
     svg += `<text
-      x="${bCX}" y="${bCY + 18}"
+      x="${bCX}" y="${bCY + 19}"
       font-family="Lilita One, Fredoka, Impact, Arial Black, sans-serif"
-      font-size="50" font-weight="900" fill="#1A1A1A"
+      font-size="54" font-weight="900" fill="#1A1A1A"
       text-anchor="middle"
     >${BADGE_LETTERS[i]}</text>`;
 
-    // Alt etiket bandı (yarı saydam siyah)
-    svg += `<rect
-      x="${colX}" y="${H - LABEL_H}"
-      width="${thisColW}" height="${LABEL_H}"
-      fill="#000000" fill-opacity="0.68"
-    />`;
+    // Alt etiket kutusu (koyu arka plan)
+    svg += `<rect x="${colX}" y="${H - LABEL_H}" width="${thisColW}" height="${LABEL_H}" fill="#1A1A1A" fill-opacity="0.80"/>`;
 
-    // Seçenek ismi
-    const name = String(opt).toUpperCase();
-    const nameFontSize = Math.min(50, Math.max(28, Math.floor((thisColW * 0.78) / (name.length * 0.6))));
+    // Şık ismi
+    const name = cleanMarkdown(opt.label).toUpperCase();
+    const nfs = Math.min(54, Math.max(28, Math.floor((thisColW * 0.76) / Math.max(name.length * 0.6, 1))));
     svg += `<text
-      x="${colX + thisColW / 2}" y="${H - LABEL_H * 0.28}"
+      x="${colX + thisColW / 2}" y="${H - LABEL_H * 0.24}"
       font-family="Lilita One, Fredoka, Impact, Arial Black, sans-serif"
-      font-size="${nameFontSize}" font-weight="900" fill="#FFD600"
+      font-size="${nfs}" font-weight="900" fill="#FFD600"
       text-anchor="middle"
       stroke="#000000" stroke-width="3" paint-order="stroke"
     >${escapeXml(name)}</text>`;
@@ -202,83 +225,70 @@ function svgOptionLabels(optionlar, W, H, bandH) {
 
 /**
  * @param {object} opts
- *   baslik     - soru metni (üst bantta)
- *   optionlar  - string[] 2-3 seçenek adı
- *   format     - "long" | "shorts"
- *   hesaplar   - Cloudflare hesap listesi
- *   jobSeed    - renk seçimi için seed string
+ *   question      — üst banttaki jenerik soru
+ *   optionsVisual — [{label, type, code?|prompt?}, ...]
+ *   format        — "long" | "shorts"
+ *   hesaplar      — CF hesap listesi
+ *   jobSeed       — renk/davranış seed
  */
-async function thumbnailUret({ baslik, optionlar, format, hesaplar, jobSeed }) {
-  // Shorts devre dışı (CLAUDE.md) — aynı layout long olarak işle
+async function thumbnailUret({ question, optionsVisual, format, hesaplar, jobSeed }) {
+  // Shorts şimdilik devre dışı (CLAUDE.md) — long olarak üret
   const W = 1280;
   const H = 720;
-  const bandH = Math.floor(H * 0.28); // ~202px
-  const bottomH = H - bandH;           // ~518px
+  const bandH = Math.floor(H * 0.20); // ~144px üst bant
+  const bottomH = H - bandH;           // ~576px alt bölüm
 
-  // Renk seçimi
-  const h = seedHash(jobSeed);
-  const bandColor = BAND_COLORS[h % BAND_COLORS.length];
-  const bgColor = BG_COLORS[h % BG_COLORS.length];
+  const n = Math.min(3, Math.max(1, optionsVisual.length));
+  const opts = optionsVisual.slice(0, n);
 
-  const n = Math.min(3, Math.max(1, optionlar.length));
-  const opts = optionlar.slice(0, n);
-
-  // 1) Per-seçenek FLUX görselleri (paralel)
-  console.log(`  🎨 ${n} FLUX seçenek görseli paralel üretiliyor...`);
+  // 1) Her seçenek için görsel (paralel)
+  console.log(`  📸 ${n} seçenek görseli üretiliyor...`);
   const optionBuffers = await Promise.all(
     opts.map((opt, i) =>
-      fluxOptionUret(opt, hesaplar[i % hesaplar.length]).catch((e) => {
-        console.warn(`  ⚠ FLUX "${opt}" hata: ${e.message}`);
+      renderOptionImage(opt, hesaplar[i % hesaplar.length]).catch((e) => {
+        console.warn(`  ⚠ "${opt.label}" görsel hata: ${e.message}`);
         return null;
       })
     )
   );
 
-  // 2) Arka plan (düz renk)
+  // 2) Arka plan: beyaz (flag türünde net görünüm için) veya açık mavi
+  const h = seedHash(jobSeed);
+  const bgColor = h % 2 === 0 ? "#F0F4FF" : "#FFF8F0";
   const bgBuf = await sharp(
-    Buffer.from(
-      `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">` +
-        `<rect width="${W}" height="${H}" fill="${bgColor}"/>` +
-        `</svg>`
-    )
-  )
-    .png()
-    .toBuffer();
+    Buffer.from(`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="${W}" height="${H}" fill="${bgColor}"/>
+    </svg>`)
+  ).png().toBuffer();
 
   const layers = [];
 
-  // 3) Seçenek görselleri yan yana (alt bölüm)
-  if (n >= 2) {
-    const colW = Math.floor(W / n);
-    for (let i = 0; i < n; i++) {
-      if (!optionBuffers[i]) continue;
-      const thisColW = i === n - 1 ? W - i * colW : colW;
-      const resized = await sharp(optionBuffers[i])
-        .resize(thisColW, bottomH, { fit: "cover", position: "centre" })
-        .toBuffer();
-      layers.push({ input: resized, left: i * colW, top: bandH });
-    }
-  } else if (optionBuffers[0]) {
-    // Tek seçenek — tüm alt alanı kapla
-    const resized = await sharp(optionBuffers[0])
-      .resize(W, bottomH, { fit: "cover" })
+  // 3) Seçenek görselleri yan yana (alt bölümde)
+  const colW = Math.floor(W / n);
+  for (let i = 0; i < n; i++) {
+    if (!optionBuffers[i]) continue;
+    const thisColW = i === n - 1 ? W - i * colW : colW;
+    // contain: oran korunsun, beyaz padding ile doldur
+    const resized = await sharp(optionBuffers[i])
+      .resize(thisColW, bottomH, {
+        fit: "contain",
+        background: { r: 255, g: 255, b: 255, alpha: 255 },
+      })
       .toBuffer();
-    layers.push({ input: resized, left: 0, top: bandH });
+    layers.push({ input: resized, left: i * colW, top: bandH });
   }
 
-  // 4) Üst bant SVG (soru metni)
-  const bandSvg = svgTopBand(baslik, W, H, bandH, bandColor);
+  // 4) Üst bant (soru metni)
+  const bandSvg = svgTopBand(question, W, H, bandH);
   layers.push({ input: Buffer.from(bandSvg), left: 0, top: 0 });
 
-  // 5) Seçenek etiketleri SVG (rozetler + isimler + ayraçlar)
-  if (n >= 1) {
-    const labelSvg = svgOptionLabels(opts, W, H, bandH);
-    layers.push({ input: Buffer.from(labelSvg), left: 0, top: 0 });
-  }
+  // 5) Overlay: rozetler + isimler + ayraçlar
+  const overlaySvg = svgOptionOverlay(opts, W, H, bandH);
+  layers.push({ input: Buffer.from(overlaySvg), left: 0, top: 0 });
 
   return await sharp(bgBuf)
     .composite(layers)
-    .jpeg({ quality: 92 })
+    .jpeg({ quality: 93 })
     .toBuffer();
 }
 
@@ -297,50 +307,57 @@ async function main() {
     const format = await formatTespit(job.drive_folder_id, saAuth);
     console.log(`📺 Format: ${format}`);
 
-    // Başlık
-    let baslik = String(job.thumbnail_baslik || "").trim();
-    if (!baslik || baslik.length < 3) {
-      baslik = `Which ${(job.konu || "").split(/\s+/).slice(0, 2).join(" ")}?`;
-    }
-    console.log(`📝 Başlık: "${baslik}"`);
-
-    // Seçenekler: thumbnail_optionlar (JSON) → obje_1/obje_2 fallback
-    let optionlar = [];
-    if (job.thumbnail_optionlar) {
-      try {
-        optionlar = JSON.parse(job.thumbnail_optionlar);
-      } catch (_) {
-        optionlar = [];
-      }
-    }
-    if (!Array.isArray(optionlar) || optionlar.length < 2) {
-      const o1 = job.thumbnail_obje_1 || "";
-      const o2 = job.thumbnail_obje_2 || "";
-      if (o1 || o2) {
-        optionlar = [o1, o2].filter(Boolean);
-      }
-    }
-    if (optionlar.length < 2) {
-      // Son fallback: konudan 2 kelime
-      const words = (job.konu || "Quiz").split(/\s+/);
-      optionlar = words.length >= 2 ? [words[0], words[1]] : [words[0], "Mystery"];
-    }
-    console.log(`🔠 Seçenekler: ${JSON.stringify(optionlar)}`);
-
     await jobGuncelle(JOB_ID, { thumb_status: "running" });
 
     const hesaplar = getCfAccounts();
     if (hesaplar.length === 0) throw new Error("Cloudflare hesap yok");
 
+    // Soru metni
+    const question = cleanMarkdown(
+      job.thumbnail_question || job.thumbnail_baslik || `Which is the best?`
+    );
+    console.log(`❓ Soru: "${question}"`);
+
+    // Seçenek görselleri
+    let optionsVisual = [];
+    if (job.thumbnail_options_visual) {
+      try {
+        optionsVisual = JSON.parse(job.thumbnail_options_visual);
+      } catch (_) {
+        optionsVisual = [];
+      }
+    }
+
+    // Fallback: thumbnail_optionlar → tüm FLUX
+    if (!Array.isArray(optionsVisual) || optionsVisual.length < 2) {
+      let fallbackOpts = [];
+      if (job.thumbnail_optionlar) {
+        try { fallbackOpts = JSON.parse(job.thumbnail_optionlar); } catch (_) {}
+      }
+      if (fallbackOpts.length < 2 && (job.thumbnail_obje_1 || job.thumbnail_obje_2)) {
+        fallbackOpts = [job.thumbnail_obje_1, job.thumbnail_obje_2].filter(Boolean);
+      }
+      optionsVisual = fallbackOpts.map((opt) => ({
+        label: String(opt),
+        type: "flux",
+        prompt: `${opt} isolated on plain white background, vivid colors, no text`,
+      }));
+    }
+
+    if (optionsVisual.length < 1) {
+      throw new Error("thumbnail_options_visual ve fallback seçenek yok");
+    }
+    console.log(`🔠 Seçenekler: ${optionsVisual.map((o) => o.label).join(" | ")}`);
+
     let buffer;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         buffer = await thumbnailUret({
-          baslik,
-          optionlar,
+          question,
+          optionsVisual,
           format,
           hesaplar,
-          jobSeed: String(JOB_ID || baslik),
+          jobSeed: String(JOB_ID || question),
         });
         break;
       } catch (e) {
@@ -353,7 +370,7 @@ async function main() {
     const filename = `thumbnail-${format}-${Date.now()}.jpg`;
     const filepath = path.join(TMP_DIR, filename);
     fs.writeFileSync(filepath, buffer);
-    console.log(`📁 Kaydedildi: ${filepath} (${(buffer.length / 1024).toFixed(0)}KB)`);
+    console.log(`📁 ${filepath} (${(buffer.length / 1024).toFixed(0)}KB)`);
 
     // Drive'a yükle
     let thumbKlasor = await driveAltKlasorBul("05-thumbnail", job.drive_folder_id);
@@ -376,8 +393,8 @@ async function main() {
     await telegram(
       job.chat_id,
       `🖼 *Thumbnail ready!* (${format})\n` +
-        `📝 "${baslik}"\n` +
-        `🔠 ${optionlar.join(" | ")}\n` +
+        `❓ "${question}"\n` +
+        `🔠 ${optionsVisual.map((o) => o.label).join(" | ")}\n` +
         `📦 ${(buffer.length / 1024).toFixed(0)}KB\n` +
         `📂 [View](${yuklenen.link})`
     );
@@ -389,13 +406,8 @@ async function main() {
     console.error(error.stack);
     try {
       const job = await jobOku(JOB_ID);
-      await jobGuncelle(JOB_ID, {
-        thumb_status: `error: ${error.message.substring(0, 100)}`,
-      });
-      await telegram(
-        job.chat_id,
-        `❌ *05-Thumbnail error:* ${error.message.substring(0, 300)}`
-      );
+      await jobGuncelle(JOB_ID, { thumb_status: `error: ${error.message.substring(0, 100)}` });
+      await telegram(job.chat_id, `❌ *05-Thumbnail error:* ${error.message.substring(0, 300)}`);
     } catch (_) {}
     process.exit(1);
   }
@@ -404,4 +416,4 @@ async function main() {
 const isDirect = import.meta.url === `file://${process.argv[1]}`;
 if (isDirect) main();
 
-export { thumbnailUret, svgTopBand, svgOptionLabels, calcBaslikLayout };
+export { thumbnailUret, svgTopBand, svgOptionOverlay, cleanMarkdown };
