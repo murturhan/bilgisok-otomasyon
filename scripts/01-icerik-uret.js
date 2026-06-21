@@ -1,4 +1,4 @@
-// REV 016/20JUN26 - gemini prompt'tan cartoon/Pixar/3D stil sirintisi kaldirildi
+// REV 017/21JUN26 - Gemini prompt kritik kural guclendirildi + few-shot ornekler + clean regex guncellendi
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -57,7 +57,7 @@ function cleanPrompt(p) {
   // Remove empty parentheses left after character removal
   p = p.replace(/\(\s*\)/g, "");
   // Remove style keywords — style is appended separately via gorsel-stilleri.js
-  p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic|3d\s+animation|stylized|\bcartoon\b/gi, "");
+  p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic|3d\s+animation|stylized|\bcartoon\b|\bfriendly\b|\bcute\b|\badorable\b|\billustration\b|\brendered\b|\billustrated\b|\banimated\b|\bwhimsical\b|\bcharming\b|\bdelightful\b/gi, "");
   return p.replace(/,\s*,+/g, ",").replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
 }
 
@@ -306,13 +306,21 @@ JSON OUTPUT (must be valid JSON, no markdown):
 CRITICAL:
 - EXACTLY ${effectiveCount} question${effectiveCount === 1 ? "" : "s"}
 - All in English${dilNote}
-- Image prompts MUST be PIXAR/3D CARTOON
+- ⚠️ CRITICAL RULE — IMAGE PROMPTS: image_prompt AND fun_fact_image_prompt fields MUST NEVER contain ANY style words. FORBIDDEN words: "cartoon", "animated", "Pixar", "3D", "realistic", "anime", "watercolor", "sketch", "illustration", "rendered", "stylized", "friendly", "cute", "adorable", "illustrated", "whimsical", "charming", "delightful". Image prompts describe ONLY the scene CONTENT (subject + action + environment). Style adjectives are STRICTLY FORBIDDEN. If you include any forbidden word, the entire prompt will be rejected.
+- BAD image prompt examples (DO NOT generate):
+  * "A friendly cartoon camel standing near a pyramid" (contains "cartoon", "friendly")
+  * "Pixar 3D style desert with camels" (contains "Pixar", "3D")
+  * "Cute illustrated lion in a savanna" (contains "cute", "illustrated")
+- GOOD image prompt examples:
+  * "A camel standing near a large pyramid in a sunny desert, warm golden light"
+  * "A lion resting in a savanna at sunset, tall dry grass, orange sky"
+  * "Pizza being taken out of a wood-fired oven in a rustic kitchen"
 - All child-safe
 - Answers SHORT (1-3 words)
 - question_audio_text MUST include all 3 options spoken out loud
 - answer_audio_text MUST include fun_fact at the end
-- **fun_fact_image_prompt MUST illustrate the fun fact narrative** (different scene from question image - e.g. if fun fact is about Eiffel Tower being 330m tall, show the Eiffel Tower with measurement; if about pizza invented in Naples 1889, show a chef in old Naples kitchen)
-- fun_fact_image_prompt should describe the scene content only, NO TEXT, NO style words
+- **fun_fact_image_prompt MUST illustrate the fun fact narrative** (different scene from question image - e.g. if fun fact is about Eiffel Tower being 330m tall, show the Eiffel Tower with measurement; if about pizza invented in Naples 1889, show a chef in Naples 1889)
+- fun_fact_image_prompt: describe scene content ONLY, NO TEXT, NO style words (same rule as image_prompt)
 - **option_flags**: ALWAYS include flag emojis array (4 items). Logic:
   * If options are COUNTRIES (e.g. "Italy", "France", "Japan", "Brazil"): use country flag emojis ["🇮🇹","🇫🇷","🇯🇵"]
   * If options relate to COUNTRY-ORIGIN (e.g. "Pizza" → Italy, "Sushi" → Japan, "Croissant" → France): use the related country flag
@@ -323,7 +331,7 @@ CRITICAL:
   * Have HEAVY BLUR / depth of field (it's a background, not foreground)
   * Have empty soft center for UI overlay
   * NO characters, NO animals, NO text
-  * Be Pixar 3D cartoon style
+  * NO style keywords — just describe the environment (style applied at render time)
 - **thumbnail_title MUST be 2-3 WORDS MAX, UPPERCASE, PUNCHY** (examples: "FOOD QUIZ", "GUESS THE ANIMAL", "OCEAN QUIZ", "TRUCK CHALLENGE", "MIGHTY MACHINES")
 - thumbnail_title is for the thumbnail image (LARGE TEXT), NOT for YouTube title
 - baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title
@@ -522,7 +530,7 @@ TOPIC EMOJIS (for intro screen emoji band)
       
       // background_prompt validation - yoksa konu'dan üret
       if (!json.background_prompt) {
-        json.background_prompt = `Blurred ${konu} themed empty environment, Pixar 3D cartoon style, heavy depth of field, soft empty center for UI overlay, decorative thematic elements on edges only, NO characters, NO animals, NO text, kid-friendly bright atmosphere`;
+        json.background_prompt = `Blurred ${konu} themed empty environment, heavy depth of field, soft empty center for UI overlay, decorative thematic elements on edges only, NO characters, NO animals, NO text, bright vibrant atmosphere`;
       }
       console.log(`Background prompt: "${json.background_prompt.substring(0, 80)}..."`);
 

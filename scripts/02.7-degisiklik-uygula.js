@@ -1,4 +1,4 @@
-// REV 007/20JUN26 - gorsel stili FLUX regen'a uygula (stage=2 per-slot dropdown)
+// REV 008/21JUN26 - cleanGorselPrompt eklendi, regen prompt'larinda stil oncesi temizlik yapiliyor
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -24,6 +24,14 @@ import {
 import { fluxRotationCagri } from "./lib/cloudflare.js";
 import { telegram } from "./lib/telegram.js";
 import { GORSEL_STILLERI, DEFAULT_STIL } from "./lib/gorsel-stilleri.js";
+
+function cleanGorselPrompt(p) {
+  if (!p) return "";
+  p = p.replace(/jess\s*(the\s*)?fox|jess\s*karakteri?|fox\s*character|fox\s*mascot|the\s*fox\s*mascot|cartoon\s+fox|a\s+fox\s+wearing|a\s+fox\s+holding|a\s+fox\s+presenting|fox\s+holding|fox\s+presenting/gi, "");
+  p = p.replace(/\(\s*\)/g, "");
+  p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic|3d\s+animation|stylized|\bcartoon\b|\bfriendly\b|\bcute\b|\badorable\b|\billustration\b|\brendered\b|\billustrated\b|\banimated\b|\bwhimsical\b|\bcharming\b|\bdelightful\b/gi, "");
+  return p.replace(/,\s*,+/g, ",").replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
+}
 
 const {
   JOB_ID,
@@ -401,7 +409,7 @@ async function main() {
         } else if (edit.regen_visible_image) {
           const vStili = q.visible_option?.image_stili || DEFAULT_STIL;
           const vSuffix = GORSEL_STILLERI[vStili]?.promptAppend || "";
-          regenQuestionImages.push({ index: idx, prompt: (q.visible_option?.image_prompt || "") + vSuffix });
+          regenQuestionImages.push({ index: idx, prompt: cleanGorselPrompt(q.visible_option?.image_prompt || "") + vSuffix });
         }
 
         if (edit.custom_surprise_image) {
@@ -423,7 +431,7 @@ async function main() {
         } else if (edit.regen_surprise_image) {
           const sStili = q.surprise_option?.surprise_image_stili || DEFAULT_STIL;
           const sSuffix = GORSEL_STILLERI[sStili]?.promptAppend || "";
-          regenFactImages.push({ index: idx, prompt: (q.surprise_option?.surprise_image_prompt || "") + sSuffix });
+          regenFactImages.push({ index: idx, prompt: cleanGorselPrompt(q.surprise_option?.surprise_image_prompt || "") + sSuffix });
         }
 
         continue;
@@ -482,7 +490,7 @@ async function main() {
       } else if (edit.regen_question_image) {
         const qStili = q.question_image_stili || DEFAULT_STIL;
         const qSuffix = GORSEL_STILLERI[qStili]?.promptAppend || "";
-        regenQuestionImages.push({ index: idx, prompt: (q.image_prompt || "") + qSuffix });
+        regenQuestionImages.push({ index: idx, prompt: cleanGorselPrompt(q.image_prompt || "") + qSuffix });
       }
 
       if (edit.custom_fact_image) {
@@ -505,7 +513,7 @@ async function main() {
       } else if (edit.regen_fact_image) {
         const fStili = q.fact_image_stili || DEFAULT_STIL;
         const fSuffix = GORSEL_STILLERI[fStili]?.promptAppend || "";
-        regenFactImages.push({ index: idx, prompt: (q.fun_fact_image_prompt || "") + fSuffix });
+        regenFactImages.push({ index: idx, prompt: cleanGorselPrompt(q.fun_fact_image_prompt || "") + fSuffix });
       }
     }
     

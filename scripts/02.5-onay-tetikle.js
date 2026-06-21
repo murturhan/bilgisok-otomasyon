@@ -1,4 +1,4 @@
-// REV 005/01JUN26 - Telegram: sadece ilk onay (video yokken), post-render tekrar atma
+// REV 006/21JUN26 - question_image_stili ve fact_image_stili payload'a eklendi (dropdown reset engeli)
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -249,6 +249,8 @@ async function main() {
           fun_fact_image_prompt: q.fun_fact_image_prompt,
           question_image_url: tumGorseller[questionImageIdx] || null,
           fun_fact_image_url: tumGorseller[factImageIdx] || null,
+          question_image_stili: q.question_image_stili || "pixar_3d",
+          fact_image_stili: q.fact_image_stili || "pixar_3d",
         };
       }),
       created_at: new Date().toISOString(),
