@@ -1,4 +1,4 @@
-// REV 017/22JUN26 - Siyah zemin bant, fosforlu highlights, renkli slot bg, kelime boşluğu fix
+// REV 018/22JUN26 - xml:space=preserve başlık, 85% slot görsel, spesifik keyword highlight
 /**
  * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
@@ -181,19 +181,16 @@ function pickHighlights(question) {
 
 /**
  * Üst bant SVG — siyah zemin + beyaz yazı + fosforlu highlight kelimeleri.
- * Her kelime AYRI <text> elementi → librsvg tspan-space collapse bug'ı yok.
+ * xml:space="preserve" + space-prefix tspan (librsvg whitespace fix).
+ * 2 satır gerekirse: 2 ayrı <text> elementi.
  * bandH ≈ %20 × H
  */
 function svgTopBand(question, W, H, bandH, highlights = []) {
   const text = cleanMarkdown(question).toUpperCase();
   const hlSet = new Set(highlights.map(h => h.toUpperCase().replace(/[^A-Z]/g, "")).filter(Boolean));
 
-  // Karakter genişlik tahmini (Impact ~monospace)
-  const CHAR_W = 0.56;
-  const SPACE_W = 0.20;
-
   // Font boyutu
-  const fsSingle = Math.min(102, Math.floor((W * 0.86) / Math.max(text.length * CHAR_W, 1)));
+  const fsSingle = Math.min(102, Math.floor((W * 0.86) / Math.max(text.length * 0.56, 1)));
   let lines, fontSize;
   if (fsSingle >= 72 || text.split(/\s+/).length <= 3) {
     lines = [text];
@@ -203,49 +200,45 @@ function svgTopBand(question, W, H, bandH, highlights = []) {
     const mid = Math.ceil(words.length / 2);
     lines = [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
     const maxLen = Math.max(lines[0].length, lines[1].length);
-    fontSize = Math.max(48, Math.min(82, Math.floor((W * 0.86) / Math.max(maxLen * CHAR_W, 1))));
+    fontSize = Math.max(48, Math.min(82, Math.floor((W * 0.86) / Math.max(maxLen * 0.56, 1))));
   }
 
-  const charPx  = fontSize * CHAR_W;
-  const spacePx = fontSize * SPACE_W;
-  const lineH   = fontSize * 1.05;
-  const totalH  = lines.length * lineH;
-  const startY  = (bandH - totalH) / 2 + fontSize * 0.82;
+  const lineH  = fontSize * 1.05;
+  const totalH = lines.length * lineH;
+  const startY = (bandH - totalH) / 2 + fontSize * 0.82;
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
 
   // Siyah bant
   svg += `<rect x="0" y="0" width="${W}" height="${bandH}" fill="#000000"/>`;
-  // Üst fosforlu sarı ince çizgi
   svg += `<rect x="0" y="0" width="${W}" height="4" fill="#FFFF00"/>`;
-  // Alt siyah bar + fosforlu çizgi
   svg += `<rect x="0" y="${bandH - 12}" width="${W}" height="12" fill="#111111"/>`;
   svg += `<rect x="0" y="${bandH - 14}" width="${W}" height="3" fill="#FFFF00"/>`;
 
   let hlIdx = 0;
-  lines.forEach((line, li) => {
-    const y = startY + li * lineH;
+  lines.forEach((line, i) => {
+    const y = Math.round(startY + i * lineH);
     const words = line.split(/\s+/);
-    // Toplam satır genişliği → x başlangıcı (ortalama)
-    const totalW = words.reduce((s, w, wi) => s + w.length * charPx + (wi > 0 ? spacePx : 0), 0);
-    let curX = (W - totalW) / 2;
+
+    // xml:space="preserve" → space karakterleri collapse edilmez
+    // İlk kelime hariç her tspan " " öneki ile başlar
+    svg += `<text x="${W / 2}" y="${y}"
+      font-family="${FONT_STACK}"
+      font-size="${fontSize}" font-weight="900"
+      text-anchor="middle"
+      xml:space="preserve">`;
 
     words.forEach((word, wi) => {
-      if (wi > 0) curX += spacePx;
-      const clean = word.replace(/[^A-Z]/g, "");
-      const isHl  = clean && hlSet.has(clean);
-      const fill  = isHl ? NEON_COLORS[hlIdx % NEON_COLORS.length] : "#FFFFFF";
+      const clean  = word.replace(/[^A-Z]/g, "");
+      const isHl   = clean && hlSet.has(clean);
+      const fill   = isHl ? NEON_COLORS[hlIdx % NEON_COLORS.length] : "#FFFFFF";
+      const sw     = isHl ? 5 : 4;
       if (isHl) hlIdx++;
-
-      svg += `<text x="${Math.round(curX)}" y="${Math.round(y)}"
-        font-family="${FONT_STACK}"
-        font-size="${fontSize}" font-weight="900"
-        text-anchor="start"
-        fill="${fill}" stroke="#000000" stroke-width="${isHl ? 5 : 4}" paint-order="stroke"
-      >${escapeXml(word)}</text>`;
-
-      curX += word.length * charPx;
+      const prefix = wi === 0 ? "" : " ";
+      svg += `<tspan fill="${fill}" stroke="#000000" stroke-width="${sw}" paint-order="stroke">${escapeXml(prefix + word)}</tspan>`;
     });
+
+    svg += `</text>`;
   });
 
   svg += `</svg>`;
@@ -293,9 +286,14 @@ function svgOptionOverlay(optionlar, W, H, bandH) {
       svg += `<circle cx="${colX}" cy="${H - LABEL_H - 24}" r="10" fill="#FFE600" fill-opacity="0.7" filter="url(#imgGlow)"/>`;
     }
 
-    // Şık görsel etrafı sarı glow halo
-    svg += `<rect x="${colX + 6}" y="${bandH + 6}" width="${thisColW - 12}" height="${bottomH - LABEL_H - 12}"
-      fill="none" stroke="#FFE600" stroke-width="5" stroke-opacity="0.45" rx="4" filter="url(#imgGlow)"/>`;
+    // Görsel etrafı beyaz çerçeve (85% bölge, 6px border)
+    const imgScale = 0.85;
+    const iW = Math.round(thisColW * imgScale);
+    const iH = Math.round(bottomH  * imgScale);
+    const iX = colX + Math.round((thisColW - iW) / 2);
+    const iY = bandH + Math.round((bottomH  - iH) / 2);
+    svg += `<rect x="${iX - 3}" y="${iY - 3}" width="${iW + 6}" height="${iH + 6}"
+      fill="none" stroke="#FFFFFF" stroke-width="6" rx="6" filter="url(#imgGlow)"/>`;
 
     // Rozet: beyaz dış → siyah ring → renkli → harf
     const bCX = colX + BADGE_R + 16;
@@ -398,18 +396,23 @@ async function thumbnailUret({ question, highlights, optionsVisual, format, hesa
   slotBgSvg += `</svg>`;
   layers.push({ input: Buffer.from(slotBgSvg), left: 0, top: 0 });
 
-  // 3) Seçenek görselleri yan yana (şeffaf padding → slot gradient görünür)
+  // 3) Seçenek görselleri %85 boyutta ortalanmış (kenarlar renkli gradient görünür)
+  const IMG_SCALE = 0.85;
   for (let i = 0; i < n; i++) {
     if (!optionBuffers[i]) continue;
     const thisColW = i === n - 1 ? W - i * colW : colW;
+    const targetW  = Math.round(thisColW * IMG_SCALE);
+    const targetH  = Math.round(bottomH  * IMG_SCALE);
+    const padLeft  = Math.round((thisColW - targetW) / 2);
+    const padTop   = Math.round((bottomH  - targetH) / 2);
     const resized = await sharp(optionBuffers[i])
-      .resize(thisColW, bottomH, {
+      .resize(targetW, targetH, {
         fit: "contain",
         background: { r: 0, g: 0, b: 0, alpha: 0 },
       })
       .png()
       .toBuffer();
-    layers.push({ input: resized, left: i * colW, top: bandH });
+    layers.push({ input: resized, left: i * colW + padLeft, top: bandH + padTop });
   }
 
   // 4) Üst bant (siyah zemin + beyaz + fosforlu highlights)

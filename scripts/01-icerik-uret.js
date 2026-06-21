@@ -1,4 +1,4 @@
-// REV 020/22JUN26 - thumbnail_highlights: Gemini'den fosforlu anahtar kelimeler + fallback heuristik
+// REV 021/22JUN26 - thumbnail_question = spesifik soru (jenerik DEĞİL), highlights = spesifik isim
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -241,16 +241,19 @@ Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
 
 **thumbnail_title**: QUESTION format — short, punchy, curiosity-gap. Examples: "Whose Bite Is Strongest?", "Which Is Faster?", "The Most Dangerous?" Maximum 5 words. Must end with ? or !
 
-**thumbnail_question**: Generalized version of the FIRST question (hide specific named object, keep it generic):
-- "Where did pizza first come from?" → "Where did this food come from?"
-- "What color is a strawberry?" → "What color is this fruit?"
-- "Who painted the Mona Lisa?" → "Who painted this artwork?"
-- "What animal has 8 arms?" → KEEP AS-IS (already generic)
-- If already generic, keep unchanged. NEVER include markdown **, just plain text.
+**thumbnail_question**: Use the FIRST question's text EXACTLY as-is. DO NOT replace specific names with generic words. DO NOT genericize.
+- "Where did pizza first come from?" → thumbnail_question = "Where did pizza first come from?"
+- "Where did Los Angeles name come from?" → thumbnail_question = "Where did Los Angeles name come from?"
+- "What animal has 8 arms?" → thumbnail_question = "What animal has 8 arms?"
+- Keep the question unchanged. NEVER include markdown **, just plain text.
 
 **thumbnail_optionlar**: Array of 2 OR 3 iconic objects for the thumbnail (e.g. ["Shark", "Alligator"]).
 
-**thumbnail_highlights**: Array of 1-3 key words from thumbnail_question to highlight in neon color on the thumbnail. Pick CONTENT words only (nouns/adjectives). NOT articles/auxiliaries/prepositions (the, a, is, did, this, that, from, to, of, and, or, but, came, which, what, who, where, when, how). Example: ["CITY", "NAME"] for "Where did this city name come from?"
+**thumbnail_highlights**: Array of 1-3 words from thumbnail_question to highlight in neon color. Priority: pick the SPECIFIC SUBJECT (city name, food name, animal name, planet name, brand name) when present. If no specific name, pick the most descriptive content noun/adjective. NEVER replace specific names with generic words.
+- "Where did pizza first come from?" → ["PIZZA"]
+- "Where did Los Angeles name come from?" → ["LOS", "ANGELES"] (multi-word: list each word separately)
+- "Which animal has the longest neck?" → ["LONGEST", "NECK"]
+- NOT articles/prepositions: the, a, did, this, from, to, which, what, who, where, when, how
 
 **thumbnail_options_visual**: Array matching the FIRST QUESTION'S OPTIONS (2-3 items). For each option:
 - If option is a COUNTRY NAME → use type "flag" with ISO 3166-1 alpha-2 code. Example: {"label": "Italy", "type": "flag", "code": "IT"}
@@ -548,10 +551,11 @@ TOPIC EMOJIS (for intro screen emoji band)
       }
       console.log(`Thumbnail title: "${json.thumbnail_title}"`);
 
-      // thumbnail_question validate + markdown temizle
-      if (!json.thumbnail_question) {
-        const firstMC = json.questions?.find(q => !q.question_type || q.question_type === "multiple_choice");
-        json.thumbnail_question = firstMC?.question_text || json.thumbnail_title || "";
+      // thumbnail_question: spesifik soru metni — jenerik DEĞİL, question_text ile aynı olmalı
+      const firstMC = json.questions?.find(q => !q.question_type || q.question_type === "multiple_choice");
+      if (!json.thumbnail_question || json.thumbnail_question.includes("this food") || json.thumbnail_question.includes("this fruit") || json.thumbnail_question.includes("this artwork")) {
+        // Gemini hâlâ jenerikleştirdiyse question_text ile override et
+        json.thumbnail_question = firstMC?.question_text || json.thumbnail_title || json.thumbnail_question || "";
       }
       json.thumbnail_question = String(json.thumbnail_question)
         .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1")
