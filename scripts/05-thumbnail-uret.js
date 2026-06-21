@@ -1,4 +1,4 @@
-// REV 015/22JUN26 - Drive questions.json'dan thumbnail_question+options_visual oku (Sheets sütun yok fallback)
+// REV 016/22JUN26 - Viral görsel: gradient bant, renkli kelimeler, renkli rozetler, vignette
 /**
  * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
@@ -159,25 +159,29 @@ async function renderOptionImage(opt, hesap) {
 
 // ─── SVG HELPERS ──────────────────────────────────────────────────────────────
 
+const WORD_COLORS  = ["#FFE600", "#FF5BA7", "#5BE0FF", "#7FFF7F", "#FFB347"];
+const BADGE_COLORS = ["#FF5722", "#5BE0FF", "#7FFF7F"];
+const LABEL_BAR_COLORS = ["#FFB347", "#FF5BA7", "#9C27B0"];
+
 /**
- * Üst bant SVG (tam kanvas boyutunda, sadece bant alanı dolu — alt şeffaf).
+ * Üst bant SVG — gradient arka plan + kelime kelime farklı renk + drop shadow.
  * bandH ≈ %20 × H
  */
 function svgTopBand(question, W, H, bandH) {
   const text = cleanMarkdown(question).toUpperCase();
 
-  // Font boyutu: tek satıra sığdır, max 88px
-  const fsSingle = Math.min(88, Math.floor((W * 0.86) / Math.max(text.length * 0.56, 1)));
+  // Font: %15-20 büyük (max 102px)
+  const fsSingle = Math.min(102, Math.floor((W * 0.86) / Math.max(text.length * 0.56, 1)));
   let lines, fontSize;
-  if (fsSingle >= 62 || text.split(/\s+/).length <= 3) {
+  if (fsSingle >= 72 || text.split(/\s+/).length <= 3) {
     lines = [text];
-    fontSize = Math.max(52, fsSingle);
+    fontSize = Math.max(60, fsSingle);
   } else {
     const words = text.split(/\s+/);
     const mid = Math.ceil(words.length / 2);
     lines = [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
     const maxLen = Math.max(lines[0].length, lines[1].length);
-    fontSize = Math.max(40, Math.min(70, Math.floor((W * 0.86) / Math.max(maxLen * 0.56, 1))));
+    fontSize = Math.max(48, Math.min(82, Math.floor((W * 0.86) / Math.max(maxLen * 0.56, 1))));
   }
 
   const lineH = fontSize * 1.05;
@@ -185,27 +189,45 @@ function svgTopBand(question, W, H, bandH) {
   const startY = (bandH - totalH) / 2 + fontSize * 0.82;
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
-  // Sarı bant
-  svg += `<rect x="0" y="0" width="${W}" height="${bandH}" fill="#FFD600"/>`;
+  svg += `<defs>
+    <linearGradient id="bandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#FFE600"/>
+      <stop offset="50%"  stop-color="#FFB347"/>
+      <stop offset="100%" stop-color="#FF5BA7"/>
+    </linearGradient>
+    <filter id="tShadow" x="-5%" y="-10%" width="110%" height="130%">
+      <feDropShadow dx="3" dy="4" stdDeviation="3" flood-color="#000000" flood-opacity="0.75"/>
+    </filter>
+  </defs>`;
+
+  svg += `<rect x="0" y="0" width="${W}" height="${bandH}" fill="url(#bandGrad)"/>`;
   // Kalın siyah alt çerçeve
-  svg += `<rect x="0" y="${bandH - 10}" width="${W}" height="10" fill="#1A1A1A"/>`;
-  // Soru metni — kalın, siyah, beyaz strok
+  svg += `<rect x="0" y="${bandH - 12}" width="${W}" height="12" fill="#1A1A1A"/>`;
+
+  // Kelime kelime renkli tspan
+  let wordIdx = 0;
   lines.forEach((line, i) => {
     const y = startY + i * lineH;
-    svg += `<text
-      x="${W / 2}" y="${y}"
+    const words = line.split(/\s+/);
+    svg += `<text x="${W / 2}" y="${y}"
       font-family="Lilita One, Fredoka, Impact, Arial Black, sans-serif"
-      font-size="${fontSize}" font-weight="900" fill="#1A1A1A"
-      text-anchor="middle"
-      stroke="#FFFFFF" stroke-width="5" paint-order="stroke"
-    >${escapeXml(line)}</text>`;
+      font-size="${fontSize}" font-weight="900"
+      text-anchor="middle" filter="url(#tShadow)">`;
+    words.forEach((word, wi) => {
+      const color = WORD_COLORS[wordIdx % WORD_COLORS.length];
+      wordIdx++;
+      const prefix = wi > 0 ? " " : "";
+      svg += `<tspan fill="${color}" stroke="#FFFFFF" stroke-width="7" paint-order="stroke">${escapeXml(prefix + word)}</tspan>`;
+    });
+    svg += `</text>`;
   });
+
   svg += `</svg>`;
   return svg;
 }
 
 /**
- * Seçenek overlay SVG: A/B/C rozetler + alt sarı etiket + dikey siyah ayraçlar.
+ * Seçenek overlay SVG — renkli rozetler, renkli şık çubukları, kalın ayraç + glow.
  * Şeffaf arka plan — compositing'de option görselleri üstüne bindirilir.
  */
 function svgOptionOverlay(optionlar, W, H, bandH) {
@@ -213,43 +235,71 @@ function svgOptionOverlay(optionlar, W, H, bandH) {
   const colW = Math.floor(W / n);
   const bottomH = H - bandH;
   const BADGE_R = 46;
-  const LABEL_H = 78;
+  const LABEL_H = 82;
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<defs>
+    <filter id="bGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="imgGlow" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="tShadow2" x="-5%" y="-10%" width="110%" height="130%">
+      <feDropShadow dx="2" dy="3" stdDeviation="2" flood-color="#000000" flood-opacity="0.85"/>
+    </filter>
+  </defs>`;
 
   optionlar.forEach((opt, i) => {
     const colX = i * colW;
     const thisColW = i === n - 1 ? W - colX : colW;
+    const badgeColor = BADGE_COLORS[i % BADGE_COLORS.length];
+    const labelColor = LABEL_BAR_COLORS[i % LABEL_BAR_COLORS.length];
 
-    // Dikey siyah ayraç
+    // Dikey ayraç: kalın siyah 5px + glow yıldızları üst/alt
     if (i > 0) {
-      svg += `<rect x="${colX - 5}" y="${bandH}" width="10" height="${bottomH}" fill="#1A1A1A"/>`;
+      svg += `<rect x="${colX - 3}" y="${bandH}" width="6" height="${bottomH}" fill="#1A1A1A"/>`;
+      // Üst glow nokta
+      svg += `<circle cx="${colX}" cy="${bandH + 24}" r="10" fill="#FFE600" fill-opacity="0.7" filter="url(#imgGlow)"/>`;
+      // Alt glow nokta
+      svg += `<circle cx="${colX}" cy="${H - LABEL_H - 24}" r="10" fill="#FFE600" fill-opacity="0.7" filter="url(#imgGlow)"/>`;
     }
 
-    // A/B/C rozeti — sol üst köşe
+    // Şık görsel etrafı sarı glow halo
+    svg += `<rect x="${colX + 6}" y="${bandH + 6}" width="${thisColW - 12}" height="${bottomH - LABEL_H - 12}"
+      fill="none" stroke="#FFE600" stroke-width="5" stroke-opacity="0.45" rx="4" filter="url(#imgGlow)"/>`;
+
+    // Rozet: beyaz dış → siyah ring → renkli → harf
     const bCX = colX + BADGE_R + 16;
     const bCY = bandH + BADGE_R + 16;
-    svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R + 8}" fill="#1A1A1A"/>`;
-    svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R}" fill="#FFD600"/>`;
-    svg += `<text
-      x="${bCX}" y="${bCY + 19}"
+    svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R + 12}" fill="#FFFFFF" filter="url(#bGlow)"/>`;
+    svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R + 7}"  fill="#1A1A1A"/>`;
+    svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R}"      fill="${badgeColor}" filter="url(#bGlow)"/>`;
+    svg += `<text x="${bCX}" y="${bCY + 20}"
       font-family="Lilita One, Fredoka, Impact, Arial Black, sans-serif"
-      font-size="54" font-weight="900" fill="#1A1A1A"
+      font-size="56" font-weight="900" fill="#FFFFFF"
       text-anchor="middle"
+      stroke="#000000" stroke-width="5" paint-order="stroke"
+      filter="url(#tShadow2)"
     >${BADGE_LETTERS[i]}</text>`;
 
-    // Alt etiket kutusu (koyu arka plan)
-    svg += `<rect x="${colX}" y="${H - LABEL_H}" width="${thisColW}" height="${LABEL_H}" fill="#1A1A1A" fill-opacity="0.80"/>`;
+    // Alt şık çubuğu — renkli arka plan
+    svg += `<rect x="${colX}" y="${H - LABEL_H}" width="${thisColW}" height="${LABEL_H}" fill="${labelColor}" fill-opacity="0.93"/>`;
+    // Üst ince aksan çizgisi (rozet rengiyle uyumlu)
+    svg += `<rect x="${colX}" y="${H - LABEL_H}" width="${thisColW}" height="6" fill="${badgeColor}"/>`;
 
-    // Şık ismi
+    // Şık ismi: beyaz + siyah strok
     const name = cleanMarkdown(opt.label).toUpperCase();
     const nfs = Math.min(54, Math.max(28, Math.floor((thisColW * 0.76) / Math.max(name.length * 0.6, 1))));
     svg += `<text
-      x="${colX + thisColW / 2}" y="${H - LABEL_H * 0.24}"
+      x="${colX + thisColW / 2}" y="${H - LABEL_H * 0.22}"
       font-family="Lilita One, Fredoka, Impact, Arial Black, sans-serif"
-      font-size="${nfs}" font-weight="900" fill="#FFD600"
+      font-size="${nfs}" font-weight="900" fill="#FFFFFF"
       text-anchor="middle"
-      stroke="#000000" stroke-width="3" paint-order="stroke"
+      stroke="#000000" stroke-width="4" paint-order="stroke"
+      filter="url(#tShadow2)"
     >${escapeXml(name)}</text>`;
   });
 
@@ -314,13 +364,26 @@ async function thumbnailUret({ question, optionsVisual, format, hesaplar, jobSee
     layers.push({ input: resized, left: i * colW, top: bandH });
   }
 
-  // 4) Üst bant (soru metni)
+  // 4) Üst bant (gradient + renkli kelimeler)
   const bandSvg = svgTopBand(question, W, H, bandH);
   layers.push({ input: Buffer.from(bandSvg), left: 0, top: 0 });
 
-  // 5) Overlay: rozetler + isimler + ayraçlar
+  // 5) Overlay: renkli rozetler + şık çubukları + ayraçlar
   const overlaySvg = svgOptionOverlay(opts, W, H, bandH);
   layers.push({ input: Buffer.from(overlaySvg), left: 0, top: 0 });
+
+  // 6) Vignette: kenarlar koyulaşır
+  const vignetteSvg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="vig" cx="50%" cy="50%" r="70%">
+        <stop offset="0%"   stop-color="black" stop-opacity="0"/>
+        <stop offset="60%"  stop-color="black" stop-opacity="0"/>
+        <stop offset="100%" stop-color="black" stop-opacity="0.48"/>
+      </radialGradient>
+    </defs>
+    <rect width="${W}" height="${H}" fill="url(#vig)"/>
+  </svg>`;
+  layers.push({ input: Buffer.from(vignetteSvg), left: 0, top: 0 });
 
   return await sharp(bgBuf)
     .composite(layers)
