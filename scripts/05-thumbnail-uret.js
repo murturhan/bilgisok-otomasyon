@@ -1,4 +1,4 @@
-// REV 016/22JUN26 - Viral görsel: gradient bant, renkli kelimeler, renkli rozetler, vignette
+// REV 017/22JUN26 - Siyah zemin bant, fosforlu highlights, renkli slot bg, kelime boşluğu fix
 /**
  * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
@@ -144,7 +144,7 @@ async function renderOptionImage(opt, hesap) {
 
   if (opt.type === "flux" && opt.prompt) {
     const fullPrompt =
-      `${opt.prompt}, isolated subject, plain white or very light gray background, ` +
+      `${opt.prompt}, isolated subject, NO white background, transparent or dark background, ` +
       `vivid saturated colors, sharp focus, photorealistic, no text, no watermarks`;
     console.log(`  🎨 FLUX: ${opt.label}`);
     return await fluxCagri(fullPrompt, hesap, { width: 512, height: 512 });
@@ -159,19 +159,41 @@ async function renderOptionImage(opt, hesap) {
 
 // ─── SVG HELPERS ──────────────────────────────────────────────────────────────
 
-const WORD_COLORS  = ["#FFE600", "#FF5BA7", "#5BE0FF", "#7FFF7F", "#FFB347"];
-const BADGE_COLORS = ["#FF5722", "#5BE0FF", "#7FFF7F"];
-const LABEL_BAR_COLORS = ["#FFB347", "#FF5BA7", "#9C27B0"];
+const NEON_COLORS      = ["#FFFF00", "#39FF14", "#00FFFF"]; // fosforlu sarı / yeşil / cyan
+const BADGE_COLORS     = ["#FF5722", "#5BE0FF", "#7FFF7F"];
+const LABEL_BAR_COLORS = ["#1A1A1A", "#1A1A1A", "#1A1A1A"]; // koyu gri/siyah
+const SLOT_BG = [
+  { start: "#FFB347", end: "#FF5722" }, // turuncu→kırmızı
+  { start: "#5BE0FF", end: "#0066FF" }, // mavi gradient
+  { start: "#7FFF7F", end: "#00C853" }, // yeşil gradient
+];
+const FONT_STACK = "'Luckiest Guy', Bangers, 'Bowlby One', 'Lilita One', Fredoka, Impact, 'Arial Black', sans-serif";
+const HIGHLIGHT_STOPWORDS = new Set(["the","a","an","is","are","was","were","did","do","does","this","that","these","those","in","on","at","of","to","from","by","with","and","or","but","has","have","had","its","it","not","no","came","come","which","what","who","where","when","how","why"]);
 
 /**
- * Üst bant SVG — gradient arka plan + kelime kelime farklı renk + drop shadow.
+ * thumbnail_question'dan heuristic highlights hesapla (Gemini vermezse fallback)
+ */
+function pickHighlights(question) {
+  const words = question.toUpperCase().split(/\s+/).map(w => w.replace(/[^A-Z]/g, ""));
+  const candidates = words.filter(w => w.length >= 4 && !HIGHLIGHT_STOPWORDS.has(w.toLowerCase()));
+  return candidates.sort((a, b) => b.length - a.length).slice(0, 2);
+}
+
+/**
+ * Üst bant SVG — siyah zemin + beyaz yazı + fosforlu highlight kelimeleri.
+ * Her kelime AYRI <text> elementi → librsvg tspan-space collapse bug'ı yok.
  * bandH ≈ %20 × H
  */
-function svgTopBand(question, W, H, bandH) {
+function svgTopBand(question, W, H, bandH, highlights = []) {
   const text = cleanMarkdown(question).toUpperCase();
+  const hlSet = new Set(highlights.map(h => h.toUpperCase().replace(/[^A-Z]/g, "")).filter(Boolean));
 
-  // Font: %15-20 büyük (max 102px)
-  const fsSingle = Math.min(102, Math.floor((W * 0.86) / Math.max(text.length * 0.56, 1)));
+  // Karakter genişlik tahmini (Impact ~monospace)
+  const CHAR_W = 0.56;
+  const SPACE_W = 0.20;
+
+  // Font boyutu
+  const fsSingle = Math.min(102, Math.floor((W * 0.86) / Math.max(text.length * CHAR_W, 1)));
   let lines, fontSize;
   if (fsSingle >= 72 || text.split(/\s+/).length <= 3) {
     lines = [text];
@@ -181,45 +203,49 @@ function svgTopBand(question, W, H, bandH) {
     const mid = Math.ceil(words.length / 2);
     lines = [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
     const maxLen = Math.max(lines[0].length, lines[1].length);
-    fontSize = Math.max(48, Math.min(82, Math.floor((W * 0.86) / Math.max(maxLen * 0.56, 1))));
+    fontSize = Math.max(48, Math.min(82, Math.floor((W * 0.86) / Math.max(maxLen * CHAR_W, 1))));
   }
 
-  const lineH = fontSize * 1.05;
-  const totalH = lines.length * lineH;
-  const startY = (bandH - totalH) / 2 + fontSize * 0.82;
+  const charPx  = fontSize * CHAR_W;
+  const spacePx = fontSize * SPACE_W;
+  const lineH   = fontSize * 1.05;
+  const totalH  = lines.length * lineH;
+  const startY  = (bandH - totalH) / 2 + fontSize * 0.82;
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
-  svg += `<defs>
-    <linearGradient id="bandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"   stop-color="#FFE600"/>
-      <stop offset="50%"  stop-color="#FFB347"/>
-      <stop offset="100%" stop-color="#FF5BA7"/>
-    </linearGradient>
-    <filter id="tShadow" x="-5%" y="-10%" width="110%" height="130%">
-      <feDropShadow dx="3" dy="4" stdDeviation="3" flood-color="#000000" flood-opacity="0.75"/>
-    </filter>
-  </defs>`;
 
-  svg += `<rect x="0" y="0" width="${W}" height="${bandH}" fill="url(#bandGrad)"/>`;
-  // Kalın siyah alt çerçeve
-  svg += `<rect x="0" y="${bandH - 12}" width="${W}" height="12" fill="#1A1A1A"/>`;
+  // Siyah bant
+  svg += `<rect x="0" y="0" width="${W}" height="${bandH}" fill="#000000"/>`;
+  // Üst fosforlu sarı ince çizgi
+  svg += `<rect x="0" y="0" width="${W}" height="4" fill="#FFFF00"/>`;
+  // Alt siyah bar + fosforlu çizgi
+  svg += `<rect x="0" y="${bandH - 12}" width="${W}" height="12" fill="#111111"/>`;
+  svg += `<rect x="0" y="${bandH - 14}" width="${W}" height="3" fill="#FFFF00"/>`;
 
-  // Kelime kelime renkli tspan
-  let wordIdx = 0;
-  lines.forEach((line, i) => {
-    const y = startY + i * lineH;
+  let hlIdx = 0;
+  lines.forEach((line, li) => {
+    const y = startY + li * lineH;
     const words = line.split(/\s+/);
-    svg += `<text x="${W / 2}" y="${y}"
-      font-family="Lilita One, Fredoka, Impact, Arial Black, sans-serif"
-      font-size="${fontSize}" font-weight="900"
-      text-anchor="middle" filter="url(#tShadow)">`;
+    // Toplam satır genişliği → x başlangıcı (ortalama)
+    const totalW = words.reduce((s, w, wi) => s + w.length * charPx + (wi > 0 ? spacePx : 0), 0);
+    let curX = (W - totalW) / 2;
+
     words.forEach((word, wi) => {
-      const color = WORD_COLORS[wordIdx % WORD_COLORS.length];
-      wordIdx++;
-      const prefix = wi > 0 ? " " : "";
-      svg += `<tspan fill="${color}" stroke="#FFFFFF" stroke-width="7" paint-order="stroke">${escapeXml(prefix + word)}</tspan>`;
+      if (wi > 0) curX += spacePx;
+      const clean = word.replace(/[^A-Z]/g, "");
+      const isHl  = clean && hlSet.has(clean);
+      const fill  = isHl ? NEON_COLORS[hlIdx % NEON_COLORS.length] : "#FFFFFF";
+      if (isHl) hlIdx++;
+
+      svg += `<text x="${Math.round(curX)}" y="${Math.round(y)}"
+        font-family="${FONT_STACK}"
+        font-size="${fontSize}" font-weight="900"
+        text-anchor="start"
+        fill="${fill}" stroke="#000000" stroke-width="${isHl ? 5 : 4}" paint-order="stroke"
+      >${escapeXml(word)}</text>`;
+
+      curX += word.length * charPx;
     });
-    svg += `</text>`;
   });
 
   svg += `</svg>`;
@@ -278,27 +304,27 @@ function svgOptionOverlay(optionlar, W, H, bandH) {
     svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R + 7}"  fill="#1A1A1A"/>`;
     svg += `<circle cx="${bCX}" cy="${bCY}" r="${BADGE_R}"      fill="${badgeColor}" filter="url(#bGlow)"/>`;
     svg += `<text x="${bCX}" y="${bCY + 20}"
-      font-family="Lilita One, Fredoka, Impact, Arial Black, sans-serif"
+      font-family="${FONT_STACK}"
       font-size="56" font-weight="900" fill="#FFFFFF"
       text-anchor="middle"
-      stroke="#000000" stroke-width="5" paint-order="stroke"
+      stroke="#000000" stroke-width="6" paint-order="stroke"
       filter="url(#tShadow2)"
     >${BADGE_LETTERS[i]}</text>`;
 
-    // Alt şık çubuğu — renkli arka plan
-    svg += `<rect x="${colX}" y="${H - LABEL_H}" width="${thisColW}" height="${LABEL_H}" fill="${labelColor}" fill-opacity="0.93"/>`;
-    // Üst ince aksan çizgisi (rozet rengiyle uyumlu)
-    svg += `<rect x="${colX}" y="${H - LABEL_H}" width="${thisColW}" height="6" fill="${badgeColor}"/>`;
+    // Alt şık çubuğu — koyu gri/siyah
+    svg += `<rect x="${colX}" y="${H - LABEL_H}" width="${thisColW}" height="${LABEL_H}" fill="#111111" fill-opacity="0.93"/>`;
+    // Üst ince aksan çizgisi (rozet rengiyle)
+    svg += `<rect x="${colX}" y="${H - LABEL_H}" width="${thisColW}" height="5" fill="${badgeColor}"/>`;
 
-    // Şık ismi: beyaz + siyah strok
+    // Şık ismi: beyaz + koyu strok
     const name = cleanMarkdown(opt.label).toUpperCase();
     const nfs = Math.min(54, Math.max(28, Math.floor((thisColW * 0.76) / Math.max(name.length * 0.6, 1))));
     svg += `<text
       x="${colX + thisColW / 2}" y="${H - LABEL_H * 0.22}"
-      font-family="Lilita One, Fredoka, Impact, Arial Black, sans-serif"
+      font-family="${FONT_STACK}"
       font-size="${nfs}" font-weight="900" fill="#FFFFFF"
       text-anchor="middle"
-      stroke="#000000" stroke-width="4" paint-order="stroke"
+      stroke="#111111" stroke-width="4" paint-order="stroke"
       filter="url(#tShadow2)"
     >${escapeXml(name)}</text>`;
   });
@@ -312,12 +338,13 @@ function svgOptionOverlay(optionlar, W, H, bandH) {
 /**
  * @param {object} opts
  *   question      — üst banttaki jenerik soru
+ *   highlights    — ["WORD1","WORD2"] fosforlu kelimeler (opsiyonel)
  *   optionsVisual — [{label, type, code?|prompt?}, ...]
  *   format        — "long" | "shorts"
  *   hesaplar      — CF hesap listesi
  *   jobSeed       — renk/davranış seed
  */
-async function thumbnailUret({ question, optionsVisual, format, hesaplar, jobSeed }) {
+async function thumbnailUret({ question, highlights, optionsVisual, format, hesaplar, jobSeed }) {
   // Shorts şimdilik devre dışı (CLAUDE.md) — long olarak üret
   const W = 1280;
   const H = 720;
@@ -326,6 +353,12 @@ async function thumbnailUret({ question, optionsVisual, format, hesaplar, jobSee
 
   const n = Math.min(3, Math.max(1, optionsVisual.length));
   const opts = optionsVisual.slice(0, n);
+  const colW = Math.floor(W / n);
+
+  // highlights fallback
+  const hl = Array.isArray(highlights) && highlights.length > 0
+    ? highlights
+    : pickHighlights(question);
 
   // 1) Her seçenek için görsel (paralel)
   console.log(`  📸 ${n} seçenek görseli üretiliyor...`);
@@ -338,34 +371,49 @@ async function thumbnailUret({ question, optionsVisual, format, hesaplar, jobSee
     )
   );
 
-  // 2) Arka plan: beyaz (flag türünde net görünüm için) veya açık mavi
-  const h = seedHash(jobSeed);
-  const bgColor = h % 2 === 0 ? "#F0F4FF" : "#FFF8F0";
+  // 2) Arka plan: siyah (bant ile uyumlu)
   const bgBuf = await sharp(
     Buffer.from(`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${W}" height="${H}" fill="${bgColor}"/>
+      <rect width="${W}" height="${H}" fill="#0A0A0A"/>
     </svg>`)
   ).png().toBuffer();
 
   const layers = [];
 
-  // 3) Seçenek görselleri yan yana (alt bölümde)
-  const colW = Math.floor(W / n);
+  // 2.5) Slot gradient arka planları (option görsellerinin altında)
+  let slotBgSvg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg"><defs>`;
+  for (let i = 0; i < n; i++) {
+    const sg = SLOT_BG[i % SLOT_BG.length];
+    slotBgSvg += `<linearGradient id="sg${i}" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="${sg.start}"/>
+      <stop offset="100%" stop-color="${sg.end}"/>
+    </linearGradient>`;
+  }
+  slotBgSvg += `</defs>`;
+  for (let i = 0; i < n; i++) {
+    const cx = i * colW;
+    const cw = i === n - 1 ? W - cx : colW;
+    slotBgSvg += `<rect x="${cx}" y="${bandH}" width="${cw}" height="${bottomH}" fill="url(#sg${i})"/>`;
+  }
+  slotBgSvg += `</svg>`;
+  layers.push({ input: Buffer.from(slotBgSvg), left: 0, top: 0 });
+
+  // 3) Seçenek görselleri yan yana (şeffaf padding → slot gradient görünür)
   for (let i = 0; i < n; i++) {
     if (!optionBuffers[i]) continue;
     const thisColW = i === n - 1 ? W - i * colW : colW;
-    // contain: oran korunsun, beyaz padding ile doldur
     const resized = await sharp(optionBuffers[i])
       .resize(thisColW, bottomH, {
         fit: "contain",
-        background: { r: 255, g: 255, b: 255, alpha: 255 },
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
       })
+      .png()
       .toBuffer();
     layers.push({ input: resized, left: i * colW, top: bandH });
   }
 
-  // 4) Üst bant (gradient + renkli kelimeler)
-  const bandSvg = svgTopBand(question, W, H, bandH);
+  // 4) Üst bant (siyah zemin + beyaz + fosforlu highlights)
+  const bandSvg = svgTopBand(question, W, H, bandH, hl);
   layers.push({ input: Buffer.from(bandSvg), left: 0, top: 0 });
 
   // 5) Overlay: renkli rozetler + şık çubukları + ayraçlar
@@ -484,8 +532,12 @@ async function main() {
     let buffer;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
+        const highlights = Array.isArray(qJson?.thumbnail_highlights) && qJson.thumbnail_highlights.length > 0
+          ? qJson.thumbnail_highlights
+          : [];
         buffer = await thumbnailUret({
           question,
+          highlights,
           optionsVisual,
           format,
           hesaplar,

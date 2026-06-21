@@ -1,4 +1,4 @@
-// REV 019/21JUN26 - thumbnail_question + thumbnail_options_visual (bayrak/flux per-seçenek) + markdown temizlik
+// REV 020/22JUN26 - thumbnail_highlights: Gemini'den fosforlu anahtar kelimeler + fallback heuristik
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -249,6 +249,8 @@ Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
 - If already generic, keep unchanged. NEVER include markdown **, just plain text.
 
 **thumbnail_optionlar**: Array of 2 OR 3 iconic objects for the thumbnail (e.g. ["Shark", "Alligator"]).
+
+**thumbnail_highlights**: Array of 1-3 key words from thumbnail_question to highlight in neon color on the thumbnail. Pick CONTENT words only (nouns/adjectives). NOT articles/auxiliaries/prepositions (the, a, is, did, this, that, from, to, of, and, or, but, came, which, what, who, where, when, how). Example: ["CITY", "NAME"] for "Where did this city name come from?"
 
 **thumbnail_options_visual**: Array matching the FIRST QUESTION'S OPTIONS (2-3 items). For each option:
 - If option is a COUNTRY NAME → use type "flag" with ISO 3166-1 alpha-2 code. Example: {"label": "Italy", "type": "flag", "code": "IT"}
@@ -555,6 +557,17 @@ TOPIC EMOJIS (for intro screen emoji band)
         .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1")
         .replace(/__([^_]+)__/g, "$1").trim();
 
+      // thumbnail_highlights validate/fallback
+      const HIGHLIGHT_STOPWORDS = new Set(["the","a","an","is","are","was","were","did","do","does","this","that","these","those","in","on","at","of","to","from","by","with","and","or","but","has","have","had","its","it","not","no","came","come","which","what","who","where","when","how","why","did","its"]);
+      if (!Array.isArray(json.thumbnail_highlights) || json.thumbnail_highlights.length < 1) {
+        const qWords = json.thumbnail_question.toUpperCase().split(/\s+/).map(w => w.replace(/[^A-Z]/g, ""));
+        const candidates = qWords.filter(w => w.length >= 4 && !HIGHLIGHT_STOPWORDS.has(w.toLowerCase()));
+        json.thumbnail_highlights = candidates.sort((a, b) => b.length - a.length).slice(0, 2);
+      }
+      json.thumbnail_highlights = json.thumbnail_highlights
+        .map(w => String(w).toUpperCase().replace(/[^A-Z]/g, "")).filter(Boolean).slice(0, 3);
+      console.log(`Thumbnail highlights: ${JSON.stringify(json.thumbnail_highlights)}`);
+
       // thumbnail_options_visual validate/fallback
       if (!Array.isArray(json.thumbnail_options_visual) || json.thumbnail_options_visual.length < 2) {
         const firstMC = json.questions?.find(q => !q.question_type || q.question_type === "multiple_choice");
@@ -751,6 +764,7 @@ async function main() {
       baslik: icerik.baslik,
       thumbnail_title: icerik.thumbnail_title || "",
       thumbnail_question: icerik.thumbnail_question || "",
+      thumbnail_highlights: icerik.thumbnail_highlights || [],
       thumbnail_options_visual: icerik.thumbnail_options_visual || [],
       thumbnail_optionlar: icerik.thumbnail_optionlar || [],
       background_prompt: icerik.background_prompt || "",
