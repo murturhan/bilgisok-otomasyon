@@ -1,4 +1,4 @@
-// REV 017/21JUN26 - Gemini prompt kritik kural guclendirildi + few-shot ornekler + clean regex guncellendi
+// REV 018/21JUN26 - thumbnail_optionlar (2-3 obje dizisi) + soru formatlı baslik + Quiz Blitz layout
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -83,9 +83,8 @@ OUTPUT (valid JSON, no markdown):
   "topic_emojis": ["🤔","🎁","✨","🎯","🎉"],
   "baslik": "Would You Rather? Kids Edition with Jess the Fox! 🤔",
   "thumbnail_title": "Would You Rather?",
-  "thumbnail_obje_1": "Gift Box",
-  "thumbnail_obje_2": "Question Mark",
-  "thumbnail_prompt": "Colorful split screen with question marks and gift boxes, vibrant colors, no characters",
+  "thumbnail_optionlar": ["Gift Box", "Mystery Box"],
+  "thumbnail_prompt": "Colorful abstract background with question marks and ribbons, vibrant colors, no characters",
   "background_prompt": "Colorful background with floating question marks and ribbons, soft blur, center empty, vibrant colors",
   "aciklama": "Play Would You Rather with Jess the Fox! ${QUESTION_COUNT} fun questions for kids. #WouldYouRather #KidsQuiz #JessTheFox #GeniMiniTests",
   "questions": [
@@ -234,9 +233,9 @@ Example: "🦁 Can YOU Guess All 25 Animals? Kids Quiz with Jess the Fox!"
 **aciklama** (description): 150-250 words with hashtags
 Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
 
-**thumbnail_title**: SHORT QUESTION format like "Which Ocean Animal?", "Which Dinosaur?", "Which Planet?". Maximum 3-4 words.
+**thumbnail_title**: QUESTION format — short, punchy, curiosity-gap. Examples: "Whose Bite Is Strongest?", "Which Is Faster?", "The Most Dangerous?" Maximum 5 words. Must end with ? or !
 
-**thumbnail_obje_1** and **thumbnail_obje_2**: Two iconic objects from the topic (e.g. "Octopus", "Starfish"). Used for 2-object FLUX image.
+**thumbnail_optionlar**: Array of 2 OR 3 iconic objects from the topic. Each gets its own FLUX image shown side-by-side (e.g. ["Shark", "Alligator"] or ["Lion", "Tiger", "Bear"]). Objects must be visually distinct and clearly recognizable as isolated subjects.
 
 **thumbnail_prompt**: FLUX prompt for thumbnail background (NO CHARACTERS, just theme scenery)
 - Vibrant theme scenery only
@@ -280,10 +279,9 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "format": "${FORMAT}",
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
   "baslik": "Long YouTube title with emoji",
-  "thumbnail_title": "Which Ocean Animal? (short question format, max 3-4 words)",
-  "thumbnail_obje_1": "Octopus",
-  "thumbnail_obje_2": "Starfish",
-  "thumbnail_prompt": "FLUX prompt - scenery only, NO CHARACTERS",
+  "thumbnail_title": "Which Ocean Animal?",
+  "thumbnail_optionlar": ["Octopus", "Starfish"],
+  "thumbnail_prompt": "Underwater scenery, vibrant ocean background, NO animals, NO characters",
   "background_prompt": "FLUX prompt - blurred topic-themed background, depth of field, center empty for UI",
   "aciklama": "200 word description with hashtags",
   "questions": [
@@ -332,8 +330,9 @@ CRITICAL:
   * Have empty soft center for UI overlay
   * NO characters, NO animals, NO text
   * NO style keywords — just describe the environment (style applied at render time)
-- **thumbnail_title MUST be 2-3 WORDS MAX, UPPERCASE, PUNCHY** (examples: "FOOD QUIZ", "GUESS THE ANIMAL", "OCEAN QUIZ", "TRUCK CHALLENGE", "MIGHTY MACHINES")
-- thumbnail_title is for the thumbnail image (LARGE TEXT), NOT for YouTube title
+- **thumbnail_title MUST be QUESTION FORMAT**: "Whose Bite Is Strongest?", "Which Is Faster?", "The Most Dangerous?" — max 5 words, ends with ? or !, NOT a generic label like "FOOD QUIZ"
+- thumbnail_title is for the thumbnail top band (LARGE TEXT), NOT for YouTube title
+- **thumbnail_optionlar MUST be 2 or 3 items**: iconic, visually recognizable objects that make great side-by-side comparison images
 - baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title
 - **question_text MUST be MAX 6 WORDS** — short and impactful, never exceed 6 words. Wrong: "What is the name of the largest ocean on Earth?". Right: "Which is Earth's largest ocean?"
 - **intro_title CRITICAL — MANDATORY STARS**: Short topic title for the video intro screen (MAX 4 WORDS). You MUST wrap the 1-2 most important words with **double stars**. Examples: "**Wild** Animals", "Amazing **Oceans**", "**Rocket** Science", "**Dino** World". NEVER output intro_title without ** markers — it MUST contain ** or the UI breaks. Wrong: "Animal Adaptations". Right: "**Animal** Adaptations".
@@ -508,22 +507,36 @@ TOPIC EMOJIS (for intro screen emoji band)
       
       if (!json.baslik) json.baslik = `${konu} Quiz for Kids!`;
       
-      // thumbnail_title validate - 2-3 kelime, uppercase, max 16 karakter
+      // thumbnail_title validate - soru formatı, max 5 kelime
       if (!json.thumbnail_title) {
-        // Konu'dan otomatik üret
-        const konuTemiz = konu.replace(/[:!?].*$/g, "").trim(); // İlk : veya ! sonrasını at
+        const konuTemiz = konu.replace(/[:!?].*$/g, "").trim();
         const kelimeler = konuTemiz.split(/\s+/).slice(0, 2);
-        json.thumbnail_title = kelimeler.join(" ").toUpperCase() + " QUIZ";
+        json.thumbnail_title = `Which ${kelimeler.join(" ")}?`;
       } else {
-        // Çok uzun ise kısalt
-        json.thumbnail_title = String(json.thumbnail_title).toUpperCase().trim();
+        json.thumbnail_title = String(json.thumbnail_title).trim();
         const kelimeler = json.thumbnail_title.split(/\s+/);
-        if (kelimeler.length > 3) {
-          json.thumbnail_title = kelimeler.slice(0, 3).join(" ");
+        if (kelimeler.length > 5) {
+          json.thumbnail_title = kelimeler.slice(0, 5).join(" ");
+          if (!/[?!]$/.test(json.thumbnail_title)) json.thumbnail_title += "?";
         }
       }
       console.log(`Thumbnail title: "${json.thumbnail_title}"`);
-      
+
+      // thumbnail_optionlar validate
+      if (!Array.isArray(json.thumbnail_optionlar) || json.thumbnail_optionlar.length < 2) {
+        // Fallback: obje_1/obje_2 veya konu'dan üret
+        if (json.thumbnail_obje_1 && json.thumbnail_obje_2) {
+          json.thumbnail_optionlar = [json.thumbnail_obje_1, json.thumbnail_obje_2];
+        } else {
+          const konuKelimeler = konu.split(/\s+/);
+          json.thumbnail_optionlar = konuKelimeler.length >= 2
+            ? [konuKelimeler[0], konuKelimeler[1]]
+            : [konu, "Mystery"];
+        }
+      }
+      json.thumbnail_optionlar = json.thumbnail_optionlar.slice(0, 3).map(o => String(o).trim());
+      console.log(`Thumbnail optionlar: ${JSON.stringify(json.thumbnail_optionlar)}`);
+
       if (!json.thumbnail_prompt) {
         json.thumbnail_prompt = `Vibrant ${konu} themed background scenery, NO CHARACTERS, NO ANIMALS, NO PEOPLE, bright colors, NO TEXT`;
       }
@@ -663,9 +676,9 @@ async function main() {
       is_test_mode: IS_TEST_MODE,
       baslik: icerik.baslik,
       thumbnail_baslik: icerik.thumbnail_title || "",
-      thumbnail_alt_baslik: "",
-      thumbnail_obje_1: icerik.thumbnail_obje_1 || "",
-      thumbnail_obje_2: icerik.thumbnail_obje_2 || "",
+      thumbnail_optionlar: JSON.stringify(icerik.thumbnail_optionlar || []),
+      thumbnail_obje_1: (icerik.thumbnail_optionlar || [])[0] || icerik.thumbnail_obje_1 || "",
+      thumbnail_obje_2: (icerik.thumbnail_optionlar || [])[1] || icerik.thumbnail_obje_2 || "",
       thumbnail_prompt: icerik.thumbnail_prompt,
       senaryo: icerik.senaryo,
       tts_telaffuz: icerik.tts_telaffuz,
