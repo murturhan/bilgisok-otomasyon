@@ -1,0 +1,66 @@
+# REV 001/21JUN26 - worker.js syntax + script dosyalari CI kontrolu
+name: CI - Validate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - worker.js
+      - scripts/**
+  pull_request:
+    branches: [main]
+    paths:
+      - worker.js
+      - scripts/**
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: worker.js syntax check
+        run: |
+          # Template literal içindeki ${...} ifadelerini boş string ile değiştir
+          # sonra node --check yap
+          node -e "
+            const fs = require('fs');
+            const src = fs.readFileSync('worker.js', 'utf8');
+            // Template literal interpolation'larini kaldir
+            const cleaned = src
+              .replace(/\\\$\{[^}]*\}/g, '\"\"')
+              .replace(/\\\$\{/g, '\"');
+            fs.writeFileSync('/tmp/worker_check.js', cleaned);
+          "
+          node --check /tmp/worker_check.js
+          echo "✅ worker.js syntax OK"
+
+      - name: scripts/ syntax check
+        run: |
+          for f in scripts/*.js; do
+            node --check "$f" && echo "✅ $f OK" || (echo "❌ $f FAILED" && exit 1)
+          done
+
+      - name: worker.js içinde forbidden backup satiri kontrolu
+        run: |
+          if grep -n "\.backup_" worker.js; then
+            echo "❌ worker.js içinde .backup_ referansı var — temizle"
+            exit 1
+          fi
+          echo "✅ backup referansı yok"
+
+      - name: Büyük dosya kontrolu (worker.js < 500KB)
+        run: |
+          SIZE=$(wc -c < worker.js)
+          echo "worker.js boyutu: ${SIZE} bytes"
+          if [ "$SIZE" -gt 512000 ]; then
+            echo "❌ worker.js çok büyük (${SIZE} > 512000 bytes)"
+            exit 1
+          fi
+          echo "✅ Boyut OK"
