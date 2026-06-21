@@ -1,4 +1,4 @@
-// REV 014/21JUN26 - Soru kapağı: jenerik soru üstte bant + A/B/C bayrak-ya-da-FLUX şıklar altta
+// REV 015/22JUN26 - Drive questions.json'dan thumbnail_question+options_visual oku (Sheets sütun yok fallback)
 /**
  * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
@@ -73,6 +73,42 @@ async function formatTespit(jobFolderId, auth) {
   const drive = google.drive({ version: "v3", auth });
   const res = await drive.files.get({ fileId: jobFolderId, fields: "name" });
   return (res.data.name || "").toLowerCase().includes("-shorts-") ? "shorts" : "long";
+}
+
+/**
+ * Drive'daki questions.json'u oku (02-ses veya ana klasörden).
+ * thumbnail_question ve thumbnail_options_visual alanlarını döndürür.
+ */
+async function questionsJsonOku(driveFolderId, auth) {
+  const drive = google.drive({ version: "v3", auth });
+  const aramaYerleri = [];
+
+  // 1. 02-ses alt klasörü
+  const sesRes = await drive.files.list({
+    q: `'${driveFolderId}' in parents and name='02-ses' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: "files(id)",
+    pageSize: 1,
+  });
+  if (sesRes.data.files?.length) {
+    aramaYerleri.push(sesRes.data.files[0].id);
+  }
+  // 2. Ana klasör
+  aramaYerleri.push(driveFolderId);
+
+  for (const klasorId of aramaYerleri) {
+    const jsonRes = await drive.files.list({
+      q: `'${klasorId}' in parents and name='questions.json' and trashed=false`,
+      fields: "files(id)",
+      pageSize: 1,
+    });
+    if (!jsonRes.data.files?.length) continue;
+    const fileId = jsonRes.data.files[0].id;
+    const res = await drive.files.get({ fileId, alt: "media" }, { responseType: "text" });
+    const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+    console.log("  ✓ questions.json Drive'dan okundu");
+    return data;
+  }
+  return null;
 }
 
 // ─── GÖRSEL KAYNAK ────────────────────────────────────────────────────────────
@@ -312,41 +348,74 @@ async function main() {
     const hesaplar = getCfAccounts();
     if (hesaplar.length === 0) throw new Error("Cloudflare hesap yok");
 
-    // Soru metni
+    // Drive'dan questions.json oku (Sheets'te olmayan alanlar buradan gelir)
+    let qJson = null;
+    try {
+      qJson = await questionsJsonOku(job.drive_folder_id, saAuth);
+    } catch (e) {
+      console.warn(`  ⚠ Drive questions.json okunamadı: ${e.message}`);
+    }
+
+    // Soru metni: Drive > Sheets thumbnail_baslik > konu
     const question = cleanMarkdown(
-      job.thumbnail_question || job.thumbnail_baslik || `Which is the best?`
+      qJson?.thumbnail_question || job.thumbnail_baslik || job.konu || "Which is the best?"
     );
     console.log(`❓ Soru: "${question}"`);
 
-    // Seçenek görselleri
+    // Seçenek görselleri — 4 aşamalı fallback zinciri:
+    // 1) Drive questions.json thumbnail_options_visual
+    // 2) Sheets job.thumbnail_options_visual (JSON)
+    // 3) Drive questions.json thumbnail_optionlar
+    // 4) Drive questions.json'daki ilk sorunun options[] dizisinden otomatik türet
     let optionsVisual = [];
-    if (job.thumbnail_options_visual) {
+
+    if (Array.isArray(qJson?.thumbnail_options_visual) && qJson.thumbnail_options_visual.length >= 2) {
+      optionsVisual = qJson.thumbnail_options_visual;
+      console.log("  ✓ Kaynak: Drive questions.json thumbnail_options_visual");
+    } else if (job.thumbnail_options_visual) {
       try {
-        optionsVisual = JSON.parse(job.thumbnail_options_visual);
-      } catch (_) {
-        optionsVisual = [];
-      }
+        const parsed = JSON.parse(job.thumbnail_options_visual);
+        if (Array.isArray(parsed) && parsed.length >= 2) {
+          optionsVisual = parsed;
+          console.log("  ✓ Kaynak: Sheets thumbnail_options_visual");
+        }
+      } catch (_) {}
     }
 
-    // Fallback: thumbnail_optionlar → tüm FLUX
-    if (!Array.isArray(optionsVisual) || optionsVisual.length < 2) {
-      let fallbackOpts = [];
-      if (job.thumbnail_optionlar) {
-        try { fallbackOpts = JSON.parse(job.thumbnail_optionlar); } catch (_) {}
-      }
-      if (fallbackOpts.length < 2 && (job.thumbnail_obje_1 || job.thumbnail_obje_2)) {
-        fallbackOpts = [job.thumbnail_obje_1, job.thumbnail_obje_2].filter(Boolean);
-      }
-      optionsVisual = fallbackOpts.map((opt) => ({
+    if (optionsVisual.length < 2 && Array.isArray(qJson?.thumbnail_optionlar) && qJson.thumbnail_optionlar.length >= 2) {
+      optionsVisual = qJson.thumbnail_optionlar.map((opt) => ({
         label: String(opt),
         type: "flux",
         prompt: `${opt} isolated on plain white background, vivid colors, no text`,
       }));
+      console.log("  ✓ Kaynak: Drive questions.json thumbnail_optionlar → FLUX fallback");
     }
 
-    if (optionsVisual.length < 1) {
-      throw new Error("thumbnail_options_visual ve fallback seçenek yok");
+    if (optionsVisual.length < 2) {
+      // Son fallback: ilk sorunun options dizisinden türet
+      const firstQ = qJson?.questions?.find((q) => !q.question_type || q.question_type === "multiple_choice");
+      const opts = firstQ?.options || [];
+      if (opts.length >= 2) {
+        optionsVisual = opts.slice(0, 3).map((opt) => ({
+          label: String(opt),
+          type: "flux",
+          prompt: `${opt} isolated on plain white background, vivid colors, no text`,
+        }));
+        console.log("  ✓ Kaynak: ilk soru options[] → FLUX fallback");
+      }
     }
+
+    if (optionsVisual.length < 2) {
+      // Absolute fallback: konu kelimelerinden üret, hiç olmasa da çalışsın
+      const words = (job.konu || job.baslik || "Option").split(/\s+/).filter(Boolean);
+      optionsVisual = [words[0] || "A", words[1] || "B"].map((w) => ({
+        label: w,
+        type: "flux",
+        prompt: `${w} isolated on plain white background, vivid colors, no text`,
+      }));
+      console.warn("  ⚠ Absolute fallback: konu kelimelerinden seçenek üretildi");
+    }
+
     console.log(`🔠 Seçenekler: ${optionsVisual.map((o) => o.label).join(" | ")}`);
 
     let buffer;
