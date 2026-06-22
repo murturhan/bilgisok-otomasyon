@@ -1,4 +1,4 @@
-// REV 018/22JUN26 - xml:space=preserve başlık, 85% slot görsel, spesifik keyword highlight
+// REV 019/23JUN26 - Dinamik bant yüksekliği: başlık artık kesilmiyor
 /**
  * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
@@ -171,6 +171,39 @@ const FONT_STACK = "'Luckiest Guy', Bangers, 'Bowlby One', 'Lilita One', Fredoka
 const HIGHLIGHT_STOPWORDS = new Set(["the","a","an","is","are","was","were","did","do","does","this","that","these","those","in","on","at","of","to","from","by","with","and","or","but","has","have","had","its","it","not","no","came","come","which","what","who","where","when","how","why"]);
 
 /**
+ * Başlık için font boyutu + satır bölmesi + bant yüksekliği hesapla.
+ * bandH içeriğe göre dinamik büyür — başlık asla kesilmez.
+ * INNER_PAD_TOP + INNER_PAD_BOT = 25px + 25px iç boşluk.
+ */
+function calcLayout(question, W) {
+  const text = cleanMarkdown(question).toUpperCase();
+  const INNER_PAD = 25; // üst ve alt iç padding (px)
+  const LINE_RATIO = 1.15;
+
+  // Font boyutu: tek satıra sığmayacak kadar uzunsa küçült
+  const fsSingle = Math.min(96, Math.floor((W * 0.86) / Math.max(text.length * 0.56, 1)));
+  let lines, fontSize;
+
+  if (fsSingle >= 72 || text.split(/\s+/).length <= 3) {
+    lines = [text];
+    fontSize = Math.max(60, fsSingle);
+  } else {
+    const words = text.split(/\s+/);
+    const mid = Math.ceil(words.length / 2);
+    lines = [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+    const maxLen = Math.max(lines[0].length, lines[1].length);
+    fontSize = Math.max(46, Math.min(80, Math.floor((W * 0.86) / Math.max(maxLen * 0.56, 1))));
+  }
+
+  const lineH = Math.round(fontSize * LINE_RATIO);
+  const textH = lines.length * lineH;
+  // Bant yüksekliği: metin bloğu + iç padding + alt çizgi payı
+  const bandH = textH + INNER_PAD * 2 + 14;
+
+  return { lines, fontSize, lineH, bandH };
+}
+
+/**
  * thumbnail_question'dan heuristic highlights hesapla (Gemini vermezse fallback)
  */
 function pickHighlights(question) {
@@ -181,31 +214,16 @@ function pickHighlights(question) {
 
 /**
  * Üst bant SVG — siyah zemin + beyaz yazı + fosforlu highlight kelimeleri.
+ * bandH, lines, fontSize, lineH → calcLayout'tan gelir (thumbnailUret tarafından hesaplanır).
  * xml:space="preserve" + space-prefix tspan (librsvg whitespace fix).
- * 2 satır gerekirse: 2 ayrı <text> elementi.
- * bandH ≈ %20 × H
  */
-function svgTopBand(question, W, H, bandH, highlights = []) {
-  const text = cleanMarkdown(question).toUpperCase();
-  const hlSet = new Set(highlights.map(h => h.toUpperCase().replace(/[^A-Z]/g, "")).filter(Boolean));
+function svgTopBand(question, W, H, bandH, highlights, layout) {
+  const { lines, fontSize, lineH } = layout;
+  const hlSet = new Set((highlights || []).map(h => h.toUpperCase().replace(/[^A-Z]/g, "")).filter(Boolean));
 
-  // Font boyutu
-  const fsSingle = Math.min(102, Math.floor((W * 0.86) / Math.max(text.length * 0.56, 1)));
-  let lines, fontSize;
-  if (fsSingle >= 72 || text.split(/\s+/).length <= 3) {
-    lines = [text];
-    fontSize = Math.max(60, fsSingle);
-  } else {
-    const words = text.split(/\s+/);
-    const mid = Math.ceil(words.length / 2);
-    lines = [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
-    const maxLen = Math.max(lines[0].length, lines[1].length);
-    fontSize = Math.max(48, Math.min(82, Math.floor((W * 0.86) / Math.max(maxLen * 0.56, 1))));
-  }
-
-  const lineH  = fontSize * 1.05;
-  const totalH = lines.length * lineH;
-  const startY = (bandH - totalH) / 2 + fontSize * 0.82;
+  const INNER_PAD = 25;
+  // İlk satır baseline: top padding + fontSize (ascender dahil)
+  const startY = INNER_PAD + fontSize;
 
   let svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">`;
 
@@ -220,8 +238,6 @@ function svgTopBand(question, W, H, bandH, highlights = []) {
     const y = Math.round(startY + i * lineH);
     const words = line.split(/\s+/);
 
-    // xml:space="preserve" → space karakterleri collapse edilmez
-    // İlk kelime hariç her tspan " " öneki ile başlar
     svg += `<text x="${W / 2}" y="${y}"
       font-family="${FONT_STACK}"
       font-size="${fontSize}" font-weight="900"
@@ -346,8 +362,11 @@ async function thumbnailUret({ question, highlights, optionsVisual, format, hesa
   // Shorts şimdilik devre dışı (CLAUDE.md) — long olarak üret
   const W = 1280;
   const H = 720;
-  const bandH = Math.floor(H * 0.20); // ~144px üst bant
-  const bottomH = H - bandH;           // ~576px alt bölüm
+
+  // Bant yüksekliği içeriğe göre dinamik — başlık kesilmesin
+  const layout   = calcLayout(question, W);
+  const bandH    = Math.min(layout.bandH, Math.floor(H * 0.50)); // max %50
+  const bottomH  = H - bandH;
 
   const n = Math.min(3, Math.max(1, optionsVisual.length));
   const opts = optionsVisual.slice(0, n);
@@ -416,7 +435,7 @@ async function thumbnailUret({ question, highlights, optionsVisual, format, hesa
   }
 
   // 4) Üst bant (siyah zemin + beyaz + fosforlu highlights)
-  const bandSvg = svgTopBand(question, W, H, bandH, hl);
+  const bandSvg = svgTopBand(question, W, H, bandH, hl, layout);
   layers.push({ input: Buffer.from(bandSvg), left: 0, top: 0 });
 
   // 5) Overlay: renkli rozetler + şık çubukları + ayraçlar
