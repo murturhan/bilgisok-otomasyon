@@ -1,4 +1,4 @@
-// REV 006/21JUN26 - question_image_stili ve fact_image_stili payload'a eklendi (dropdown reset engeli)
+// REV 007/24JUN26 - option_emojis payload'a eklendi (stage=1 emoji oneri)
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -242,6 +242,7 @@ async function main() {
           options: q.options,
           correct_answer: q.correct_answer,
           option_flags: q.option_flags || ["", "", ""],
+          option_emojis: q.option_emojis || [],
           difficulty: q.difficulty,
           fun_fact: q.fun_fact,
           show_image: q.show_image !== false, // default true
