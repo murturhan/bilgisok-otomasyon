@@ -1,4 +1,4 @@
-// REV 009/24JUN26 - VIDEO_BASLIK stage=2 desteği (onay2'den başlık güncellenebilir)
+// REV 010/24JUN26 - 01-gorseller lookup stage=1'de atla (gorsel yokken crash düzeldi)
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -141,6 +141,7 @@ async function driveVideoYukle(slot, decoded, gorselKlasorId) {
  */
 async function yedekSilinenleri(silinenIndices, gorselKlasorId) {
   if (!silinenIndices?.length) return;
+  if (!gorselKlasorId) { console.log("yedekSilinenleri: gorselKlasorId yok (stage=1), atlanıyor"); return; }
   if (!GDRIVE_FOLDER_ID) { console.warn("GDRIVE_FOLDER_ID yok, silinen görsel yedekleme atlandı"); return; }
   const driveOAuth = google.drive({ version: "v3", auth: getOAuthClient() });
   try {
@@ -258,10 +259,13 @@ async function main() {
     
     if (!questionsData) throw new Error("questions.json bulunamadi");
 
-    // 4. 01-gorseller klasör id
-    const altKlasorler = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
-    if (altKlasorler.length === 0) throw new Error("01-gorseller klasoru yok");
-    const gorselKlasorId = altKlasorler[0].id;
+    // 4. 01-gorseller klasör id — stage=1'de görsel henüz yok, klasör bulunmayabilir
+    let gorselKlasorId = null;
+    if (!IS_STAGE1) {
+      const altKlasorler = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
+      if (altKlasorler.length === 0) throw new Error("01-gorseller klasoru yok");
+      gorselKlasorId = altKlasorler[0].id;
+    }
 
     // ── STAGE=1 BLOCK (içerik onayı) ────────────────────────────────────────
     if (IS_STAGE1) {

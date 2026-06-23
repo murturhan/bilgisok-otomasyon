@@ -1,4 +1,4 @@
-// REV 062/24JUN26 - onay2 baslik edit, option_emojis fallback, flagpedia CDN
+// REV 063/24JUN26 - onay1 buton feedback + 02.7 01-gorseller crash fix
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1635,7 +1635,7 @@ async function submitAction(action){
   allBtns.forEach(function(b){b.disabled=true;});
   const st=document.getElementById('status');
   st.style.display='block';st.className='';
-  st.textContent='⏳ Kaydediliyor...';
+  st.textContent='⏳ İşleniyor...';
   try{
     const sorular=collectSorular();
     const silineenOriginalIndices=[...deletedIdx];
@@ -1645,10 +1645,19 @@ async function submitAction(action){
     });
     const d=await r.json();
     if(d.ok){
-      if(d.saved){st.className='ok';st.textContent='Kaydedildi! Workflow tetiklenmedi.';}
-      else{st.className='ok';st.textContent='Gonderildi! Telegram bildirimi bekleniyor.';document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);}
-    }else{st.className='err';st.textContent='Hata: '+JSON.stringify(d);}
-  }catch(e){st.className='err';st.textContent='Hata: '+e.message;allBtns.forEach(function(b){b.disabled=false;});}
+      if(d.saved){
+        st.className='ok';
+        st.textContent='💾 Kaydedildi. Devam etmek için "Aşama 2\'ye geç" veya "Aşama 2\'yi atla" butonuna bas.';
+        allBtns.forEach(function(b){b.disabled=false;});
+      }else{
+        var msg=action==='stage2_flux'
+          ?'✓ Gönderildi! Görsel üretimi başladı — Telegram\'a bildirim gelecek.'
+          :'✓ Gönderildi! Ses + render başladı — Telegram\'a bildirim gelecek.';
+        st.className='ok';st.textContent=msg;
+        document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);
+      }
+    }else{st.className='err';st.textContent='❌ Hata: '+JSON.stringify(d);allBtns.forEach(function(b){b.disabled=false;});}
+  }catch(e){st.className='err';st.textContent='❌ Hata: '+e.message;allBtns.forEach(function(b){b.disabled=false;});}
 }
 
 // Initial render server-side yapildi — JS yalnizca type change/delete/add sonrasi re-render
