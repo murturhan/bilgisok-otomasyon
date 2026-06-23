@@ -1,4 +1,4 @@
-// REV 063/24JUN26 - onay1 buton feedback + 02.7 01-gorseller crash fix
+// REV 064/24JUN26 - githubDispatch senkron + hata browser'a dönüyor
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1095,9 +1095,10 @@ async function githubDispatch(eventType, payload, env) {
   if (!res.ok) {
     const txt = await res.text();
     console.error(`GitHub dispatch hatası [${eventType}]: ${res.status} — ${txt.substring(0, 300)}`);
-  } else {
-    console.log(`✓ Dispatched: ${eventType}`, JSON.stringify(payload));
+    return false;
   }
+  console.log(`✓ Dispatched: ${eventType}`, JSON.stringify(payload));
+  return true;
 }
 
 // ─── GET /?job=ID&stage=1 — İçerik Onay Sayfası (Parça 2) ────
@@ -1710,17 +1711,21 @@ async function handleIcerikOnay(request, env, url, ctx) {
     return json({ ok: true, saved: true });
   }
 
-  // 02.7 üzerinden dispatch — 02.7 edits'i okur, uygular, sonraki workflow'u başlatır
+  // 02.7 üzerinden dispatch — senkron: hata browser'a dönüyor
   const actionLabel = action === "stage2_flux" ? "FLUX gorsel uretimi" : "ses+render";
-  ctx.waitUntil(telegramMesajAt(chatIdStr, `⏳ *Icerik kaydedildi!* Simdi ${actionLabel} basliyor...\n\nJob: \`${jobId}\``, env));
 
-  ctx.waitUntil(githubDispatch("degisiklik_uygula", {
+  const dispatched = await githubDispatch("degisiklik_uygula", {
     job_id: jobId,
     chat_id: chatIdStr,
     stage1_action: action,
     stage: "1",
-  }, env));
+  }, env);
 
+  if (!dispatched) {
+    return json({ ok: false, error: "GitHub dispatch başarısız — GITHUB_TOKEN kontrol et (401/422)" });
+  }
+
+  ctx.waitUntil(telegramMesajAt(chatIdStr, `⏳ *Icerik kaydedildi!* Simdi ${actionLabel} basliyor...\n\nJob: \`${jobId}\``, env));
   return json({ ok: true });
 }
 
