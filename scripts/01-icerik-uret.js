@@ -1,4 +1,4 @@
-// REV 021/22JUN26 - thumbnail_question = spesifik soru (jenerik DEĞİL), highlights = spesifik isim
+// REV 022/24JUN26 - Gemini prompt soru sayisi hardcode 25 → effectiveCount (N_SORU calissin)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -142,7 +142,7 @@ async function icerikUret(konu, nSoruArg = null, isWyrArg = null) {
 Channel mascot: **Jess the Fox** - cute, friendly fox who hosts the quiz.
 
 TOPIC: "${konu}"
-FORMAT: ${FORMAT === "shorts" ? "YouTube Shorts (60-90 seconds, 5 quick questions)" : "Long video (10-12 minutes, 25 questions with mixed difficulty)"}
+FORMAT: ${FORMAT === "shorts" ? "YouTube Shorts (60-90 seconds, 5 quick questions)" : `Long video (10-12 minutes, ${effectiveCount} questions with mixed difficulty)`}
 
 ═══════════════════════════════════════════════════
 QUIZ STRUCTURE
@@ -291,7 +291,7 @@ SAFETY (Made for Kids)
 
 ═══════════════════════════════════════════════════
 TOPIC: ${konu}
-QUESTION COUNT: ${QUESTION_COUNT}
+QUESTION COUNT: ${effectiveCount}
 ═══════════════════════════════════════════════════
 
 JSON OUTPUT (must be valid JSON, no markdown):

@@ -1,4 +1,4 @@
-// REV 060/21JUN26 - _renderBayrak onerror escape duzeltildi (data-dn pattern)
+// REV 061/24JUN26 - /uret form max="25" → max="50" (soru sayisi limiti kaldirild)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1997,11 +1997,11 @@ textarea{min-height:80px}
   <div class="row2">
     <div>
       <label class="lbl">📝 Çoktan Seçmeli (MC)</label>
-      <input type="number" id="mc_count" value="15" min="0" max="25" oninput="updateTotal()">
+      <input type="number" id="mc_count" value="15" min="0" max="50" oninput="updateTotal()">
     </div>
     <div>
       <label class="lbl">🤔 Would You Rather (WYR)</label>
-      <input type="number" id="wyr_count" value="0" min="0" max="25" oninput="updateTotal()">
+      <input type="number" id="wyr_count" value="0" min="0" max="50" oninput="updateTotal()">
     </div>
   </div>
   <p class="total-note">Toplam: <b id="total_soru">15</b> soru</p>
