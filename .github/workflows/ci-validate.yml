@@ -1,4 +1,4 @@
-# REV 001/21JUN26 - worker.js syntax + script dosyalari CI kontrolu
+# REV 002/24JUN26 - browser-side script block syntax check eklendi
 name: CI - Validate
 
 on:
@@ -54,6 +54,52 @@ jobs:
             exit 1
           fi
           echo "✅ backup referansı yok"
+
+      - name: worker.js browser-side script block syntax check
+        run: |
+          node -e "
+            const fs = require('fs');
+            const {execSync} = require('child_process');
+            const src = fs.readFileSync('worker.js', 'utf8');
+
+            // \${...} template ifadelerini replace et (nested brace destekli)
+            function stripTmpl(code) {
+              let r='', i=0;
+              while (i < code.length) {
+                if (code[i] === '\$' && code[i+1] === '{') {
+                  let d=1, j=i+2;
+                  while (j < code.length && d > 0) {
+                    if (code[j] === '{') d++;
+                    else if (code[j] === '}') d--;
+                    j++;
+                  }
+                  r += '\"__X__\"'; i = j;
+                } else { r += code[i]; i++; }
+              }
+              return r;
+            }
+
+            const re = /<script>([\s\S]*?)<\/script>/g;
+            let m, n=0, errs=0;
+            while ((m = re.exec(src)) !== null) {
+              n++;
+              // async wrapper: top-level await ve const/let icin
+              const code = '(async function(){\n' + stripTmpl(m[1]) + '\n})';
+              const f = '/tmp/bs_' + n + '.js';
+              fs.writeFileSync(f, code);
+              try {
+                execSync('node --check ' + f, {stdio:'pipe'});
+                process.stdout.write('OK ' + n + '\n');
+              } catch(e) {
+                const msg = (e.stderr || e.stdout || Buffer.alloc(0)).toString().substring(0, 400);
+                process.stderr.write('FAIL block ' + n + ': ' + msg + '\n');
+                errs++;
+              }
+            }
+            process.stdout.write('Checked ' + n + ' script blocks, ' + errs + ' errors\n');
+            if (errs) process.exit(1);
+          "
+          echo "✅ Browser-side script blocks OK"
 
       - name: Büyük dosya kontrolu (worker.js < 500KB)
         run: |
