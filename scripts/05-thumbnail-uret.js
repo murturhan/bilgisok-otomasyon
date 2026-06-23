@@ -1,4 +1,4 @@
-// REV 019/23JUN26 - Dinamik bant yüksekliği: başlık artık kesilmiyor
+// REV 020/24JUN26 - Flagpedia CDN bayrak (iran fix), dinamik bant yuksekligi
 /**
  * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
@@ -113,12 +113,9 @@ async function questionsJsonOku(driveFolderId, auth) {
 
 // ─── GÖRSEL KAYNAK ────────────────────────────────────────────────────────────
 
-/** ISO kodu → Twemoji SVG URL */
+/** ISO kodu → Flagpedia PNG URL (guncel bayraklar, 320px) */
 function flagSvgUrl(isoCode) {
-  const upper = isoCode.toUpperCase();
-  const cp1 = (0x1f1e6 + upper.charCodeAt(0) - 65).toString(16);
-  const cp2 = (0x1f1e6 + upper.charCodeAt(1) - 65).toString(16);
-  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/${cp1}-${cp2}.svg`;
+  return `https://flagcdn.com/w320/${isoCode.toLowerCase()}.png`;
 }
 
 /** URL'den buffer indir (fetch — Node 18+) */
@@ -137,9 +134,8 @@ async function renderOptionImage(opt, hesap) {
   if (opt.type === "flag" && opt.code) {
     const url = flagSvgUrl(opt.code);
     console.log(`  🏳 Bayrak indir: ${opt.label} (${opt.code}) → ${url}`);
-    const svgBuf = await downloadImage(url);
-    // density=1200 → ~600px (36px viewBox * 1200/72)
-    return await sharp(svgBuf, { density: 1200 }).png().toBuffer();
+    const pngBuf = await downloadImage(url);
+    return await sharp(pngBuf).png().toBuffer();
   }
 
   if (opt.type === "flux" && opt.prompt) {

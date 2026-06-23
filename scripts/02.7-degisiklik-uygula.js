@@ -1,4 +1,4 @@
-// REV 008/21JUN26 - cleanGorselPrompt eklendi, regen prompt'larinda stil oncesi temizlik yapiliyor
+// REV 009/24JUN26 - VIDEO_BASLIK stage=2 desteği (onay2'den başlık güncellenebilir)
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -43,6 +43,7 @@ const {
   GITHUB_REPO_OWNER,
   GITHUB_REPO_NAME,
   GDRIVE_FOLDER_ID,
+  VIDEO_BASLIK,
 } = process.env;
 
 const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
@@ -521,6 +522,12 @@ async function main() {
     if (Array.isArray(edits.topic_emojis) && edits.topic_emojis.length > 0) {
       questionsData.topic_emojis = edits.topic_emojis;
       console.log(`topic_emojis güncellendi: ${edits.topic_emojis.join(" ")}`);
+    }
+
+    // 5c. Video başlığı güncelle (onay2'den geliyorsa)
+    if (VIDEO_BASLIK && VIDEO_BASLIK.trim()) {
+      questionsData.baslik = VIDEO_BASLIK.trim();
+      console.log(`Video başlığı güncellendi (stage2): "${VIDEO_BASLIK.trim()}"`);
     }
 
     // 6. questions.json'u Drive'a geri yaz

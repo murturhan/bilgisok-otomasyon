@@ -1,4 +1,4 @@
-// REV 061/24JUN26 - /uret form max="25" → max="50" (soru sayisi limiti kaldirild)
+// REV 062/24JUN26 - onay2 baslik edit, option_emojis fallback, flagpedia CDN
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -323,7 +323,7 @@ async function handleSubmit(request, env, url, ctx) {
   const jobId = url.pathname.split("/").pop();
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
-  const { edits = {}, approval_level = "full", chat_id = "" } = body;
+  const { edits = {}, approval_level = "full", chat_id = "", video_baslik = "" } = body;
 
   const mevcut = await issueVeriOku(jobId, env);
   if (mevcut) {
@@ -335,6 +335,7 @@ async function handleSubmit(request, env, url, ctx) {
     job_id: jobId,
     chat_id: String(chat_id),
     approval_level,
+    video_baslik: String(video_baslik || ""),
   }, env));
 
   return json({ ok: true });
@@ -434,10 +435,11 @@ textarea{min-height:56px}
 </head>
 <body>
 <div class="topbar">
-  <div>
+  <div style="flex-shrink:0">
     <div class="topbar h1">🦊 GeniMini — Onay</div>
     <div class="topbar meta">${esc(jobId)} · ${esc(format)} · ${questions.length} soru · ${esc(topic)}</div>
   </div>
+  <input type="text" id="video_baslik_s2" value="${esc(baslik)}" placeholder="Video başlığı..." style="flex:1;margin:0 10px;min-width:0;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 10px;font-size:.82em">
   <div class="sticky-btns">
     <button type="button" class="b1" onclick="submit_('full',true)">✅ Değiştir<br>+ Ses + Render</button>
     <button type="button" class="b2" onclick="submit_('render_only',true)">🎬 Değiştir<br>+ Sadece Render</button>
@@ -750,7 +752,7 @@ async function submit_(level, applyEdits){
     const r=await fetch("/api/submit/"+JOB_ID,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID}),
+      body:JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2')}),
     });
     const d=await r.json();
     if(d.ok){
@@ -785,7 +787,10 @@ function buildQuestionCard(q, i) {
   const qStiliOpts = GORSEL_STILLERI_WORKER.map(s => `<option value="${s.v}"${question_image_stili === s.v ? " selected" : ""}>${s.l}</option>`).join("");
   const fStiliOpts = GORSEL_STILLERI_WORKER.map(s => `<option value="${s.v}"${fact_image_stili === s.v ? " selected" : ""}>${s.l}</option>`).join("");
 
-  const flagInputs = (q.option_flags || ["","",""]).map((f, j) =>
+  // option_emojis otomatik öneri varsa option_flags boşsa kullan
+  const rawFlags = q.option_flags || [];
+  const flagValues = rawFlags.some(f => f && f.trim()) ? rawFlags : (q.option_emojis || ["","",""]);
+  const flagInputs = flagValues.map((f, j) =>
     `<div class="emoji-cell"><button type="button" class="emoji-pick-btn" id="q${i}_f${j}_btn" onclick="editEmoji('q${i}_f${j}')">${esc(f)||"❓"}</button><input type="text" class="emoji-edit-inp" id="q${i}_f${j}" value="${esc(f)}" maxlength="8"><span class="emoji-hint">${["A","B","C"][j]}</span></div>`
   ).join("");
 

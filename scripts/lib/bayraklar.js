@@ -1,5 +1,7 @@
-// REV 001/20JUN26 - ISO 3166 ulke bayraklari (Twemoji CDN)
+// REV 002/24JUN26 - Flagpedia CDN eklendi (flagcdn.com - guncel bayraklar)
 // [code, name_tr, name_en] - unicode ve URL runtime'da hesaplaniyor
+
+const FLAG_CDN = "https://flagcdn.com/w320";
 
 const _BASE = [
   ["AD","Andorra","Andorra"],
@@ -270,5 +272,6 @@ export const BAYRAKLAR = _BASE.map(([code, name, name_en]) => {
     emoji: String.fromCodePoint(parseInt(cps[0], 16), parseInt(cps[1], 16)),
     unicode: cps.join("-"),
     twemoji_url: `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/${cps.join("-")}.png`,
+    flagpedia_url: `${FLAG_CDN}/${code.toLowerCase()}.png`,
   };
 });

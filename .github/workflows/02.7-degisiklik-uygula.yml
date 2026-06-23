@@ -1,3 +1,4 @@
+# REV 002/24JUN26 - VIDEO_BASLIK input eklendi (onay2 baslik degistirme)
 name: 02.7 - Değişiklik Uygula
 
 on:
@@ -50,4 +51,5 @@ jobs:
           APPROVAL_LEVEL: ${{ github.event.client_payload.approval_level }}
           STAGE: ${{ github.event.client_payload.stage }}
           STAGE1_ACTION: ${{ github.event.client_payload.stage1_action }}
+          VIDEO_BASLIK: ${{ github.event.client_payload.video_baslik }}
         run: node scripts/02.7-degisiklik-uygula.js

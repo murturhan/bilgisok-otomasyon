@@ -1,4 +1,4 @@
-// REV 022/24JUN26 - Gemini prompt soru sayisi hardcode 25 → effectiveCount (N_SORU calissin)
+// REV 023/24JUN26 - option_emojis otomatik (Gemini önerir), N_SORU limit fix
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -321,6 +321,7 @@ JSON OUTPUT (must be valid JSON, no markdown):
       "fun_fact_image_prompt": "image illustrating the fun fact (different scene — e.g. if fun_fact is 'Pizza invented in Naples 1889', show a chef in Naples 1889)",
       "options": ["A_short", "B_short", "C_short"],
       "option_flags": ["🇮🇹", "🇹🇷", "🇫🇷", "🇪🇸"],
+      "option_emojis": ["🍕", "🌮", "🍜"],
       "correct_answer": 0,
       "difficulty": "easy",
       "fun_fact": "Fun fact sentence.",
@@ -353,6 +354,11 @@ CRITICAL:
   * If options relate to COUNTRY-ORIGIN (e.g. "Pizza" → Italy, "Sushi" → Japan, "Croissant" → France): use the related country flag
   * If options are NEUTRAL (no country relation, e.g. animals, colors, numbers): use ["","",""] (empty strings)
   * NEVER skip this field - if uncertain, use empty strings
+- **option_emojis**: Array of exactly 3 emoji strings visually matching options[0], options[1], options[2].
+  * Examples: 'Pizza'→🍕, 'Italy'→🇮🇹, 'Octopus'→🐙, 'Eiffel Tower'→🗼, 'Sun'→☀️, 'Football'→⚽
+  * Use country flag emojis for country/nationality options (same as option_flags)
+  * NEVER use ❓ — always pick something relevant, even a broad category emoji is fine
+  * Always return exactly 3 emoji strings
 - **background_prompt MUST**:
   * Match the topic theme but be GENERIC (no specific objects in center)
   * Have HEAVY BLUR / depth of field (it's a background, not foreground)
@@ -495,18 +501,24 @@ TOPIC EMOJIS (for intro screen emoji band)
         if (!q.option_flags || !Array.isArray(q.option_flags) || q.option_flags.length !== 3) {
           q.option_flags = ["", "", ""];
         }
-        // String'e çevir (emoji unicode için emniyet)
         q.option_flags = q.option_flags.map(f => String(f || ""));
+
+        // option_emojis validation
+        if (!q.option_emojis || !Array.isArray(q.option_emojis) || q.option_emojis.length !== 3) {
+          q.option_emojis = ["", "", ""];
+        }
+        q.option_emojis = q.option_emojis.map(e => String(e || ""));
         
         // ŞIK KARIŞTIRMA (kullanıcı talebi: Gemini hep correct_answer=0 veriyordu)
         // options + option_flags'i rastgele permute et, correct_answer index'i ona göre güncelle
         {
           const correctOpt = q.options[q.correct_answer];
           const correctFlag = q.option_flags[q.correct_answer];
-          // 3 elemanlı [option, flag, wasCorrect] dizisi yap
+          // 3 elemanlı [option, flag, emoji, wasCorrect] dizisi yap
           const pairs = q.options.map((opt, idx) => ({
             option: opt,
             flag: q.option_flags[idx] || "",
+            emoji: q.option_emojis?.[idx] || "",
             wasCorrect: idx === q.correct_answer,
           }));
           // Fisher-Yates shuffle
@@ -516,6 +528,7 @@ TOPIC EMOJIS (for intro screen emoji band)
           }
           q.options = pairs.map(p => p.option);
           q.option_flags = pairs.map(p => p.flag);
+          q.option_emojis = pairs.map(p => p.emoji);
           q.correct_answer = pairs.findIndex(p => p.wasCorrect);
           // Sanity check
           if (q.options[q.correct_answer] !== correctOpt) {
