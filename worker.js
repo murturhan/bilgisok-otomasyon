@@ -1,4 +1,4 @@
-// REV 064/24JUN26 - githubDispatch senkron + hata browser'a dönüyor
+// REV 065/24JUN26 - submitAction JS syntax fix: template literal apostrof hatas
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -1648,12 +1648,12 @@ async function submitAction(action){
     if(d.ok){
       if(d.saved){
         st.className='ok';
-        st.textContent='💾 Kaydedildi. Devam etmek için "Aşama 2\'ye geç" veya "Aşama 2\'yi atla" butonuna bas.';
+        st.textContent='Kaydedildi — Asama 2 veya atla butonuna bas.';
         allBtns.forEach(function(b){b.disabled=false;});
       }else{
         var msg=action==='stage2_flux'
-          ?'✓ Gönderildi! Görsel üretimi başladı — Telegram\'a bildirim gelecek.'
-          :'✓ Gönderildi! Ses + render başladı — Telegram\'a bildirim gelecek.';
+          ?'Gonderildi! Gorsel uretimi basladi — Telegram bildirimi gelecek.'
+          :'Gonderildi! Ses + render basladi — Telegram bildirimi gelecek.';
         st.className='ok';st.textContent=msg;
         document.querySelectorAll('.sticky-btns button').forEach(b=>b.disabled=true);
       }
