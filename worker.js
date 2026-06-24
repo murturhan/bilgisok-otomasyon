@@ -1,4 +1,4 @@
-// REV 065/24JUN26 - submitAction JS syntax fix: template literal apostrof hatas
+// REV 066/25JUN26 - handleSubmit dispatch sync: video_baslik kaybolmasın (ctx.waitUntil → await)
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -331,12 +331,15 @@ async function handleSubmit(request, env, url, ctx) {
     await issueGuncelle(mevcut.number, yeni, env);
   }
 
-  ctx.waitUntil(githubDispatch("degisiklik_uygula", {
+  const dispatched = await githubDispatch("degisiklik_uygula", {
     job_id: jobId,
     chat_id: String(chat_id),
     approval_level,
     video_baslik: String(video_baslik || ""),
-  }, env));
+  }, env);
+  if (!dispatched) {
+    return json({ ok: false, error: "GitHub dispatch basarisiz — GITHUB_TOKEN kontrol et" }, 500);
+  }
 
   return json({ ok: true });
 }
