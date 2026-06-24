@@ -1,4 +1,4 @@
-// REV 001/26MAY26 - TwemojiText + idle bounce
+// REV 002/25JUN26 - flag raw text → TwemojiText (Flagpedia image render)
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { BRAND, FONTS, ANSWER_BADGE_COLORS } from "../styles/theme";
@@ -170,7 +170,7 @@ export const AnswerCard: React.FC<AnswerCardProps> = ({
             flexShrink: 0,
           }}
         >
-          {flag}
+          <TwemojiText text={flag} />
         </div>
       )}
       

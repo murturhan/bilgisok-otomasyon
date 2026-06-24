@@ -1,21 +1,19 @@
-// REV 004/20JUN26 - Bayrak emoji algılama eklendi (regional indicator → Twemoji CDN)
+// REV 005/25JUN26 - Bayrak emoji Flagpedia CDN'e gecildi (Twemoji CDN 404 sorunu)
 import React from "react";
 import fluentMapRaw from "../data/fluent-emoji-map.json";
 
 const FLUENT_BASE = "https://cdn.jsdelivr.net/gh/microsoft/fluentui-emoji@main/assets/";
-const TWEMOJI_BASE = "https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/";
+const FLAGPEDIA_BASE = "https://flagcdn.com/w320/";
 
 function isFlagEmoji(grapheme: string): boolean {
   const cp = grapheme.codePointAt(0);
   return cp !== undefined && cp >= 0x1f1e6 && cp <= 0x1f1ff;
 }
 
-function flagToTwemojiUrl(grapheme: string): string {
-  const parts: string[] = [];
-  for (const ch of grapheme) {
-    parts.push(ch.codePointAt(0)!.toString(16));
-  }
-  return TWEMOJI_BASE + parts.join("-") + ".png";
+function flagToFlagpediaUrl(grapheme: string): string {
+  const cps = [...grapheme].map(ch => ch.codePointAt(0)!);
+  const iso = cps.map(cp => String.fromCharCode(cp - 0x1f1a5)).join("").toLowerCase();
+  return FLAGPEDIA_BASE + iso + ".png";
 }
 const fluentMap = fluentMapRaw as Record<string, { name: string; slug: string }>;
 
@@ -94,7 +92,7 @@ export const FluentEmojiText: React.FC<FluentEmojiTextProps> = ({ text, style, c
           );
         }
         if (part.type === "flag") {
-          const url = flagToTwemojiUrl(part.char);
+          const url = flagToFlagpediaUrl(part.char);
           return <img key={i} src={url} alt={part.char} style={IMG_STYLE} />;
         }
         if (part.type === "emoji") {

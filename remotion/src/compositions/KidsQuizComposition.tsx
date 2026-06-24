@@ -1,4 +1,4 @@
-// REV 017/17JUN26 - whoosh duck 0.2 (0.03'ten), skip_outro inputProps'tan geliyor
+// REV 018/25JUN26 - uploaded_image_url onceligi image_path'in onune gecti
 import React from "react";
 import {
   AbsoluteFill,
@@ -243,13 +243,18 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         }
 
         const phases = computeQuestionPhases(q as any);
-        const imageSrc = (q as any).image_path
-          ? staticFile((q as any).image_path)
-          : (q as any).uploaded_image_url || (q as any).image_url || "";
+        // uploaded_image_url (user-uploaded) takes priority over Drive-downloaded image_path
+        const imageSrc = (q as any).uploaded_image_url
+          ? (q as any).uploaded_image_url
+          : (q as any).image_path
+            ? staticFile((q as any).image_path)
+            : (q as any).image_url || "";
         // prob7: funFact imageSrc'e fallback yapmasin - ayri slot ayri gorsel
-        const funFactImageSrc = (q as any).fun_fact_image_path
-          ? staticFile((q as any).fun_fact_image_path)
-          : (q as any).uploaded_fact_image_url || (q as any).fun_fact_image_url || "";
+        const funFactImageSrc = (q as any).uploaded_fact_image_url
+          ? (q as any).uploaded_fact_image_url
+          : (q as any).fun_fact_image_path
+            ? staticFile((q as any).fun_fact_image_path)
+            : (q as any).fun_fact_image_url || "";
         // prob6: uploaded_video_url stage=1 video upload fallback
         const videoSrc: string = (q as any).question_video_url || (q as any).uploaded_video_url || "";
         const funFactVideoSrc: string = (q as any).fun_fact_video_url || (q as any).uploaded_fact_video_url || "";
