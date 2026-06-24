@@ -1,4 +1,4 @@
-// REV 023/24JUN26 - option_emojis otomatik (Gemini önerir), N_SORU limit fix
+// REV 024/24JUN26 - Turkey→Turkiye prompt directive + fixTurkiye post-processing
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -124,6 +124,7 @@ CRITICAL:
 - image_prompt and surprise_image_prompt MUST describe ONLY the option/outcome subject. CRITICAL: NEVER use style keywords. Forbidden words: cartoon, Pixar, 3D, animation, anime, watercolor, sketch, photorealistic, realistic, stylized. Style is applied at render time. NO character/fox/Jess references.
 - IMPORTANT: Image prompts should describe ONLY the scene content (subjects, objects, action, environment, colors). DO NOT include any style keywords like "Pixar 3D", "cartoon style", "photorealistic", "anime style", "watercolor", "pencil sketch". Style will be applied separately at render time.
 - IMPORTANT — Image prompt rules: DO NOT include any characters, mascots, foxes, or animals UNLESS the question is specifically about that animal. DO NOT mention "Jess", "Jess the Fox", "fox character", "mascot", "cartoon character", or any character presenting/holding/showing things. Image should be the subject alone. BAD: "a fox presenting a gift box". GOOD: "a colorful gift box with ribbons, sparkles around it". The mascot will be added separately during rendering.
+- IMPORTANT: For the country formerly known as "Turkey", always use "Turkiye" (the official international name as of 2022, without umlaut). Never use "Turkey" in English question text, options, or any output.
 `;
 }
 
@@ -377,6 +378,7 @@ CRITICAL:
   * Default to FALSE when uncertain. Better hidden than spoiled.
 - IMPORTANT: Image prompts should describe ONLY the scene content (subjects, objects, action, environment, colors). DO NOT include any style keywords like "Pixar 3D", "cartoon style", "photorealistic", "anime style", "watercolor", "pencil sketch". Style will be applied separately at render time.
 - IMPORTANT — Image prompt rules: DO NOT include any characters, mascots, foxes, or animals UNLESS the question is specifically about that animal. DO NOT mention "Jess", "Jess the Fox", "fox character", "mascot", "cartoon character", or any character presenting/holding/showing things. Image should be the subject of the question alone, in its natural environment. BAD: "a fox wearing a chef hat holding a pizza". GOOD: "a delicious pepperoni pizza on a wooden peel, vibrant colors, kitchen background". BAD: "Jess the Fox standing next to a planet". GOOD: "planet Saturn with its rings, cosmic background". The mascot will be added separately during rendering. Image prompts must NEVER contain characters unless the question is specifically about an animal species.
+- IMPORTANT: For the country formerly known as "Turkey", always use "Turkiye" (the official international name as of 2022, without umlaut). Never use "Turkey" in English question text, options, or any output.
 
 ═══════════════════════════════════════════════════
 HIGHLIGHTED WORDS (for animated text on screen)
@@ -426,8 +428,18 @@ TOPIC EMOJIS (for intro screen emoji band)
       
       const result = await model.generateContent(prompt);
       const text = result.response.text().trim();
-      const json = JSON.parse(text);
-      
+      const fixTurkiye = (obj) => {
+        if (typeof obj === "string") return obj.replace(/\bTurkey\b/g, "Turkiye");
+        if (Array.isArray(obj)) return obj.map(fixTurkiye);
+        if (typeof obj === "object" && obj !== null) {
+          const out = {};
+          for (const k in obj) out[k] = fixTurkiye(obj[k]);
+          return out;
+        }
+        return obj;
+      };
+      const json = fixTurkiye(JSON.parse(text));
+
       // ÖNCE BOZUK SORULARI FİLTRELE - eksik options veya correct_answer olanları at
       if (json.questions && Array.isArray(json.questions)) {
         const oncekiSayi = json.questions.length;

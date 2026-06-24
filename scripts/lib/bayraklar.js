@@ -1,4 +1,4 @@
-// REV 002/24JUN26 - Flagpedia CDN eklendi (flagcdn.com - guncel bayraklar)
+// REV 003/24JUN26 - TR name_en: "Turkiye" (resmi BM 2022 adi)
 // [code, name_tr, name_en] - unicode ve URL runtime'da hesaplaniyor
 
 const FLAG_CDN = "https://flagcdn.com/w320";
@@ -228,7 +228,7 @@ const _BASE = [
   ["TM","Türkmenistan","Turkmenistan"],
   ["TN","Tunus","Tunisia"],
   ["TO","Tonga","Tonga"],
-  ["TR","Türkiye","Turkey"],
+  ["TR","Türkiye","Turkiye"],
   ["TT","Trinidad ve Tobago","Trinidad and Tobago"],
   ["TV","Tuvalu","Tuvalu"],
   ["TW","Tayvan","Taiwan"],

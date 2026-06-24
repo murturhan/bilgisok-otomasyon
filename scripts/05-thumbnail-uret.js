@@ -1,4 +1,4 @@
-// REV 020/24JUN26 - Flagpedia CDN bayrak (iran fix), dinamik bant yuksekligi
+// REV 021/24JUN26 - Turkey→Turkiye replace (thumbnail metni)
 /**
  * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
@@ -488,7 +488,7 @@ async function main() {
     // Soru metni: Drive > Sheets thumbnail_baslik > konu
     const question = cleanMarkdown(
       qJson?.thumbnail_question || job.thumbnail_baslik || job.konu || "Which is the best?"
-    );
+    ).replace(/\bTurkey\b/gi, "Turkiye");
     console.log(`❓ Soru: "${question}"`);
 
     // Seçenek görselleri — 4 aşamalı fallback zinciri:

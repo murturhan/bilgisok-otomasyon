@@ -1,4 +1,4 @@
-// REV 007/21JUN26 - cleanGorselPrompt regex'e friendly/cute/adorable/illustration vb. eklendi
+// REV 008/24JUN26 - cleanGorselPrompt: Turkey→Turkiye replace
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -31,6 +31,7 @@ function cleanGorselPrompt(p) {
   p = p.replace(/\(\s*\)/g, "");
   // Remove stale style keywords — correct style appended via gorsel-stilleri.js
   p = p.replace(/watercolor\s+painting(?:\s+style)?|pencil\s+sketch(?:\s+style)?|(?:pixar|cartoon|anime|watercolor|pencil\s*sketch|realistic)[\s-]*(?:3d\s+)?(?:animation\s+)?style|pixar\s*3d|photorealistic|3d\s+animation|stylized|\bcartoon\b|\bfriendly\b|\bcute\b|\badorable\b|\billustration\b|\brendered\b|\billustrated\b|\banimated\b|\bwhimsical\b|\bcharming\b|\bdelightful\b/gi, "");
+  p = p.replace(/\bTurkey\b/gi, "Turkiye");
   return p.replace(/,\s*,+/g, ",").replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "").replace(/\s{2,}/g, " ").trim();
 }
 
