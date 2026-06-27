@@ -1,4 +1,4 @@
-// REV 066/25JUN26 - handleSubmit dispatch sync: video_baslik kaybolmasın (ctx.waitUntil → await)
+// REV 067/28JUN26 - /uret form: Konu etiketi "Gemini SEO uyumlu başlık önerecek" netleştirmesi
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -2011,7 +2011,7 @@ textarea{min-height:80px}
 <body>
 <h1>🦊 GeniMini &mdash; İçerik Üret</h1>
 <div class="card">
-  <label class="lbl">Konu (Topic)</label>
+  <label class="lbl">Konu / Topic (Gemini SEO uyumlu başlık önerecek)</label>
   <textarea id="konu" placeholder="Örn: Dinosaurs, Ocean Animals, Space Exploration, Ancient Egypt..."></textarea>
 </div>
 <div class="card">

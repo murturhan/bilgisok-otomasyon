@@ -1,4 +1,4 @@
-// REV 024/24JUN26 - Turkey→Turkiye prompt directive + fixTurkiye post-processing
+// REV 025/28JUN26 - Gemini SEO video_baslik önerisi (kullanıcı konu yazar, AI başlık önerir; fallback konu metni)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -237,6 +237,22 @@ TITLE & METADATA
 **baslik** (YouTube title): Click-worthy with emoji
 Example: "🦁 Can YOU Guess All 25 Animals? Kids Quiz with Jess the Fox!"
 
+**video_baslik** (SEO-friendly suggested video title — THIS becomes the final video title):
+Generate a SEO-friendly, click-worthy YouTube video title for the topic.
+Rules:
+- 50-70 characters max
+- Question format works well (e.g. 'Can You Guess...?', 'Which...?', 'How Well Do You Know...?')
+- Include the main topic noun
+- Kid-friendly tone
+- May include 1-2 emoji at the end (optional)
+- NEVER use clickbait words like 'SHOCKING', 'INSANE', 'YOU WON'T BELIEVE'
+- Examples:
+  * Topic: 'Turkiye's cities' → 'Can You Guess Turkiye's Famous Cities? Fun Geography Quiz! 🇹🇷'
+  * Topic: 'Ocean animals' → 'How Well Do You Know Ocean Animals? Quiz for Kids!'
+  * Topic: 'Planets' → 'Which Planet Is It? Space Quiz for Curious Minds! 🪐'
+Return field: video_baslik (string, the suggested title)
+Also include: konu_kisa (the original topic, for internal use)
+
 **aciklama** (description): 150-250 words with hashtags
 Include: #KidsQuiz #LearnForKids #EducationalGames #JessTheFox #GeniMiniTests
 
@@ -302,6 +318,8 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "intro_title": "Topic as intro big title — wrap the most important 1-2 words with **double stars** (e.g. '**Wild** Animals' or 'Amazing **Oceans**')",
   "format": "${FORMAT}",
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
+  "video_baslik": "SEO-friendly suggested video title (50-70 chars, question format, kid-friendly)",
+  "konu_kisa": "${konu}",
   "baslik": "Long YouTube title with emoji",
   "thumbnail_title": "Which Ocean Animal?",
   "thumbnail_question": "Which animal lives in the ocean?",
@@ -370,6 +388,7 @@ CRITICAL:
 - thumbnail_title is for the thumbnail top band (LARGE TEXT), NOT for YouTube title
 - **thumbnail_optionlar MUST be 2 or 3 items**: iconic, visually recognizable objects that make great side-by-side comparison images
 - baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title
+- **video_baslik MUST be provided**: a concise SEO video title (50-70 chars, question format, kid-friendly, optional 1-2 emoji). This is the title shown to the user for approval. NEVER use clickbait words (SHOCKING/INSANE/YOU WON'T BELIEVE).
 - **question_text MUST be MAX 6 WORDS** — short and impactful, never exceed 6 words. Wrong: "What is the name of the largest ocean on Earth?". Right: "Which is Earth's largest ocean?"
 - **intro_title CRITICAL — MANDATORY STARS**: Short topic title for the video intro screen (MAX 4 WORDS). You MUST wrap the 1-2 most important words with **double stars**. Examples: "**Wild** Animals", "Amazing **Oceans**", "**Rocket** Science", "**Dino** World". NEVER output intro_title without ** markers — it MUST contain ** or the UI breaks. Wrong: "Animal Adaptations". Right: "**Animal** Adaptations".
 - **show_image** (boolean, per question): Decide if showing the image during question helps or spoils.
@@ -559,7 +578,15 @@ TOPIC EMOJIS (for intro screen emoji band)
         }
       }
       
-      if (!json.baslik) json.baslik = `${konu} Quiz for Kids!`;
+      // SEO başlık önerisi: Gemini video_baslik verdiyse THE final başlık o olur.
+      // Yoksa eski baslik alanı, o da yoksa fallback: original konu metni (eski davranış).
+      if (json.video_baslik && String(json.video_baslik).trim()) {
+        json.baslik = String(json.video_baslik).trim();
+        console.log(`SEO video_baslik önerildi: "${json.baslik}"`);
+      } else if (!json.baslik) {
+        json.baslik = konu;
+        console.log(`video_baslik yok, fallback konu metni başlık oldu: "${json.baslik}"`);
+      }
       
       // thumbnail_title validate - soru formatı, max 5 kelime
       if (!json.thumbnail_title) {
@@ -791,6 +818,7 @@ async function main() {
       format: FORMAT,
       konu: konu,
       baslik: icerik.baslik,
+      video_baslik: icerik.video_baslik || icerik.baslik || "",
       thumbnail_title: icerik.thumbnail_title || "",
       thumbnail_question: icerik.thumbnail_question || "",
       thumbnail_highlights: icerik.thumbnail_highlights || [],
