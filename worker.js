@@ -1,4 +1,4 @@
-// REV 067/28JUN26 - /uret form: Konu etiketi "Gemini SEO uyumlu başlık önerecek" netleştirmesi
+// REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
 /**
  * Cloudflare Worker — telegram-to-github
  *
@@ -40,6 +40,18 @@ function stilOptsServer(selected) {
 
 export default {
   async fetch(request, env, ctx) {
+    try {
+      return await handleFetch(request, env, ctx);
+    } catch (err) {
+      // Global hata yakalama: throw olursa Cloudflare HTML hata sayfasi yerine JSON don
+      // (browser'daki "Unexpected token '<'" hatasini engeller)
+      console.error("Worker fetch hatasi:", err && err.stack || err);
+      return json({ ok: false, error: "Worker hatasi: " + (err && err.message || String(err)) }, 500);
+    }
+  },
+};
+
+async function handleFetch(request, env, ctx) {
     const url    = new URL(request.url);
     const method = request.method;
     const path   = url.pathname;
@@ -99,8 +111,7 @@ function go(inp){
       return handleTelegram(request, env, ctx);
     }
     return new Response("GeniMini Tests Worker", { status: 200 });
-  },
-};
+}
 
 // ─── GitHub Issues storage ────────────────────────────────────
 
@@ -142,7 +153,7 @@ async function issueOlustur(jobId, icerik, env) {
 }
 
 async function issueGuncelle(number, icerik, env) {
-  await fetch(
+  const r = await fetch(
     `${GH_API}/repos/${REPO_OWNER}/${REPO_NAME}/issues/${number}`,
     {
       method: "PATCH",
@@ -150,6 +161,12 @@ async function issueGuncelle(number, icerik, env) {
       body: JSON.stringify({ body: JSON.stringify(icerik) }),
     }
   );
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    console.error(`issueGuncelle hata: ${r.status} — ${txt.substring(0, 300)}`);
+    return false;
+  }
+  return true;
 }
 
 async function issueVeriOku(jobId, env) {
@@ -177,7 +194,10 @@ async function handleStoreJob(request, env, url) {
   try { data = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
 
   const mevcut = await issueVeriOku(jobId, env);
-  const icerik = { job: data, edits: mevcut?.data?.edits || {} };
+  // edits'i SIFIRLA: onay sayfasi job.questions'tan render edilir, edits sadece submit aninda
+  // (handleSubmit/handleIcerikOnay) yazilan gecici buffer. Eski edit'leri tasimak stage-1
+  // formatindaki edit'lerin (_stage1_meta/sorular) stage-2 02.7'ye sizmasina ve atlanmasina yol aciyordu.
+  const icerik = { job: data, edits: {} };
 
   if (mevcut) {
     await issueGuncelle(mevcut.number, icerik, env);
@@ -328,7 +348,11 @@ async function handleSubmit(request, env, url, ctx) {
   const mevcut = await issueVeriOku(jobId, env);
   if (mevcut) {
     const yeni = { job: mevcut.data?.job || {}, edits };
-    await issueGuncelle(mevcut.number, yeni, env);
+    const yazildi = await issueGuncelle(mevcut.number, yeni, env);
+    // Edit yazimi basarisizsa dispatch ETME — yoksa 02.7 eski/stale edit'leri okur, degisiklik uygulanmaz
+    if (!yazildi) {
+      return json({ ok: false, error: "Edit kaydedilemedi (GitHub issue PATCH basarisiz) — degisiklik uygulanmadi, tekrar dene" }, 500);
+    }
   }
 
   const dispatched = await githubDispatch("degisiklik_uygula", {

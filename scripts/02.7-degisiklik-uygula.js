@@ -1,4 +1,4 @@
-// REV 010/24JUN26 - 01-gorseller lookup stage=1'de atla (gorsel yokken crash düzeldi)
+// REV 011/28JUN26 - stage=2 edit dongusu: sayisal olmayan anahtarlari (stage-1 meta sizintisi) acikca atla
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -325,6 +325,10 @@ async function main() {
     let customUploadedCount = 0;
     
     for (const [idxStr, edit] of Object.entries(edits)) {
+      // Sadece sayisal anahtarlar soru index'idir. _stage1_meta/sorular/silinen_original_indices/
+      // topic_emojis gibi stage-1 veya meta anahtarlari stage-2 soru-edit dongusunde ATLA
+      // (parseInt NaN -> questions[NaN] undefined ile sessizce atlaniyordu, simdi acikca atliyoruz)
+      if (!/^\d+$/.test(idxStr)) continue;
       const idx = parseInt(idxStr);
       const q = questionsData.questions[idx];
       if (!q) continue;
