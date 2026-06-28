@@ -1,3 +1,4 @@
+// REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
 /**
  * Cloudflare Worker — telegram-to-github
@@ -775,21 +776,45 @@ async function submit_(level, applyEdits){
   const st=document.getElementById("status");
   st.style.display="block";st.className="";
   st.textContent="⏳ "+(msgs[level+"+"+applyEdits]||"Gönderiliyor...");
-  try{
-    const r=await fetch("/api/submit/"+JOB_ID,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2')}),
-    });
-    const d=await r.json();
-    if(d.ok){
-      st.className="ok";
-      st.textContent="✅ Gönderildi! Telegram'da bildirim alacaksın.";
-      document.querySelectorAll(".sticky-btns button").forEach(b=>b.disabled=true);
-    } else {
-      st.className="err";st.textContent="❌ Hata: "+JSON.stringify(d);
+  const payload=JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2')});
+  // Cok buyuk govde uyarisi (custom gorseller base64 data URL olarak gomulu -> "Failed to fetch" sebebi)
+  const mb=payload.length/1048576;
+  if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB) — custom gorselleri tek tek 'Yukle' butonuyla yukleyip oyle gonder. Base64 yukleme cok agir.";allBtns.forEach(function(b){b.disabled=false;});return;}
+  // Timeout + otomatik yeniden deneme (transient "Failed to fetch" icin)
+  async function postOnce(){
+    const ctl=new AbortController();
+    const to=setTimeout(function(){ctl.abort();},90000);
+    try{
+      const r=await fetch("/api/submit/"+JOB_ID,{method:"POST",headers:{"Content-Type":"application/json"},body:payload,signal:ctl.signal});
+      const txt=await r.text();
+      let d;try{d=JSON.parse(txt);}catch(_){throw new Error("Sunucu JSON yerine sunu dondu (HTTP "+r.status+"): "+txt.slice(0,120));}
+      return d;
+    }finally{clearTimeout(to);}
+  }
+  let lastErr=null;
+  for(let attempt=1;attempt<=3;attempt++){
+    try{
+      if(attempt>1)st.textContent="⏳ Baglanti hatasi, tekrar deneniyor ("+attempt+"/3)...";
+      const d=await postOnce();
+      if(d.ok){
+        st.className="ok";
+        st.textContent="✅ Gönderildi! Telegram'da bildirim alacaksın.";
+        document.querySelectorAll(".sticky-btns button").forEach(b=>b.disabled=true);
+      } else {
+        st.className="err";st.textContent="❌ Hata: "+(d.error||JSON.stringify(d));allBtns.forEach(function(b){b.disabled=false;});
+      }
+      return;
+    }catch(e){
+      lastErr=e;
+      // Sadece ag/abort hatasinda yeniden dene; baska hatada hemen cik
+      const retryable=(e.name==="AbortError")||/failed to fetch|networkerror|load failed/i.test(e.message||"");
+      if(!retryable||attempt===3)break;
+      await new Promise(function(res){setTimeout(res,1500*attempt);});
     }
-  }catch(e){st.className="err";st.textContent="❌ "+e.message;allBtns.forEach(function(b){b.disabled=false;});}
+  }
+  st.className="err";
+  st.textContent="❌ "+(lastErr&&lastErr.name==="AbortError"?"Zaman asimi (90s) — sunucu yanit vermedi, tekrar dene.":(lastErr&&lastErr.message||"Bilinmeyen hata"))+" (Govde: "+mb.toFixed(1)+" MB)";
+  allBtns.forEach(function(b){b.disabled=false;});
 }
 
 
