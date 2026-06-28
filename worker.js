@@ -1,3 +1,4 @@
+// REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
 /**
@@ -339,21 +340,86 @@ async function getGDriveToken(saJson) {
   return td.access_token;
 }
 
+// ─── Edit yardimcilari (save_only icin) ──────────────────────────
+// Metin edit'lerini job.questions uzerine uygula (custom base64 gorsel + FLUX regen
+// uygulanmaz — onlar render'da 02.7'de yapilir). Reload'da degisiklik gorunsun diye.
+function editTextUygula(questions, edits) {
+  const qs = Array.isArray(questions) ? questions.map((q) => ({ ...q })) : [];
+  for (const [k, e] of Object.entries(edits)) {
+    if (!/^\d+$/.test(k) || !e) continue;
+    const q = qs[parseInt(k)];
+    if (!q) continue;
+    if (e.question_type === "would_you_rather") {
+      if (e.visible_option) {
+        q.visible_option = { ...(q.visible_option || {}) };
+        if (typeof e.visible_option.label === "string") q.visible_option.label = e.visible_option.label;
+        if (typeof e.visible_option.image_prompt === "string") q.visible_option.image_prompt = e.visible_option.image_prompt;
+      }
+      if (e.surprise_option) {
+        q.surprise_option = { ...(q.surprise_option || {}) };
+        const so = e.surprise_option;
+        if (typeof so.label === "string") q.surprise_option.label = so.label;
+        if (typeof so.surprise_outcome === "string") q.surprise_option.surprise_outcome = so.surprise_outcome;
+        if (typeof so.surprise_image_prompt === "string") q.surprise_option.surprise_image_prompt = so.surprise_image_prompt;
+        if (typeof so.surprise_is_good === "boolean") q.surprise_option.surprise_is_good = so.surprise_is_good;
+      }
+      if (typeof e.jess_reaction === "string") q.jess_reaction = e.jess_reaction;
+      if (e.surprise_box_image_url) q.surprise_box_image_url = e.surprise_box_image_url;
+    } else {
+      if (typeof e.question_text === "string") q.question_text = e.question_text;
+      if (Array.isArray(e.options) && e.options.length === 3) q.options = e.options;
+      if (typeof e.correct_answer === "number") q.correct_answer = e.correct_answer;
+      if (typeof e.fun_fact === "string") q.fun_fact = e.fun_fact;
+      if (typeof e.image_prompt === "string") q.image_prompt = e.image_prompt;
+      if (typeof e.fun_fact_image_prompt === "string") q.fun_fact_image_prompt = e.fun_fact_image_prompt;
+      if (Array.isArray(e.option_flags) && e.option_flags.length === 3) q.option_flags = e.option_flags;
+      if (e.regen_question_stili) q.question_image_stili = e.regen_question_stili;
+      if (e.regen_fact_stili) q.fact_image_stili = e.regen_fact_stili;
+    }
+  }
+  return qs;
+}
+
+function editOzet(edits) {
+  let soru = 0, upload = 0, regen = 0;
+  for (const [k, e] of Object.entries(edits)) {
+    if (!/^\d+$/.test(k) || !e) continue;
+    soru++;
+    if (e.custom_question_image || e.custom_fact_image || e.custom_visible_image || e.custom_surprise_image ||
+        e.custom_question_video || e.custom_fact_video || e.custom_visible_video || e.custom_surprise_video) upload++;
+    if (e.regen_question_image || e.regen_fact_image || e.regen_visible_image || e.regen_surprise_image) regen++;
+  }
+  return `${soru} soru guncellendi, ${upload} custom yukleme, ${regen} regen isaretli`;
+}
+
 // ─── POST /api/submit/:id ──────────────────────────────────────
 async function handleSubmit(request, env, url, ctx) {
   const jobId = url.pathname.split("/").pop();
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
   const { edits = {}, approval_level = "full", chat_id = "", video_baslik = "" } = body;
+  const isSave = approval_level === "save_only";
 
   const mevcut = await issueVeriOku(jobId, env);
   if (mevcut) {
-    const yeni = { job: mevcut.data?.job || {}, edits };
+    const eskiJob = mevcut.data?.job || {};
+    // save_only: metin edit'lerini job.questions + baslik'a uygula ki reload'da gorunsun ve kaybolmasin
+    const job = isSave
+      ? { ...eskiJob, baslik: video_baslik || eskiJob.baslik, questions: editTextUygula(eskiJob.questions || [], edits) }
+      : eskiJob;
+    const yeni = { job, edits };
     const yazildi = await issueGuncelle(mevcut.number, yeni, env);
     // Edit yazimi basarisizsa dispatch ETME — yoksa 02.7 eski/stale edit'leri okur, degisiklik uygulanmaz
     if (!yazildi) {
       return json({ ok: false, error: "Edit kaydedilemedi (GitHub issue PATCH basarisiz) — degisiklik uygulanmadi, tekrar dene" }, 500);
     }
+    if (isSave) {
+      // Drive questions.json'a da metni yaz (best-effort), RENDER TETIKLEME
+      ctx.waitUntil(driveQuestionsGuncelle(eskiJob.drive_folder_id, jobId, video_baslik || eskiJob.baslik, job.questions, env));
+      return json({ ok: true, saved: true, summary: editOzet(edits) });
+    }
+  } else if (isSave) {
+    return json({ ok: false, error: "Job bulunamadi — kaydedilemedi" }, 404);
   }
 
   const dispatched = await githubDispatch("degisiklik_uygula", {
@@ -410,6 +476,7 @@ body{font-family:system-ui,sans-serif;background:#111827;color:#f3f4f6;padding:0
 .b3{background:#6b7280;color:#fff}
 .b4{background:#4b5563;color:#fff}
 .b5{background:#f59e0b;color:#000}
+.bsave{background:#14b8a6;color:#042f2e;border:2px solid #5eead4!important}
 button:hover{opacity:.88}
 .cards{padding:12px 16px}
 .card{background:#1f2937;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #374151}
@@ -474,6 +541,7 @@ textarea{min-height:56px}
     <button type="button" class="b3" onclick="submit_('full',false)">▶ Ses + Render<br>(değişiklik yok)</button>
     <button type="button" class="b4" onclick="submit_('render_only',false)">⚡ Sadece Render<br>(değişiklik yok)</button>
     <button type="button" class="b5" onclick="submit_('regen_only',true)">🔄 Değiştir<br>+ Tekrar Göster</button>
+    <button type="button" class="bsave" onclick="kaydet()">💾 Değişiklikleri<br>Kaydet <span style="font-weight:400;opacity:.85">(render yok)</span></button>
   </div>
 </div>
 <div id="status"></div>
@@ -705,67 +773,73 @@ async function changeBoxApi(qi){
 
 function playClick(){try{var c=new(window.AudioContext||window.webkitAudioContext)();var b=c.createBuffer(1,Math.ceil(c.sampleRate*0.04),c.sampleRate);var d=b.getChannelData(0);for(var i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-(i/d.length),3)*0.4;var s=c.createBufferSource();s.buffer=b;var g=c.createGain();g.gain.value=0.5;s.connect(g);g.connect(c.destination);s.start();setTimeout(function(){c.close();},200);}catch(e){}}
 
+// ─── Edits toplama (submit_ + kaydet ortak kullanir) ─────────────
+// DOM'dan tum sorularin guncel halini toplar. Index'li (0,1,2..) anahtarlar + topic_emojis.
+function collectEdits(){
+  const edits={};
+  for(let i=0;i<N;i++){
+    const isWyr=QUESTIONS[i]&&QUESTIONS[i].question_type==="would_you_rather";
+    if(isWyr){
+      edits[String(i)]={
+        question_type:"would_you_rather",
+        question_text:"Pick One!",
+        visible_option:{
+          label:val("q"+i+"_vl"),
+          image_prompt:val("q"+i+"_vp"),
+        },
+        surprise_option:{
+          label:val("q"+i+"_sl"),
+          surprise_outcome:val("q"+i+"_so"),
+          surprise_image_prompt:val("q"+i+"_sp"),
+          surprise_is_good:chk("q"+i+"_sg"),
+        },
+        jess_reaction:val("q"+i+"_jr"),
+        surprise_box_image_url:selectedSurpriseBoxes[i]||null,
+        regen_visible_image:chk("q"+i+"_rv"),
+        regen_surprise_image:chk("q"+i+"_rs"),
+        regen_visible_stili:val("q"+i+"_stili_v")||"pixar_3d",
+        regen_surprise_stili:val("q"+i+"_stili_s")||"pixar_3d",
+        custom_visible_image:customImages["cv"+i]||null,
+        custom_surprise_image:customImages["cs"+i]||null,
+        custom_visible_video:customVideos["cvv"+i]||null,
+        custom_surprise_video:customVideos["csv"+i]||null,
+      };
+    } else {
+      edits[String(i)]={
+        question_text:val("q"+i+"_qt"),
+        options:[val("q"+i+"_o0"),val("q"+i+"_o1"),val("q"+i+"_o2")],
+        correct_answer:parseInt(val("q"+i+"_ca"))||0,
+        fun_fact:val("q"+i+"_ff"),
+        image_prompt:val("q"+i+"_ip"),
+        fun_fact_image_prompt:val("q"+i+"_fp"),
+        option_flags:[val("q"+i+"_f0"),val("q"+i+"_f1"),val("q"+i+"_f2")],
+        show_image:true,
+        image_show_mode:"net",
+        fact_image_show_mode:"net",
+        regen_question_image:chk("q"+i+"_rq"),
+        regen_fact_image:chk("q"+i+"_rf"),
+        regen_question_stili:val("q"+i+"_stili_q")||"pixar_3d",
+        regen_fact_stili:val("q"+i+"_stili_f")||"pixar_3d",
+        custom_question_image:customImages["cq"+i]||null,
+        custom_fact_image:customImages["cf"+i]||null,
+        custom_question_video:customVideos["cqv"+i]||null,
+        custom_fact_video:customVideos["cfv"+i]||null,
+      };
+    }
+  }
+  // Topic emojileri
+  const te=[];
+  for(let i=0;i<5;i++){const e=val("te_"+i);if(e)te.push(e);}
+  if(te.length) edits.topic_emojis=te;
+  return edits;
+}
+
 async function submit_(level, applyEdits){
   playClick();
   const allBtns=document.querySelectorAll(".sticky-btns button");
   allBtns.forEach(function(b){b.disabled=true;});
-  const edits={};
-  if(applyEdits){
-    for(let i=0;i<N;i++){
-      const isWyr=QUESTIONS[i]&&QUESTIONS[i].question_type==="would_you_rather";
-      if(isWyr){
-        edits[String(i)]={
-          question_type:"would_you_rather",
-          question_text:"Pick One!",
-          visible_option:{
-            label:val("q"+i+"_vl"),
-            image_prompt:val("q"+i+"_vp"),
-          },
-          surprise_option:{
-            label:val("q"+i+"_sl"),
-            surprise_outcome:val("q"+i+"_so"),
-            surprise_image_prompt:val("q"+i+"_sp"),
-            surprise_is_good:chk("q"+i+"_sg"),
-          },
-          jess_reaction:val("q"+i+"_jr"),
-          surprise_box_image_url:selectedSurpriseBoxes[i]||null,
-          regen_visible_image:chk("q"+i+"_rv"),
-          regen_surprise_image:chk("q"+i+"_rs"),
-          regen_visible_stili:val("q"+i+"_stili_v")||"pixar_3d",
-          regen_surprise_stili:val("q"+i+"_stili_s")||"pixar_3d",
-          custom_visible_image:customImages["cv"+i]||null,
-          custom_surprise_image:customImages["cs"+i]||null,
-          custom_visible_video:customVideos["cvv"+i]||null,
-          custom_surprise_video:customVideos["csv"+i]||null,
-        };
-      } else {
-        edits[String(i)]={
-          question_text:val("q"+i+"_qt"),
-          options:[val("q"+i+"_o0"),val("q"+i+"_o1"),val("q"+i+"_o2")],
-          correct_answer:parseInt(val("q"+i+"_ca"))||0,
-          fun_fact:val("q"+i+"_ff"),
-          image_prompt:val("q"+i+"_ip"),
-          fun_fact_image_prompt:val("q"+i+"_fp"),
-          option_flags:[val("q"+i+"_f0"),val("q"+i+"_f1"),val("q"+i+"_f2")],
-          show_image:true,
-          image_show_mode:"net",
-          fact_image_show_mode:"net",
-          regen_question_image:chk("q"+i+"_rq"),
-          regen_fact_image:chk("q"+i+"_rf"),
-          regen_question_stili:val("q"+i+"_stili_q")||"pixar_3d",
-          regen_fact_stili:val("q"+i+"_stili_f")||"pixar_3d",
-          custom_question_image:customImages["cq"+i]||null,
-          custom_fact_image:customImages["cf"+i]||null,
-          custom_question_video:customVideos["cqv"+i]||null,
-          custom_fact_video:customVideos["cfv"+i]||null,
-        };
-      }
-    }
-    // Topic emojileri
-    const te=[];
-    for(let i=0;i<5;i++){const e=val("te_"+i);if(e)te.push(e);}
-    if(te.length) edits.topic_emojis=te;
-  }
+  const edits = applyEdits ? collectEdits() : {};
+  if(applyEdits) console.log("[submit_] toplanan edits:", edits, "| customImages:", customImages, "| customVideos:", customVideos);
   const msgs={
     "full+true":"Değişiklikler uygulanıyor, ses üretimi başlıyor...",
     "render_only+true":"Değişiklikler uygulanıyor, video render başlıyor...",
@@ -814,6 +888,40 @@ async function submit_(level, applyEdits){
   }
   st.className="err";
   st.textContent="❌ "+(lastErr&&lastErr.name==="AbortError"?"Zaman asimi (90s) — sunucu yanit vermedi, tekrar dene.":(lastErr&&lastErr.message||"Bilinmeyen hata"))+" (Govde: "+mb.toFixed(1)+" MB)";
+  allBtns.forEach(function(b){b.disabled=false;});
+}
+
+// ─── KAYDET: degisiklikleri sakla, RENDER TETIKLEME ──────────────
+async function kaydet(){
+  playClick();
+  const allBtns=document.querySelectorAll(".sticky-btns button");
+  allBtns.forEach(function(b){b.disabled=true;});
+  const st=document.getElementById("status");
+  st.style.display="block";st.className="";st.textContent="⏳ Kaydediliyor...";
+  const edits=collectEdits();
+  console.log("[KAYDET] toplanan edits:", edits);
+  console.log("[KAYDET] customImages:", customImages, "| customVideos:", customVideos, "| selectedSurpriseBoxes:", selectedSurpriseBoxes);
+  const payload=JSON.stringify({edits,approval_level:"save_only",chat_id:CHAT_ID,video_baslik:val('video_baslik_s2')});
+  const mb=payload.length/1048576;
+  if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB) — custom gorselleri tek tek 'Yukle' butonuyla yukle.";allBtns.forEach(function(b){b.disabled=false;});return;}
+  try{
+    const ctl=new AbortController();
+    const to=setTimeout(function(){ctl.abort();},90000);
+    let d;
+    try{
+      const r=await fetch("/api/submit/"+JOB_ID,{method:"POST",headers:{"Content-Type":"application/json"},body:payload,signal:ctl.signal});
+      const txt=await r.text();
+      try{d=JSON.parse(txt);}catch(_){throw new Error("Sunucu JSON yerine sunu dondu (HTTP "+r.status+"): "+txt.slice(0,120));}
+    }finally{clearTimeout(to);}
+    if(d.ok){
+      st.className="ok";
+      st.textContent="✅ Değişiklikler kaydedildi"+(d.summary?" — "+d.summary:"")+" (render başlatılmadı, sayfayı kapatsan da korunur)";
+    }else{
+      st.className="err";st.textContent="❌ Hata: "+(d.error||JSON.stringify(d));
+    }
+  }catch(e){
+    st.className="err";st.textContent="❌ "+(e.name==="AbortError"?"Zaman asimi (90s) — tekrar dene.":(e.message||"Bilinmeyen hata"));
+  }
   allBtns.forEach(function(b){b.disabled=false;});
 }
 
