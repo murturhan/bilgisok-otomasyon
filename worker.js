@@ -1,3 +1,4 @@
+// REV 071/29JUN26 - Onay2 resim yukleme: base64 yerine ANINDA Drive upload (/api/upload-medya), state'te sadece URL (41MB body bug fix); upload-medya eski slot dosyasini siler; body size log
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -582,20 +583,46 @@ const s1VideoUrls = {};
 function val(id){const e=document.getElementById(id);return e?e.value:"";}
 function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
 
+// Resim seclince ANINDA Drive'a yukle, state'te sadece URL tut (base64 YOK -> body sismez).
+// Video: simdilik base64 (degismedi) — buyuk video body'yi sisirir, guard uyarir.
 function handleFileChange(inp,previewId,key,isVideo){
   var file=inp.files[0];if(!file)return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    if(isVideo){
+  var prev=document.getElementById(previewId);
+  if(isVideo){
+    var reader=new FileReader();
+    reader.onload=function(e){
       customVideos[key]=e.target.result;
       var mb=(file.size/1024/1024).toFixed(1);
-      document.getElementById(previewId).innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span><button type="button" data-p="'+previewId+'" data-k="'+key+'" onclick="clearMediaStage2(this.dataset.p,this.dataset.k,true)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
-    }else{
-      customImages[key]=e.target.result;
-      document.getElementById(previewId).innerHTML='<img src="'+e.target.result+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yüklendi</span><button type="button" data-p="'+previewId+'" data-k="'+key+'" onclick="clearMediaStage2(this.dataset.p,this.dataset.k,false)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
-    }
-  };
-  reader.readAsDataURL(file);
+      if(prev)prev.innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span><button type="button" data-p="'+previewId+'" data-k="'+key+'" onclick="clearMediaStage2(this.dataset.p,this.dataset.k,true)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
+  // key: cq/cf/cv/cs (2 char prefix) + index. slice ile parse (regex/escape derdi yok).
+  var pfx=key.slice(0,2), idx=key.slice(2);
+  var slotMap={cq:"image",cf:"fact_image",cv:"visible_image",cs:"surprise_image"};
+  var regMap={cq:"_rq",cf:"_rf",cv:"_rv",cs:"_rs"};
+  var slotKey=slotMap[pfx];
+  if(!slotKey){if(prev)prev.innerHTML='<span style="color:#fca5a5">Slot cozulemedi: '+key+'</span>';return;}
+  // Custom yukleme regen'i ezsin (ikisi birden olmasin)
+  var rcb=document.getElementById("q"+idx+regMap[pfx]);if(rcb)rcb.checked=false;
+  // Aninda onizleme (object URL), arkada Drive upload
+  var objUrl=URL.createObjectURL(file);
+  if(prev)prev.innerHTML='<img src="'+objUrl+'" style="width:100%;border-radius:8px"><span class="preview-badge">⏳ Yukleniyor...</span>';
+  var fd=new FormData();fd.append("file",file);
+  fetch("/api/upload-medya/"+JOB_ID+"/"+idx+"/"+slotKey,{method:"POST",body:fd})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.ok&&d.url){
+        customImages[key]=d.url; // SADECE URL (kisa string), base64 degil
+        console.log("[upload-medya] "+key+" (soru "+idx+", "+slotKey+") -> "+d.url);
+        if(prev)prev.innerHTML='<img src="'+d.url+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yuklendi (Drive)</span><button type="button" data-p="'+previewId+'" data-k="'+key+'" onclick="clearMediaStage2(this.dataset.p,this.dataset.k,false)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
+      }else{
+        if(prev)prev.innerHTML='<span style="color:#fca5a5">✗ Yukleme hatasi: '+(d.error||"bilinmeyen")+'</span>';
+      }
+    })
+    .catch(function(e){if(prev)prev.innerHTML='<span style="color:#fca5a5">✗ Ag hatasi: '+e.message+'</span>';});
+  inp.value="";
 }
 function clearMediaStage2(previewId,key,isVideo){
   if(isVideo) delete customVideos[key]; else delete customImages[key];
@@ -853,6 +880,7 @@ async function submit_(level, applyEdits){
   const payload=JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2')});
   // Cok buyuk govde uyarisi (custom gorseller base64 data URL olarak gomulu -> "Failed to fetch" sebebi)
   const mb=payload.length/1048576;
+  if(applyEdits) console.log("[submit_] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
   if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB) — custom gorselleri tek tek 'Yukle' butonuyla yukleyip oyle gonder. Base64 yukleme cok agir.";allBtns.forEach(function(b){b.disabled=false;});return;}
   // Timeout + otomatik yeniden deneme (transient "Failed to fetch" icin)
   async function postOnce(){
@@ -903,6 +931,7 @@ async function kaydet(){
   console.log("[KAYDET] customImages:", customImages, "| customVideos:", customVideos, "| selectedSurpriseBoxes:", selectedSurpriseBoxes);
   const payload=JSON.stringify({edits,approval_level:"save_only",chat_id:CHAT_ID,video_baslik:val('video_baslik_s2')});
   const mb=payload.length/1048576;
+  console.log("[KAYDET] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
   if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB) — custom gorselleri tek tek 'Yukle' butonuyla yukle.";allBtns.forEach(function(b){b.disabled=false;});return;}
   try{
     const ctl=new AbortController();
@@ -2025,7 +2054,24 @@ async function handleUploadMedya(request, env, url) {
     // gorsel-NN naming so 02.5 can discover via /^gorsel-(\d+)-/ pattern
     const soruIdxInt = parseInt(soruIdx) || 0;
     const gorselNum = (slotKey === "image" || slotKey === "visible_image") ? (2 * soruIdxInt + 1) : (2 * soruIdxInt + 2);
-    const filename = `gorsel-${String(gorselNum).padStart(2, "0")}-stage1-${Date.now()}.${ext}`;
+    const slotStr = String(gorselNum).padStart(2, "0");
+    const filename = `gorsel-${slotStr}-stage1-${Date.now()}.${ext}`;
+
+    // Ayni slot'taki eski gorselleri sil (02.7 ile ayni davranis — duplicate slot dosyasi olmasin,
+    // render/02.5 dogru gorseli secsin). Best-effort: hata olursa upload yine devam eder.
+    try {
+      const slotPrefix = `gorsel-${slotStr}-`;
+      const eskiRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("'" + gorselFolderId + "' in parents and name contains '" + slotPrefix + "' and trashed=false")}&fields=files(id,name)&pageSize=25`,
+        { headers: { "Authorization": `Bearer ${token}` } }
+      );
+      const eskiData = await eskiRes.json();
+      for (const f of (eskiData.files || [])) {
+        if (!String(f.name || "").startsWith(slotPrefix)) continue; // 'contains' yanlis eslesmesin
+        await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}`, { method: "DELETE", headers: { "Authorization": `Bearer ${token}` } });
+        console.log(`upload-medya: eski slot dosyasi silindi ${f.name}`);
+      }
+    } catch (e) { console.warn("upload-medya eski slot silme hatasi:", e.message); }
 
     const boundary2 = "upload-boundary-123456";
     const metaJson = JSON.stringify({ name: filename, parents: [gorselFolderId] });
