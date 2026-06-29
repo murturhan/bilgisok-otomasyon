@@ -1,3 +1,4 @@
+// REV 001/30JUN26 - jobGuncelle kolonHaritasi'na baslik:4 eklendi (onay2 başlık edit Sheet'e yazılsın)
 /**
  * Ortak Google kütüphanesi: Service Account (her şey: Sheets + Drive read/write)
  *
@@ -182,6 +183,7 @@ export async function jobGuncelle(jobId, updates) {
   const rowIndex = job.rowIndex;
   
   const kolonHaritasi = {
+    baslik: 4,            // E = video başlığı (onay2'de değiştirilebilir, 08-youtube buradan okur)
     drive_folder_id: 12,
     gorsel_status: 13,
     ses_status: 14,

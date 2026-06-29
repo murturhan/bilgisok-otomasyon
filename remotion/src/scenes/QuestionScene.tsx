@@ -1,4 +1,4 @@
-// REV 023/17JUN26 - show_image=true → flu (blur→reveal) modu; WYR whoosh eklendi
+// REV 024/30JUN26 - DEFAULT NET: show_image=true → net (blur YOK), false → flu+fünye+reveal; fünye border merkezine hizalandı
 import React from "react";
 import {
   AbsoluteFill,
@@ -395,9 +395,9 @@ const LongLayout: React.FC<LayoutProps> = ({
   const factHeight = Math.min(height - bodyTop - bodyBottom, 800);
   
   // ─── Görsel mod ───
-  // net: resim hep net; flu: reveal'a kadar bulanık; surpriz: "?" placeholder
+  // DEFAULT net: resim hep net (blur YOK). show_image=false → flu (reveal'a kadar bulanık). surpriz: "?" placeholder (sadece image_show_mode ile)
   const showMode: string = (question as any).image_show_mode
-    || (question.show_image === false ? 'surpriz' : 'flu');
+    || (question.show_image === false ? 'flu' : 'net');
   const showImageClear = showMode !== 'surpriz';
   const afterReveal = localFrame >= phases.reveal;
   const blurAmount = showMode === 'flu' && !afterReveal ? 18 : 0;
@@ -539,9 +539,9 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   const showProgressBar = inCountdown || inDrumRoll || inSilentPause;
   
   // ─── Görsel mod ───
-  // net: resim hep net; flu: reveal'a kadar bulanık; surpriz: "?" placeholder
+  // DEFAULT net: resim hep net (blur YOK). show_image=false → flu (reveal'a kadar bulanık). surpriz: "?" placeholder (sadece image_show_mode ile)
   const showMode: string = (question as any).image_show_mode
-    || (question.show_image === false ? 'surpriz' : 'flu');
+    || (question.show_image === false ? 'flu' : 'net');
   const showImageClear = showMode !== 'surpriz';
   const afterReveal = localFrame >= phases.reveal;
   const blurAmount = showMode === 'flu' && !afterReveal ? 18 : 0;
@@ -590,7 +590,7 @@ const ShortsLayout: React.FC<LayoutProps> = ({
             fusePhase={fusePhase}
             burstActive={burstActive}
             burstLocalFrame={burstLocalFrame}
-            showAsPlaceholder={question.show_image === false && !isRevealed}
+            showAsPlaceholder={showMode === 'surpriz' && !isRevealed}
             borderColor={borderColor}
           />
 
@@ -791,9 +791,15 @@ const ImageCard: React.FC<ImageCardProps> = ({
   
   if (!src && !videoSrc && !showAsPlaceholder) return null;
   
-  // Fitil için SVG path: dikdörtgen çerçeve (saat yönünde, üst-orta'dan başlar)
+  // Fitil: 12px çerçeve border'ının ORTA hattını takip eder (merkezden kayma fix)
+  // border merkez hattı content kenarından -6px dışarda, merkez radius = 28 dış - 6 = 22
+  const fuseInset = 6;                     // border kalınlığının (12px) yarısı
+  const fusePad = 8;                       // stroke taşması için SVG kenar payı
+  const fuseW = width + 2 * fuseInset;     // border merkez dikdörtgen genişliği
+  const fuseH = height + 2 * fuseInset;
+  const fuseRx = 22;                       // border merkez radius
   // fusePhase 0..1 → strokeDashoffset ile ilerle
-  const perim = 2 * (width + height);
+  const perim = 2 * (fuseW + fuseH);
   const fuseDashOffset = perim * (1 - fusePhase);
   
   // Konfeti burst - 24 parça farklı yönlere
@@ -894,19 +900,20 @@ const ImageCard: React.FC<ImageCardProps> = ({
         <svg
           style={{
             position: "absolute",
-            top: -3, left: -3, width: width, height: height,
+            top: -(fuseInset + fusePad), left: -(fuseInset + fusePad),
+            width: fuseW + 2 * fusePad, height: fuseH + 2 * fusePad,
             pointerEvents: "none",
             zIndex: 3,
           }}
-          width={width}
-          height={height}
+          width={fuseW + 2 * fusePad}
+          height={fuseH + 2 * fusePad}
         >
           {/* Karbonlaşmış iz (yanan kısım) */}
           <rect
-            x={3} y={3}
-            width={width - 6}
-            height={height - 6}
-            rx={22}
+            x={fusePad} y={fusePad}
+            width={fuseW}
+            height={fuseH}
+            rx={fuseRx}
             fill="none"
             stroke="#1a0500"
             strokeWidth={6}
@@ -916,10 +923,10 @@ const ImageCard: React.FC<ImageCardProps> = ({
           />
           {/* Kıvılcım (parlayan baş) */}
           <rect
-            x={3} y={3}
-            width={width - 6}
-            height={height - 6}
-            rx={22}
+            x={fusePad} y={fusePad}
+            width={fuseW}
+            height={fuseH}
+            rx={fuseRx}
             fill="none"
             stroke="#FFD700"
             strokeWidth={8}

@@ -1,4 +1,4 @@
-// REV 025/28JUN26 - Gemini SEO video_baslik önerisi (kullanıcı konu yazar, AI başlık önerir; fallback konu metni)
+// REV 026/30JUN26 - WYR reveal_audio_text fallback (son WYR Jess susmasın); SEO video_baslik (REV025)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -388,7 +388,12 @@ CRITICAL:
 - thumbnail_title is for the thumbnail top band (LARGE TEXT), NOT for YouTube title
 - **thumbnail_optionlar MUST be 2 or 3 items**: iconic, visually recognizable objects that make great side-by-side comparison images
 - baslik is the LONG YouTube title (10-15 words with emoji), separate from thumbnail_title
-- **video_baslik MUST be provided**: a concise SEO video title (50-70 chars, question format, kid-friendly, optional 1-2 emoji). This is the title shown to the user for approval. NEVER use clickbait words (SHOCKING/INSANE/YOU WON'T BELIEVE).
+- **video_baslik — FIRST PRIORITY, MUST be provided**: a concise SEO YouTube video title (50-70 chars, question format, kid-friendly, optional 1-2 emoji). This is the FINAL video title.
+  * CRITICAL: NEVER copy the topic input "${konu}" verbatim as the title. The topic is a seed; transform it into a click-worthy question-format title.
+  * BAD (topic copied as-is): topic "pizza origins" → video_baslik "pizza origins". FORBIDDEN.
+  * GOOD: topic "pizza origins" → "Where Did Pizza REALLY Come From? Fun Food Quiz! 🍕"
+  * GOOD: topic "planets" → "Can You Name These Planets? Space Quiz for Kids! 🪐"
+  * NEVER use clickbait words (SHOCKING/INSANE/YOU WON'T BELIEVE).
 - **question_text MUST be MAX 6 WORDS** — short and impactful, never exceed 6 words. Wrong: "What is the name of the largest ocean on Earth?". Right: "Which is Earth's largest ocean?"
 - **intro_title CRITICAL — MANDATORY STARS**: Short topic title for the video intro screen (MAX 4 WORDS). You MUST wrap the 1-2 most important words with **double stars**. Examples: "**Wild** Animals", "Amazing **Oceans**", "**Rocket** Science", "**Dino** World". NEVER output intro_title without ** markers — it MUST contain ** or the UI breaks. Wrong: "Animal Adaptations". Right: "**Animal** Adaptations".
 - **show_image** (boolean, per question): Decide if showing the image during question helps or spoils.
@@ -494,6 +499,13 @@ TOPIC EMOJIS (for intro screen emoji band)
           q.question_type = "would_you_rather"; // Gemini bazen unutuyor, garantile
           if (!q.visible_option) q.visible_option = { label: "Option A" };
           if (!q.surprise_option) q.surprise_option = { label: "Sürpriz Kutu", surprise_outcome: "Surprise!", surprise_is_good: true };
+          // SON WYR JESS SUSMASIN: reveal_audio_text boşsa (Gemini son soruda atlıyor) surprise'tan üret
+          if (!q.reveal_audio_text || !String(q.reveal_audio_text).trim()) {
+            const outcome = q.surprise_option?.surprise_outcome || "a surprise";
+            q.reveal_audio_text = q.jess_reaction || (q.surprise_option?.surprise_is_good
+              ? `And the mystery box reveals... ${outcome}! What a lucky pick!`
+              : `Oh no! The mystery box was... ${outcome}! Better luck next time!`);
+          }
           // WYR: stil per-slot kaydet
           q.visible_option.image_stili = GORSEL_STILI_ENV;
           q.surprise_option.surprise_image_stili = GORSEL_STILI_ENV;
@@ -586,6 +598,15 @@ TOPIC EMOJIS (for intro screen emoji band)
       } else if (!json.baslik) {
         json.baslik = konu;
         console.log(`video_baslik yok, fallback konu metni başlık oldu: "${json.baslik}"`);
+      }
+
+      // DEFENSE IN DEPTH: Gemini SEO talimatını yoksayıp konu metnini aynen başlık yaptıysa düzelt
+      const baslikNorm = String(json.baslik || "").trim().toLowerCase().replace(/[\s_]+/g, " ");
+      const konuNorm = String(konu || "").trim().toLowerCase().replace(/[\s_]+/g, " ");
+      if (baslikNorm && konuNorm && baslikNorm === konuNorm) {
+        json.baslik = `${String(konu).trim()} — Fun Quiz for Kids! 🎯`;
+        json.video_baslik = json.baslik;
+        console.log(`⚠ video_baslik konu metniyle aynıydı (SEO yok sayılmış), fallback uygulandı: "${json.baslik}"`);
       }
       
       // thumbnail_title validate - soru formatı, max 5 kelime

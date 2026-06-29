@@ -1,4 +1,4 @@
-// REV 006/07JUN26 - GECİCİ: Shorts format girerse hata firlat
+// REV 007/30JUN26 - son WYR Jess susmasın: reveal metni boşsa surprise outcome'dan fallback üret
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -254,10 +254,20 @@ async function main() {
         type: "question",
       });
       if (isWyr) {
+        // SON WYR JESS SUSMASIN: reveal metni boşsa surprise outcome'dan üret
+        // (Gemini bazen son soruda reveal_audio_text/jess_reaction vermiyor → segment üretilmez → Jess sessiz)
+        let revealText = (q.reveal_audio_text || q.jess_reaction || "").trim();
+        if (!revealText) {
+          const outcome = q.surprise_option?.surprise_outcome || "a surprise";
+          revealText = q.surprise_option?.surprise_is_good
+            ? `And the mystery box reveals... ${outcome}! What a lucky pick!`
+            : `Oh no! The mystery box was... ${outcome}! Better luck next time!`;
+          console.log(`⚠ q${idx} reveal metni boştu, fallback üretildi: "${revealText}"`);
+        }
         segmentTasks.push({
           key: `q${idx}-reveal`,
           filename: `q${idx}-reveal.mp3`,
-          text: q.reveal_audio_text || q.jess_reaction || "",
+          text: revealText,
           question_index: i,
           type: "reveal",
         });

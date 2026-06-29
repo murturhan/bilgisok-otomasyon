@@ -1,4 +1,4 @@
-// REV 011/28JUN26 - stage=2 edit dongusu: sayisal olmayan anahtarlari (stage-1 meta sizintisi) acikca atla
+// REV 012/30JUN26 - onay2 başlık edit fix: video_baslik artık Sheet job.baslik'a da yazılıyor (08-youtube buradan okur)
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -277,10 +277,11 @@ async function main() {
 
       console.log(`Stage=1: ${sorular.length} soru, ${silinenIndices.length} silinen, action=${action}`);
 
-      // a) Video başlığı güncelle
-      if (videoBaslik) {
-        questionsData.baslik = videoBaslik;
-        console.log(`Video başlığı güncellendi: "${videoBaslik}"`);
+      // a) Video başlığı güncelle (questions.json + Sheet job.baslik — 08-youtube Sheet'ten okur)
+      if (videoBaslik && videoBaslik.trim()) {
+        questionsData.baslik = videoBaslik.trim();
+        await jobGuncelle(JOB_ID, { baslik: videoBaslik.trim() });
+        console.log(`Video başlığı güncellendi (stage1, questions.json + Sheet): "${videoBaslik.trim()}"`);
       }
 
       // b) Silinen soruların Drive görsellerini yedekle
@@ -532,10 +533,12 @@ async function main() {
       console.log(`topic_emojis güncellendi: ${edits.topic_emojis.join(" ")}`);
     }
 
-    // 5c. Video başlığı güncelle (onay2'den geliyorsa)
+    // 5c. Video başlığı güncelle (onay2'den geliyorsa) — questions.json + Sheet job.baslik
+    //     08-youtube-upload başlığı Sheet'ten (job.baslik) okur, bu yüzden Sheet de güncellenmeli
     if (VIDEO_BASLIK && VIDEO_BASLIK.trim()) {
       questionsData.baslik = VIDEO_BASLIK.trim();
-      console.log(`Video başlığı güncellendi (stage2): "${VIDEO_BASLIK.trim()}"`);
+      await jobGuncelle(JOB_ID, { baslik: VIDEO_BASLIK.trim() });
+      console.log(`Video başlığı güncellendi (stage2, questions.json + Sheet): "${VIDEO_BASLIK.trim()}"`);
     }
 
     // 6. questions.json'u Drive'a geri yaz
