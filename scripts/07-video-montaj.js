@@ -1,4 +1,4 @@
-// REV 017/17JUN26 - skip_outro inputProps'a geciliyor (onceki rev sadece audio_duration=0 yapiyordu)
+// REV 018/05SEP26 - gorsel_status guard esnetildi: completed* + partial:X/N (X>0) gecer, error/running bloklar
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -370,11 +370,28 @@ async function main() {
     // Kullanıcı talebi: "image tamamlanmadan video montaja geçmesin"
     const gorselStatus = String(job.gorsel_status || "");
     const sesStatus = String(job.ses_status || "");
-    if (!gorselStatus.startsWith("completed")) {
+    // gorsel_status kabul kurallari:
+    //   "completed*"        -> gec
+    //   "partial:X/N" X>0   -> gec (1-2 gorsel eksikse video yine render edilsin)
+    //   "partial:<metin>"   -> gec (legacy; 02 sifir gorselde zaten hata firlatiyor)
+    //   digerleri (bos, "error:*", "running*", ara durumlar) -> blokla
+    const gorselOk = (() => {
+      if (gorselStatus.startsWith("completed")) return true;
+      if (gorselStatus.startsWith("partial")) {
+        const m = gorselStatus.match(/^partial:(\d+)\/(\d+)$/);
+        if (!m) return true; // sayisiz legacy format
+        return Number(m[1]) > 0;
+      }
+      return false;
+    })();
+    if (!gorselOk) {
       throw new Error(
         `Görsel üretimi tamamlanmamış (gorsel_status: "${gorselStatus || "yok"}"). ` +
         `Önce 02-gorsel-uret tamamlanmalı. Video montaj başlatılamaz.`
       );
+    }
+    if (gorselStatus.startsWith("partial")) {
+      console.warn(`⚠ Görseller eksik (gorsel_status: ${gorselStatus}) — render yine de başlatılıyor.`);
     }
     if (!sesStatus.startsWith("completed")) {
       throw new Error(

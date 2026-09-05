@@ -1,4 +1,4 @@
-// REV 008/24JUN26 - cleanGorselPrompt: Turkey→Turkiye replace
+// REV 009/05SEP26 - partial_regen: gorsel_status artik sayisal format (0 regen'de eski status korunur)
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -347,6 +347,10 @@ async function partialRegenMain() {
   if (!altKlasorler.length) throw new Error("01-gorseller klasörü bulunamadı");
   const gorselKlasorId = altKlasorler[0].id;
 
+  // Regen oncesi mevcut status'u sakla: hic regen yapilmazsa geri yazilacak
+  // (aksi halde "running_partial" kalir ve 07-video-montaj bloklanir)
+  const oncekiGorselStatus = String(job.gorsel_status || "");
+
   await jobGuncelle(JOB_ID, { gorsel_status: "running_partial" });
 
   // FLUX üretilecek slotları belirle
@@ -428,12 +432,23 @@ async function partialRegenMain() {
     console.warn(`⚠ questions.json Drive güncelleme hatası (devam): ${e.message}`);
   }
 
-  const toplamYuklu = fluxSlots.length === 0
-    ? questions.length * 2 // tümü yüklü sayılır
-    : uretilen + (questions.length * 2 - fluxSlots.length); // üretilen + zaten yüklü
-  const status = uretilen === fluxSlots.length ? "completed" : "partial";
-  await jobGuncelle(JOB_ID, { gorsel_status: `${status}:partial_regen` });
-  console.log(`✅ Partial regen tamamlandı: ${uretilen}/${fluxSlots.length} FLUX üretildi.`);
+  // gorsel_status HER ZAMAN sayisal formatta yazilir: "completed:N/N" veya "partial:X/N".
+  // "partial:partial_regen" gibi serbest metin 07-video-montaj guard'i tarafindan parse
+  // edilemiyor ve pipeline'i bloklyordu.
+  const toplamSlot = questions.length * 2;
+  if (fluxSlots.length === 0) {
+    // Hic regen yapilmadi -> 02'nin yazdigi onceki status'a DOKUNMA, geri yaz.
+    const geriYazilacak = /^(completed|partial)/.test(oncekiGorselStatus)
+      ? oncekiGorselStatus
+      : `completed:${toplamSlot}/${toplamSlot}`;
+    await jobGuncelle(JOB_ID, { gorsel_status: geriYazilacak });
+    console.log(`✅ Partial regen: 0 slot üretildi, gorsel_status korundu (${geriYazilacak}).`);
+  } else {
+    const toplamYuklu = uretilen + (toplamSlot - fluxSlots.length); // üretilen + zaten yüklü
+    const status = uretilen === fluxSlots.length ? "completed" : "partial";
+    await jobGuncelle(JOB_ID, { gorsel_status: `${status}:${toplamYuklu}/${toplamSlot}` });
+    console.log(`✅ Partial regen tamamlandı: ${uretilen}/${fluxSlots.length} FLUX üretildi (gorsel_status: ${status}:${toplamYuklu}/${toplamSlot}).`);
+  }
 
   await telegram(job.chat_id, `🖼 *Görseller hazır* (aşama 1 seçimi)\n\n⏳ Onay sayfası hazırlanıyor...`);
   await dispatch02_5(job);
