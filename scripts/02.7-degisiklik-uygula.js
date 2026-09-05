@@ -1,4 +1,4 @@
-// REV 013/05SEP26 - gorsel-NN.jpg deterministik ad, regen silme artik upload aninda (basarisiz regen gorseli silmiyor), per-gorsel log + gercek sayilar
+// REV 014/05SEP26 - flux cagrilarindan width/height kaldirildi (model desteklemiyor)
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -588,9 +588,8 @@ async function main() {
     if (regenQuestionImages.length > 0) {
       console.log(`FLUX: ${regenQuestionImages.length} soru gorseli regen...`);
       const prompts = regenQuestionImages.map(r => r.prompt);
+      // flux-1-schnell width/height KABUL ETMIYOR (resmi dokuman: prompt/steps/seed)
       const res = await fluxRotationCagri(prompts, {
-        width: 1920,
-        height: 1080,
         onSuccess: async (filteredIdx, buffer) => {
           const slot = slotForQuestion(regenQuestionImages[filteredIdx].index, "question");
           const ok = await regenSlotYaz(gorselKlasorId, slot, buffer, filteredIdx + 1, prompts.length, "soru");
@@ -608,9 +607,8 @@ async function main() {
     if (regenFactImages.length > 0) {
       console.log(`FLUX: ${regenFactImages.length} fact gorseli regen...`);
       const prompts = regenFactImages.map(r => r.prompt);
+      // flux-1-schnell width/height KABUL ETMIYOR (resmi dokuman: prompt/steps/seed)
       const res = await fluxRotationCagri(prompts, {
-        width: 1920,
-        height: 1080,
         onSuccess: async (filteredIdx, buffer) => {
           const slot = slotForQuestion(regenFactImages[filteredIdx].index, "fact");
           const ok = await regenSlotYaz(gorselKlasorId, slot, buffer, filteredIdx + 1, prompts.length, "fact");

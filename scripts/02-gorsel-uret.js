@@ -1,4 +1,4 @@
-// REV 010/05SEP26 - gorsel-NN.jpg deterministik ad (timestamp yok), Drive hatasi artik basarisiz sayiliyor, per-gorsel log, bos-Drive dogrulamasi
+// REV 011/05SEP26 - flux width/height cagrilardan kaldirildi, ilk 3 FLUX hatasinin tam govdesi Telegram a gidiyor
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -20,7 +20,7 @@ import {
   getServiceAccountAuth,
   getOAuthClient,
 } from "./lib/google.js";
-import { fluxRotationCagri } from "./lib/cloudflare.js";
+import { fluxRotationCagri, fluxHataOzeti } from "./lib/cloudflare.js";
 import { telegram } from "./lib/telegram.js";
 import { GORSEL_STILLERI, DEFAULT_STIL } from "./lib/gorsel-stilleri.js";
 
@@ -231,15 +231,16 @@ async function main() {
     let yeniUretilen = 0;
     let driveHata = 0;
     let fluxHata = 0;
+    let sonHatalar = []; // fluxRotationCagri'nin dondugu zengin hata kayitlari (status/body/errors)
 
     if (eksikPromptlar.length === 0) {
       console.log("✅ Tüm görseller zaten mevcut, yeni üretim yok.");
     } else {
       console.log(`🎨 ${eksikPromptlar.length} eksik görsel üretilecek (slot: ${eksikOrijinalIndexler.map(i => i+1).join(", ")})`);
 
+      // NOT: flux-1-schnell width/height KABUL ETMIYOR (resmi dokuman: prompt/steps/seed).
+      // Model kendi dogal cozunurlugunde uretir, Remotion objectFit:"cover" ile kirpar.
       const { sonuclar, hatalar } = await fluxRotationCagri(eksikPromptlar, {
-        width: 1920,
-        height: 1080,
         onSuccess: async (filteredIndex, buffer) => {
           // filteredIndex = eksikPromptlar içindeki index → orijinal slot'a çevir
           const slot = eksikOrijinalIndexler[filteredIndex] + 1;
@@ -249,6 +250,7 @@ async function main() {
         },
       });
       fluxHata = (hatalar || []).length;
+      sonHatalar = hatalar || [];
       fluxHatalariniLogla(hatalar, (i) => eksikOrijinalIndexler[i] + 1, eksikPromptlar.length);
       console.log(
         `📊 Üretim özeti: FLUX ok ${(sonuclar || []).length}/${eksikPromptlar.length}, ` +
@@ -259,11 +261,18 @@ async function main() {
     // Toplam başarılı = mevcut + Drive'a GERÇEKTEN yüklenen
     const toplamBasarili = mevcutIndexler.size + yeniUretilen;
 
-    // SIFIR görsel = hata
+    // SIFIR görsel = hata. İlk 3 FLUX hatasının TAM gövdesini Telegram'a da yolla
+    // (Actions loguna girmeden ne olduğu görülsün).
     if (toplamBasarili === 0) {
+      const ozet = fluxHataOzeti(sonHatalar, 3, 300);
+      if (ozet) {
+        try {
+          await telegram(job.chat_id, `⛔ *FLUX ilk 3 hata:*\n\`\`\`\n${ozet}\n\`\`\``);
+        } catch (e) { console.warn(`Telegram hata özeti gönderilemedi: ${e.message}`); }
+      }
       throw new Error(
         `0/${toplam} görsel Drive'a yüklendi (FLUX hata: ${fluxHata}, Drive hata: ${driveHata}). ` +
-        `Tüm Cloudflare hesaplarının kotası dolmuş olabilir, UTC 00:00'ı bekleyin.`
+        (sonHatalar[0] ? `İlk hata: HTTP ${sonHatalar[0].status ?? "-"} (${sonHatalar[0].tur}) ${(sonHatalar[0].errorsOzet || sonHatalar[0].body || "").substring(0, 200)}` : "")
       );
     }
 
@@ -491,13 +500,14 @@ async function partialRegenMain() {
   let uretilen = 0;
   let driveHata = 0;
   let fluxHata = 0;
+  let sonHatalar = []; // zengin hata kayitlari (status/tur/body/errorsOzet/account)
   if (fluxSlots.length === 0) {
     console.log("✅ FLUX üretilecek slot yok (tümü yüklü veya işaretsiz).");
   } else {
     console.log(`🎨 ${fluxSlots.length} slot FLUX üretilecek: ${fluxSlots.map(s => `${gorselDosyaAdi(s.gorselNum)} (${s.slotType})`).join(", ")}`);
     const prompts = fluxSlots.map(s => s.prompt);
+    // NOT: flux-1-schnell width/height KABUL ETMIYOR (resmi dokuman: prompt/steps/seed).
     const { sonuclar, hatalar } = await fluxRotationCagri(prompts, {
-      width: 1280, height: 720,
       onSuccess: async (filteredIdx, buffer) => {
         const slot = fluxSlots[filteredIdx];
         const result = await gorselYukle(gorselKlasorId, slot.gorselNum, buffer, filteredIdx + 1, fluxSlots.length);
@@ -513,6 +523,7 @@ async function partialRegenMain() {
       },
     });
     fluxHata = (hatalar || []).length;
+    sonHatalar = hatalar || [];
     fluxHatalariniLogla(hatalar, (i) => fluxSlots[i].gorselNum, fluxSlots.length);
     console.log(
       `📊 Regen özeti: FLUX ok ${(sonuclar || []).length}/${fluxSlots.length}, ` +
@@ -522,9 +533,17 @@ async function partialRegenMain() {
 
   // Yalan başarı raporunu kes: regen istendi ama hiçbir görsel Drive'a yazılamadıysa
   // "hazır" DEME — hata at (catch bloğu gorsel_status=error yazar + Telegram'a hata gider).
+  // İlk 3 FLUX hatasının TAM gövdesi ayrıca Telegram'a gider (kör uçuş bitsin).
   if (fluxSlots.length > 0 && uretilen === 0) {
+    const ozet = fluxHataOzeti(sonHatalar, 3, 300);
+    if (ozet) {
+      try {
+        await telegram(job.chat_id, `⛔ *FLUX ilk 3 hata:*\n\`\`\`\n${ozet}\n\`\`\``);
+      } catch (e) { console.warn(`Telegram hata özeti gönderilemedi: ${e.message}`); }
+    }
     throw new Error(
       `0/${fluxSlots.length} görsel Drive'a yüklenebildi (FLUX hata: ${fluxHata}, Drive hata: ${driveHata}). ` +
+      (sonHatalar[0] ? `İlk hata: HTTP ${sonHatalar[0].status ?? "-"} (${sonHatalar[0].tur}) ${(sonHatalar[0].errorsOzet || sonHatalar[0].body || "").substring(0, 200)} ` : "") +
       `Onay sayfası boş kalırdı, durduruldu.`
     );
   }

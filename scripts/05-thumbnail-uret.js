@@ -1,4 +1,4 @@
-// REV 021/24JUN26 - Turkey→Turkiye replace (thumbnail metni)
+// REV 022/05SEP26 - fluxCagri width/height kaldirildi (model desteklemiyor, boyut sharp ile ayarlaniyor)
 /**
  * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
@@ -143,7 +143,8 @@ async function renderOptionImage(opt, hesap) {
       `${opt.prompt}, isolated subject, NO white background, transparent or dark background, ` +
       `vivid saturated colors, sharp focus, photorealistic, no text, no watermarks`;
     console.log(`  🎨 FLUX: ${opt.label}`);
-    return await fluxCagri(fullPrompt, hesap, { width: 512, height: 512 });
+    // flux-1-schnell width/height KABUL ETMIYOR; boyutlandirma asagida sharp ile yapiliyor
+    return await fluxCagri(fullPrompt, hesap, {});
   }
 
   // Fallback: beyaz boş resim
