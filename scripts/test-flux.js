@@ -1,4 +1,4 @@
-// REV 001/05SEP26 - tek gorsellik FLUX test scripti: tum hesaplari sirayla dener, TAM response basar
+// REV 002/05SEP26 - --telegram bayragi: duz metin (parse_mode yok) sonuc raporu
 /**
  * test-flux.js — Tek görsellik hızlı FLUX testi.
  *
@@ -12,8 +12,10 @@
  *   node scripts/test-flux.js "a red apple" --kaydet   → başarılı görseli /tmp'ye yazar
  *   node scripts/test-flux.js "a red apple" --wh       → ESKİ davranış: width/height DE gönderir
  *                                                        (parametrenin hataya sebep olup olmadığını kanıtlamak için)
+ *   node scripts/test-flux.js "a red apple" --telegram → sonucu Telegram'a DÜZ METİN yollar
  *
  * Env: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (ve _2 .. _6)
+ *      --telegram için ayrıca: TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
  *
  * Bu script HİÇBİR workflow tetiklemez, Drive'a/Sheets'e yazmaz. Sadece okur ve raporlar.
  */
@@ -27,7 +29,33 @@ const bayraklar = args.filter(a => a.startsWith("--"));
 const PROMPT = args.filter(a => !a.startsWith("--"))[0] || "a red apple on a wooden table";
 const KAYDET = bayraklar.includes("--kaydet");
 const WIDTH_HEIGHT_GONDER = bayraklar.includes("--wh");
+const TELEGRAM_YOLLA = bayraklar.includes("--telegram");
 const STEPS = 4;
+
+/**
+ * Telegram'a DÜZ METİN yolla. lib/telegram.js parse_mode:"Markdown" kullanıyor;
+ * hata gövdelerinde _ * [ ` gibi karakterler olduğu için Telegram 400 döndürebiliyor.
+ * Bu yüzden burada parse_mode GÖNDERİLMİYOR — mesaj birebir düz metin gider.
+ */
+async function telegramDuzMetin(metin) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) {
+    console.warn("⚠ Telegram atlandı: TELEGRAM_BOT_TOKEN veya TELEGRAM_CHAT_ID yok.");
+    return;
+  }
+  try {
+    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+      chat_id: chatId,
+      text: metin.substring(0, 4000), // Telegram limiti 4096
+      disable_web_page_preview: true,
+    });
+    console.log("✓ Telegram raporu gönderildi.");
+  } catch (e) {
+    const govde = e?.response?.data ? JSON.stringify(e.response.data) : e.message;
+    console.error(`Telegram gönderilemedi: ${govde}`);
+  }
+}
 
 function maskele(s) {
   if (!s) return "(yok)";
@@ -86,7 +114,7 @@ async function hesabiDene(account, sira, toplam) {
       fs.writeFileSync(yol, buf);
       console.log(`  💾 kaydedildi: ${yol}`);
     }
-    return { ad: account.name, ok: true, status: response.status, kb: Math.round(buf.length / 1024) };
+    return { ad: account.name, ok: true, status: response.status, kb: Math.round(buf.length / 1024), boyut: pngJpegBoyut(buf) };
 
   } catch (e) {
     const sure = Date.now() - t0;
@@ -134,12 +162,17 @@ async function main() {
   console.log(`  width/height gönderiliyor mu: ${WIDTH_HEIGHT_GONDER ? "EVET (--wh)" : "HAYIR (model desteklemiyor)"}`);
   console.log("═".repeat(78));
 
+  const whEtiket = WIDTH_HEIGHT_GONDER ? "width/height GONDERILDI" : "width/height GONDERILMEDI";
+
   let accounts;
   try {
     accounts = getCfAccounts();
   } catch (e) {
     console.error(`⛔ ${e.message}`);
     console.error("   CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID env değişkenlerini ayarla.");
+    if (TELEGRAM_YOLLA) {
+      await telegramDuzMetin(`FLUX TEST (${whEtiket})\nprompt: ${PROMPT}\n\nHIC CLOUDFLARE HESABI YAPILANDIRILMAMIS.\nCLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID secret'lari eksik.`);
+    }
     process.exit(1);
   }
   console.log(`${accounts.length} hesap yapılandırılmış: ${accounts.map(a => a.name).join(", ")}`);
@@ -159,6 +192,28 @@ async function main() {
   const okSayisi = sonuclar.filter(s => s.ok).length;
   console.log(`  → ${okSayisi}/${sonuclar.length} hesap çalışıyor`);
   console.log("═".repeat(78));
+
+  if (TELEGRAM_YOLLA) {
+    // DÜZ METİN: backtick / yıldız / alt çizgi biçimlendirmesi YOK
+    const satirlar = [
+      `FLUX TEST SONUCU (${whEtiket})`,
+      `model: ${FLUX_MODEL}`,
+      `prompt: ${PROMPT}`,
+      `steps: ${STEPS}`,
+      "",
+    ];
+    for (const s of sonuclar) {
+      if (s.ok) {
+        satirlar.push(`${s.ad}: HTTP ${s.status} OK - ${s.kb}KB - ${s.boyut || "boyut bilinmiyor"}`);
+      } else {
+        satirlar.push(`${s.ad}: HTTP ${s.status ?? "-"} (${s.tur || "?"})`);
+        if (s.not) satirlar.push(`  ${String(s.not).substring(0, 300)}`);
+      }
+    }
+    satirlar.push("");
+    satirlar.push(`SONUC: ${okSayisi}/${sonuclar.length} hesap calisiyor`);
+    await telegramDuzMetin(satirlar.join("\n"));
+  }
 
   process.exit(okSayisi > 0 ? 0 : 1);
 }

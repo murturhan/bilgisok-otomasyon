@@ -1,0 +1,96 @@
+# REV 001/05SEP26 - flux teshis test workflow
+name: TEST - FLUX Teşhis
+
+# SADECE TEŞHİS. Drive'a yazmaz, Sheets'e dokunmaz, başka workflow tetiklemez.
+# Tek bir prompt ile yapılandırılmış TÜM Cloudflare hesaplarını dener ve
+# HTTP status + errors[] + tam response gövdesini loga basar.
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'FLUX prompt'
+        required: false
+        default: 'a red apple'
+
+jobs:
+  test-flux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # NOT: repoda package-lock.json YOK, bu yüzden "npm ci" calismaz
+      # (npm error EUSAGE). Diger workflow'lar da ayni deseni kullaniyor.
+      - name: NPM dependencies
+        run: |
+          npm init -y
+          npm pkg set type=module
+          npm install --no-save axios
+
+      - name: 'TEST 1 - width/height GONDERILMEDEN (mevcut kod davranisi)'
+        id: test_normal
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN_2: ${{ secrets.CLOUDFLARE_API_TOKEN_2 }}
+          CLOUDFLARE_ACCOUNT_ID_2: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_2 }}
+          CLOUDFLARE_API_TOKEN_3: ${{ secrets.CLOUDFLARE_API_TOKEN_3 }}
+          CLOUDFLARE_ACCOUNT_ID_3: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_3 }}
+          CLOUDFLARE_API_TOKEN_4: ${{ secrets.CLOUDFLARE_API_TOKEN_4 }}
+          CLOUDFLARE_ACCOUNT_ID_4: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_4 }}
+          CLOUDFLARE_API_TOKEN_5: ${{ secrets.CLOUDFLARE_API_TOKEN_5 }}
+          CLOUDFLARE_ACCOUNT_ID_5: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_5 }}
+          CLOUDFLARE_API_TOKEN_6: ${{ secrets.CLOUDFLARE_API_TOKEN_6 }}
+          CLOUDFLARE_ACCOUNT_ID_6: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_6 }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PROMPT: ${{ github.event.inputs.prompt || 'a red apple' }}
+        run: |
+          echo "=============================================================="
+          echo "TEST 1: width/height GONDERILMIYOR (flux-1-schnell dokumani)"
+          echo "=============================================================="
+          node scripts/test-flux.js "$PROMPT" --telegram
+
+      - name: 'TEST 2 - width/height GONDERILEREK (eski kod davranisi)'
+        id: test_wh
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN_2: ${{ secrets.CLOUDFLARE_API_TOKEN_2 }}
+          CLOUDFLARE_ACCOUNT_ID_2: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_2 }}
+          CLOUDFLARE_API_TOKEN_3: ${{ secrets.CLOUDFLARE_API_TOKEN_3 }}
+          CLOUDFLARE_ACCOUNT_ID_3: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_3 }}
+          CLOUDFLARE_API_TOKEN_4: ${{ secrets.CLOUDFLARE_API_TOKEN_4 }}
+          CLOUDFLARE_ACCOUNT_ID_4: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_4 }}
+          CLOUDFLARE_API_TOKEN_5: ${{ secrets.CLOUDFLARE_API_TOKEN_5 }}
+          CLOUDFLARE_ACCOUNT_ID_5: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_5 }}
+          CLOUDFLARE_API_TOKEN_6: ${{ secrets.CLOUDFLARE_API_TOKEN_6 }}
+          CLOUDFLARE_ACCOUNT_ID_6: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_6 }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PROMPT: ${{ github.event.inputs.prompt || 'a red apple' }}
+        run: |
+          echo "=============================================================="
+          echo "TEST 2: width/height GONDERILIYOR (1280x720) - eski davranis"
+          echo "=============================================================="
+          node scripts/test-flux.js "$PROMPT" --wh --telegram
+
+      - name: Ozet
+        if: always()
+        run: |
+          echo "=============================================================="
+          echo "TEST 1 (width/height YOK)  : ${{ steps.test_normal.outcome }}"
+          echo "TEST 2 (width/height VAR)  : ${{ steps.test_wh.outcome }}"
+          echo "=============================================================="
+          echo "Iki testin de TAM ciktisi yukaridaki adim loglarinda."
+          echo "Telegram'a her test icin ayri duz metin rapor gonderildi."
