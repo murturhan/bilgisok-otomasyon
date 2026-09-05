@@ -1,4 +1,4 @@
-// REV 009/05SEP26 - partial_regen: gorsel_status artik sayisal format (0 regen'de eski status korunur)
+// REV 010/05SEP26 - gorsel-NN.jpg deterministik ad (timestamp yok), Drive hatasi artik basarisiz sayiliyor, per-gorsel log, bos-Drive dogrulamasi
 /**
  * 02 - Görsel Üretimi (20 adet FLUX, 1280x720)
  * - job_state'ten promptları oku
@@ -18,6 +18,7 @@ import {
   driveAltKlasorBul,
   driveDosyaYukle,
   getServiceAccountAuth,
+  getOAuthClient,
 } from "./lib/google.js";
 import { fluxRotationCagri } from "./lib/cloudflare.js";
 import { telegram } from "./lib/telegram.js";
@@ -43,10 +44,24 @@ const {
 
 const IS_PARTIAL_REGEN = PARTIAL_REGEN === "true" || PARTIAL_REGEN === "1";
 
+// ─── TEK DOSYA ADLANDIRMA STANDARDI ──────────────────────────────────────────
+// Yazan taraf (02, 02.7, worker.js) ve okuyan taraf (02.5) AYNI şemayı kullanır:
+//   slot 1 = soru1 görseli, slot 2 = fact1, slot 3 = soru2, slot 4 = fact2, ...
+//   dosya adı: "gorsel-01.jpg" — TIMESTAMP YOK.
+// Timestamp'li eski isimler ("gorsel-01-1779415297810.jpg") okumada hâlâ kabul
+// edilir (eski job'lar bozulmasın), ama yeni yazımlar deterministik isim kullanır.
+// Deterministik isim sayesinde: regen'de eski dosya kesin siliniyor, aynı slot
+// için birden fazla dosya kalmıyor, 02.5 eşleştirmesi tek dosyaya düşüyor.
+const GORSEL_AD_PATTERN = /^gorsel-(\d+)[-.]/;
+
+function gorselDosyaAdi(slot, ext = "jpg") {
+  return `gorsel-${String(slot).padStart(2, "0")}.${ext}`;
+}
+
 /**
- * Drive'daki klasörde mevcut "gorsel-NN-*" dosyalarını listele.
- * Filename örneği: "gorsel-02-1779415297810.jpg" → index 2
- * 
+ * Drive'daki klasörde mevcut "gorsel-NN" dosyalarını listele.
+ * Kabul edilen isimler: "gorsel-02.jpg" (yeni) ve "gorsel-02-<ts>.jpg" (legacy)
+ *
  * @returns {Set<number>} Mevcut görsel index'leri (1-indexed)
  */
 async function mevcutGorselIndexleri(klasorId) {
@@ -61,8 +76,7 @@ async function mevcutGorselIndexleri(klasorId) {
       pageToken,
     });
     for (const f of res.data.files || []) {
-      // "gorsel-02-..." gibi pattern
-      const match = f.name.match(/^gorsel-(\d+)-/);
+      const match = String(f.name || "").match(GORSEL_AD_PATTERN);
       if (match) {
         mevcut.add(parseInt(match[1], 10));
       }
@@ -70,6 +84,70 @@ async function mevcutGorselIndexleri(klasorId) {
     pageToken = res.data.nextPageToken;
   } while (pageToken);
   return mevcut;
+}
+
+/**
+ * Bir slot'a ait TÜM eski dosyaları sil (yeni + legacy isimler).
+ * OAuth ile yapılır: dosyaların sahibi OAuth kullanıcısı (driveDosyaYukle OAuth kullanır).
+ */
+async function driveSlotTemizle(klasorId, slot) {
+  const drive = google.drive({ version: "v3", auth: getOAuthClient() });
+  let pageToken = undefined;
+  let silinen = 0;
+  do {
+    const res = await drive.files.list({
+      q: `'${klasorId}' in parents and trashed=false`,
+      fields: "nextPageToken, files(id, name)",
+      pageSize: 1000,
+      pageToken,
+    });
+    for (const f of res.data.files || []) {
+      const m = String(f.name || "").match(GORSEL_AD_PATTERN);
+      if (!m || parseInt(m[1], 10) !== slot) continue;
+      try {
+        await drive.files.delete({ fileId: f.id });
+        silinen++;
+      } catch (e) {
+        console.warn(`   ⚠ eski dosya silinemedi (${f.name}): ${e.message}`);
+      }
+    }
+    pageToken = res.data.nextPageToken;
+  } while (pageToken);
+  return silinen;
+}
+
+/**
+ * FLUX buffer'ını Drive'a yükle. HER görsel için tek satır log basar:
+ *   "gorsel 3/30 (slot 05): FLUX ok -> Drive ok -> gorsel-05.jpg"
+ * Drive hatasında null döner (çağıran taraf BAŞARISIZ sayar, yutulmaz).
+ */
+async function gorselYukle(klasorId, slot, buffer, sira, toplamSira) {
+  const filename = gorselDosyaAdi(slot);
+  const filepath = `/tmp/${filename}`;
+  const etiket = `gorsel ${sira}/${toplamSira} (slot ${String(slot).padStart(2, "0")})`;
+  fs.writeFileSync(filepath, buffer);
+  try {
+    await driveSlotTemizle(klasorId, slot); // duplicate slot dosyası kalmasın
+    const result = await driveDosyaYukle({ filename, filepath }, klasorId, "image/jpeg");
+    console.log(`${etiket}: FLUX ok -> Drive ok -> ${filename}`);
+    return result;
+  } catch (e) {
+    console.error(`${etiket}: FLUX ok -> Drive HATA (${e.message}) -> ${filename}`);
+    return null;
+  } finally {
+    try { fs.unlinkSync(filepath); } catch (e) {}
+  }
+}
+
+/** fluxRotationCagri'nin hata listesini slot bazında logla. */
+function fluxHatalariniLogla(hatalar, slotCozucu, toplamSira) {
+  for (const h of hatalar || []) {
+    const slot = slotCozucu(h.index);
+    console.error(
+      `gorsel ${h.index + 1}/${toplamSira} (slot ${String(slot).padStart(2, "0")}): ` +
+      `FLUX HATA (${String(h.hata).substring(0, 120)}) -> Drive atlandi -> ${gorselDosyaAdi(slot)}`
+    );
+  }
 }
 
 async function main() {
@@ -151,60 +229,78 @@ async function main() {
     }
     
     let yeniUretilen = 0;
-    
+    let driveHata = 0;
+    let fluxHata = 0;
+
     if (eksikPromptlar.length === 0) {
       console.log("✅ Tüm görseller zaten mevcut, yeni üretim yok.");
     } else {
-      console.log(`🎨 ${eksikPromptlar.length} eksik görsel üretilecek (index: ${eksikOrijinalIndexler.map(i => i+1).join(", ")})`);
-      
+      console.log(`🎨 ${eksikPromptlar.length} eksik görsel üretilecek (slot: ${eksikOrijinalIndexler.map(i => i+1).join(", ")})`);
+
       const { sonuclar, hatalar } = await fluxRotationCagri(eksikPromptlar, {
         width: 1920,
         height: 1080,
         onSuccess: async (filteredIndex, buffer) => {
-          // filteredIndex = eksikPromptlar içindeki index → orijinal'e çevir
-          const orijinalIndex = eksikOrijinalIndexler[filteredIndex];
-          const filename = `gorsel-${String(orijinalIndex + 1).padStart(2, "0")}-${Date.now()}.jpg`;
-          const filepath = `/tmp/${filename}`;
-          fs.writeFileSync(filepath, buffer);
-          
-          try {
-            await driveDosyaYukle({ filename, filepath }, gorselKlasorId, "image/jpeg");
-            yeniUretilen++;
-          } catch (e) {
-            console.error(`Drive yükleme hatası (görsel ${orijinalIndex + 1}): ${e.message}`);
-          } finally {
-            try { fs.unlinkSync(filepath); } catch (e) {}
-          }
+          // filteredIndex = eksikPromptlar içindeki index → orijinal slot'a çevir
+          const slot = eksikOrijinalIndexler[filteredIndex] + 1;
+          const yuklendi = await gorselYukle(gorselKlasorId, slot, buffer, filteredIndex + 1, eksikPromptlar.length);
+          if (yuklendi) yeniUretilen++;
+          else driveHata++; // Drive hatası artık BAŞARISIZ sayılıyor, sessizce yutulmuyor
         },
       });
+      fluxHata = (hatalar || []).length;
+      fluxHatalariniLogla(hatalar, (i) => eksikOrijinalIndexler[i] + 1, eksikPromptlar.length);
+      console.log(
+        `📊 Üretim özeti: FLUX ok ${(sonuclar || []).length}/${eksikPromptlar.length}, ` +
+        `Drive ok ${yeniUretilen}, Drive hata ${driveHata}, FLUX hata ${fluxHata}`
+      );
     }
-    
-    // Toplam başarılı = mevcut + yeni üretilen
+
+    // Toplam başarılı = mevcut + Drive'a GERÇEKTEN yüklenen
     const toplamBasarili = mevcutIndexler.size + yeniUretilen;
-    
+
     // SIFIR görsel = hata
     if (toplamBasarili === 0) {
       throw new Error(
-        `0/${toplam} görsel üretildi. Tüm Cloudflare hesaplarının kotası dolmuş olabilir, UTC 00:00'ı bekleyin.`
+        `0/${toplam} görsel Drive'a yüklendi (FLUX hata: ${fluxHata}, Drive hata: ${driveHata}). ` +
+        `Tüm Cloudflare hesaplarının kotası dolmuş olabilir, UTC 00:00'ı bekleyin.`
       );
     }
-    
-    const status = toplamBasarili === toplam ? "completed" : "partial";
+
+    // Drive'da gerçekten dosya var mı? (yalan "hazır" raporunu kesen son kontrol)
+    const dogrulama = await mevcutGorselIndexleri(gorselKlasorId);
+    console.log(`🔎 Drive doğrulama: ${dogrulama.size}/${toplam} slot dolu`);
+    if (dogrulama.size === 0) {
+      throw new Error(
+        `Drive'da hiç "gorsel-NN" dosyası yok (FLUX hata: ${fluxHata}, Drive hata: ${driveHata}). ` +
+        `Onay sayfası boş kalırdı, durduruldu.`
+      );
+    }
+
+    // Sayaç değil, Drive'daki GERÇEK dosya sayısı esas alınır (yalan rapor olmasın)
+    const gercekBasarili = dogrulama.size;
+    const status = gercekBasarili >= toplam ? "completed" : "partial";
     await jobGuncelle(JOB_ID, {
-      gorsel_status: `${status}:${toplamBasarili}/${toplam}`,
+      gorsel_status: `${status}:${gercekBasarili}/${toplam}`,
     });
-    
-    console.log(`✅ ${toplamBasarili}/${toplam} görsel hazır (${yeniUretilen} yeni üretildi).`);
-    
+
+    console.log(`✅ ${gercekBasarili}/${toplam} görsel Drive'da (${yeniUretilen} yeni üretildi, sayaç: ${toplamBasarili}).`);
+
     if (status === "partial") {
-      const eksikIndexler = [];
+      const eksikSlotlar = [];
       for (let i = 1; i <= toplam; i++) {
-        if (!mevcutIndexler.has(i) && !eksikOrijinalIndexler.includes(i - 1)) continue;
-        // Hâlâ eksik mi kontrol et - yeniden listele
+        if (!dogrulama.has(i)) eksikSlotlar.push(i);
       }
-      await telegram(job.chat_id, `⚠️ *Görseller eksik:* ${toplamBasarili}/${toplam}. 02-gorsel-uret'i tekrar tetikle (resume modu eksikleri üretir).`);
+      await telegram(
+        job.chat_id,
+        `⚠️ *Görseller eksik:* ${gercekBasarili}/${toplam}` +
+        (fluxHata ? `\nFLUX hata: ${fluxHata}` : "") +
+        (driveHata ? `\nDrive hata: ${driveHata}` : "") +
+        (eksikSlotlar.length ? `\nEksik slot: ${eksikSlotlar.join(", ")}` : "") +
+        `\n\n02-gorsel-uret'i tekrar tetikle (resume modu eksikleri üretir).`
+      );
     } else {
-      await telegram(job.chat_id, `🖼 *Görseller hazır:* ${toplamBasarili}/${toplam}\n\n⏳ Onay sayfası hazırlanıyor...`);
+      await telegram(job.chat_id, `🖼 *Görseller hazır:* ${gercekBasarili}/${toplam}\n\n⏳ Onay sayfası hazırlanıyor...`);
       
       // 02.5-onay-tetikle workflow'unu çalıştır (GitHub Action repository_dispatch)
       try {
@@ -393,35 +489,44 @@ async function partialRegenMain() {
   });
 
   let uretilen = 0;
+  let driveHata = 0;
+  let fluxHata = 0;
   if (fluxSlots.length === 0) {
     console.log("✅ FLUX üretilecek slot yok (tümü yüklü veya işaretsiz).");
   } else {
-    console.log(`🎨 ${fluxSlots.length} slot FLUX üretilecek: ${fluxSlots.map(s => `gorsel-${String(s.gorselNum).padStart(2,"0")} (${s.slotType})`).join(", ")}`);
+    console.log(`🎨 ${fluxSlots.length} slot FLUX üretilecek: ${fluxSlots.map(s => `${gorselDosyaAdi(s.gorselNum)} (${s.slotType})`).join(", ")}`);
     const prompts = fluxSlots.map(s => s.prompt);
-    await fluxRotationCagri(prompts, {
+    const { sonuclar, hatalar } = await fluxRotationCagri(prompts, {
       width: 1280, height: 720,
       onSuccess: async (filteredIdx, buffer) => {
         const slot = fluxSlots[filteredIdx];
-        const filename = `gorsel-${String(slot.gorselNum).padStart(2, "0")}-${Date.now()}.jpg`;
-        const filepath = `/tmp/${filename}`;
-        fs.writeFileSync(filepath, buffer);
-        try {
-          const result = await driveDosyaYukle({ filename, filepath }, gorselKlasorId, "image/jpeg");
-          const driveUrl = `https://drive.google.com/thumbnail?id=${result.drive_id}&sz=w800`;
-          // questions.json'daki ilgili alana URL yaz
-          const q = questions[slot.questionIdx];
-          if (slot.slotType === "question") q.question_image_url = driveUrl;
-          else if (slot.slotType === "fact") q.fun_fact_image_url = driveUrl;
-          else if (slot.slotType === "visible") { q.visible_option = q.visible_option || {}; q.visible_option.image_url = driveUrl; }
-          else if (slot.slotType === "surprise") { q.surprise_option = q.surprise_option || {}; q.surprise_option.surprise_image_url = driveUrl; }
-          uretilen++;
-        } catch (e) {
-          console.error(`Drive yükleme hatası (gorsel-${slot.gorselNum}): ${e.message}`);
-        } finally {
-          try { fs.unlinkSync(filepath); } catch (e) {}
-        }
+        const result = await gorselYukle(gorselKlasorId, slot.gorselNum, buffer, filteredIdx + 1, fluxSlots.length);
+        if (!result) { driveHata++; return; } // Drive hatası = BAŞARISIZ, yutulmuyor
+        const driveUrl = `https://drive.google.com/thumbnail?id=${result.drive_id}&sz=w800`;
+        // questions.json'daki ilgili alana URL yaz
+        const q = questions[slot.questionIdx];
+        if (slot.slotType === "question") q.question_image_url = driveUrl;
+        else if (slot.slotType === "fact") q.fun_fact_image_url = driveUrl;
+        else if (slot.slotType === "visible") { q.visible_option = q.visible_option || {}; q.visible_option.image_url = driveUrl; }
+        else if (slot.slotType === "surprise") { q.surprise_option = q.surprise_option || {}; q.surprise_option.surprise_image_url = driveUrl; }
+        uretilen++;
       },
     });
+    fluxHata = (hatalar || []).length;
+    fluxHatalariniLogla(hatalar, (i) => fluxSlots[i].gorselNum, fluxSlots.length);
+    console.log(
+      `📊 Regen özeti: FLUX ok ${(sonuclar || []).length}/${fluxSlots.length}, ` +
+      `Drive ok ${uretilen}, Drive hata ${driveHata}, FLUX hata ${fluxHata}`
+    );
+  }
+
+  // Yalan başarı raporunu kes: regen istendi ama hiçbir görsel Drive'a yazılamadıysa
+  // "hazır" DEME — hata at (catch bloğu gorsel_status=error yazar + Telegram'a hata gider).
+  if (fluxSlots.length > 0 && uretilen === 0) {
+    throw new Error(
+      `0/${fluxSlots.length} görsel Drive'a yüklenebildi (FLUX hata: ${fluxHata}, Drive hata: ${driveHata}). ` +
+      `Onay sayfası boş kalırdı, durduruldu.`
+    );
   }
 
   // questions.json'ı güncellenmiş haliyle Drive'a kaydet
@@ -430,6 +535,17 @@ async function partialRegenMain() {
     await questionsJsonKaydet(qFileId, qData);
   } catch (e) {
     console.warn(`⚠ questions.json Drive güncelleme hatası (devam): ${e.message}`);
+  }
+
+  // Drive'da gerçekten dosya var mı? Onay sayfası buradan besleniyor —
+  // boşsa 02.5'i tetiklemek yerine hata at (30 slotun hepsi "Görsel yok" bug'ı).
+  const dogrulama = await mevcutGorselIndexleri(gorselKlasorId);
+  console.log(`🔎 Drive doğrulama: ${dogrulama.size} slot dolu (${questions.length * 2} slot bekleniyor)`);
+  if (dogrulama.size === 0) {
+    throw new Error(
+      `Drive'da hiç "gorsel-NN" dosyası yok (FLUX hata: ${fluxHata}, Drive hata: ${driveHata}). ` +
+      `Onay sayfası boş kalırdı, durduruldu.`
+    );
   }
 
   // gorsel_status HER ZAMAN sayisal formatta yazilir: "completed:N/N" veya "partial:X/N".
@@ -450,7 +566,17 @@ async function partialRegenMain() {
     console.log(`✅ Partial regen tamamlandı: ${uretilen}/${fluxSlots.length} FLUX üretildi (gorsel_status: ${status}:${toplamYuklu}/${toplamSlot}).`);
   }
 
-  await telegram(job.chat_id, `🖼 *Görseller hazır* (aşama 1 seçimi)\n\n⏳ Onay sayfası hazırlanıyor...`);
+  // Telegram GERÇEK sayıyı gösterir (fluxSlots=0 ise zaten üretim istenmemiştir)
+  const eksikVar = fluxHata > 0 || driveHata > 0;
+  await telegram(
+    job.chat_id,
+    (eksikVar ? `⚠️ *Görseller eksik* (aşama 1 seçimi)` : `🖼 *Görseller hazır* (aşama 1 seçimi)`) +
+    `\n\nÜretilen: ${uretilen}/${fluxSlots.length}` +
+    `\nDrive'da dolu slot: ${dogrulama.size}/${toplamSlot}` +
+    (fluxHata ? `\nFLUX hata: ${fluxHata}` : "") +
+    (driveHata ? `\nDrive hata: ${driveHata}` : "") +
+    `\n\n⏳ Onay sayfası hazırlanıyor...`
+  );
   await dispatch02_5(job);
 
   process.exit(0);

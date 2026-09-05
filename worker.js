@@ -1,4 +1,4 @@
-// REV 071/29JUN26 - Onay2 resim yukleme: base64 yerine ANINDA Drive upload (/api/upload-medya), state'te sadece URL (41MB body bug fix); upload-medya eski slot dosyasini siler; body size log
+// REV 072/05SEP26 - stage1 upload-medya: gorsel-NN.<ext> deterministik ad (timestamp kaldirildi), eski slot silme regex ile (gorsel-0 vs gorsel-05 yanlis eslesmesi)
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -2051,23 +2051,26 @@ async function handleUploadMedya(request, env, url) {
     const fileBuffer = await file.arrayBuffer();
     const mimeType = file.type || "application/octet-stream";
     const ext = file.name ? file.name.split(".").pop() : "bin";
-    // gorsel-NN naming so 02.5 can discover via /^gorsel-(\d+)-/ pattern
+    // TEK ADLANDIRMA STANDARDI: "gorsel-NN.<ext>" — timestamp YOK.
+    // 02.5 /^gorsel-(\d+)[-.]/ ile eslestiriyor; deterministik ad sayesinde ayni slot
+    // icin birden fazla dosya kalmiyor ve regen'de eski dosya kesin siliniyor.
     const soruIdxInt = parseInt(soruIdx) || 0;
     const gorselNum = (slotKey === "image" || slotKey === "visible_image") ? (2 * soruIdxInt + 1) : (2 * soruIdxInt + 2);
     const slotStr = String(gorselNum).padStart(2, "0");
-    const filename = `gorsel-${slotStr}-stage1-${Date.now()}.${ext}`;
+    const filename = `gorsel-${slotStr}.${ext}`;
 
     // Ayni slot'taki eski gorselleri sil (02.7 ile ayni davranis — duplicate slot dosyasi olmasin,
     // render/02.5 dogru gorseli secsin). Best-effort: hata olursa upload yine devam eder.
     try {
-      const slotPrefix = `gorsel-${slotStr}-`;
+      const slotPrefix = `gorsel-${slotStr}`;
+      const slotRe = new RegExp(`^gorsel-${slotStr}[-.]`); // "gorsel-05.jpg" + legacy "gorsel-05-<ts>.jpg"
       const eskiRes = await fetch(
         `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent("'" + gorselFolderId + "' in parents and name contains '" + slotPrefix + "' and trashed=false")}&fields=files(id,name)&pageSize=25`,
         { headers: { "Authorization": `Bearer ${token}` } }
       );
       const eskiData = await eskiRes.json();
       for (const f of (eskiData.files || [])) {
-        if (!String(f.name || "").startsWith(slotPrefix)) continue; // 'contains' yanlis eslesmesin
+        if (!slotRe.test(String(f.name || ""))) continue; // 'contains' yanlis eslesmesin (gorsel-0 vs gorsel-05)
         await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}`, { method: "DELETE", headers: { "Authorization": `Bearer ${token}` } });
         console.log(`upload-medya: eski slot dosyasi silindi ${f.name}`);
       }

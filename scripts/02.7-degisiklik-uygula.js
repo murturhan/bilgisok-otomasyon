@@ -1,4 +1,4 @@
-// REV 012/30JUN26 - onay2 başlık edit fix: video_baslik artık Sheet job.baslik'a da yazılıyor (08-youtube buradan okur)
+// REV 013/05SEP26 - gorsel-NN.jpg deterministik ad, regen silme artik upload aninda (basarisiz regen gorseli silmiyor), per-gorsel log + gercek sayilar
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -74,6 +74,31 @@ async function driveDosyaSil(klasorId, pattern) {
     pageToken = res.data.nextPageToken;
   } while (pageToken);
   return silinen;
+}
+
+/**
+ * Regen edilen bir slot'u Drive'a yaz. Dosya adı deterministik: "gorsel-NN.jpg".
+ * ESKİ DOSYA ANCAK YENİSİ GELDİĞİNDE SİLİNİR — FLUX başarısız olursa mevcut görsel
+ * korunur (önceden önden siliniyordu ve başarısız regen slot'u boş bırakıyordu).
+ * Her görsel için tek satır log basar. Drive hatasında false döner (sayaç artmaz).
+ */
+async function regenSlotYaz(gorselKlasorId, slot, buffer, sira, toplamSira, tip) {
+  const slotStr = String(slot).padStart(2, "0");
+  const filename = `gorsel-${slotStr}.jpg`;
+  const filepath = `/tmp/${filename}`;
+  const etiket = `${tip} regen ${sira}/${toplamSira} (slot ${slotStr})`;
+  fs.writeFileSync(filepath, buffer);
+  try {
+    await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}[-.]`));
+    await driveDosyaYukle({ filename, filepath }, gorselKlasorId, "image/jpeg");
+    console.log(`${etiket}: FLUX ok -> Drive ok -> ${filename}`);
+    return true;
+  } catch (e) {
+    console.error(`${etiket}: FLUX ok -> Drive HATA (${e.message}) -> ${filename}`);
+    return false;
+  } finally {
+    try { fs.unlinkSync(filepath); } catch (e) {}
+  }
 }
 
 /**
@@ -176,10 +201,12 @@ async function yedekSilinenleri(silinenIndices, gorselKlasorId) {
         const slotStr = String(slotNum).padStart(2, "0");
         try {
           const filesRes = await driveOAuth.files.list({
-            q: `'${gorselKlasorId}' in parents and name contains 'gorsel-${slotStr}-' and trashed=false`,
+            // 'contains' geniş tarar; hem "gorsel-NN.jpg" hem legacy "gorsel-NN-<ts>.jpg" gelsin
+            q: `'${gorselKlasorId}' in parents and name contains 'gorsel-${slotStr}' and trashed=false`,
             fields: "files(id, name)", pageSize: 10,
           });
-          for (const f of filesRes.data.files || []) {
+          const slotRe = new RegExp(`^gorsel-${slotStr}[-.]`);
+          for (const f of (filesRes.data.files || []).filter(f => slotRe.test(String(f.name || "")))) {
             await driveOAuth.files.copy({ fileId: f.id, requestBody: { name: f.name, parents: [backupId] }, fields: "id" });
             console.log(`  Yedeklendi: ${f.name} → silinen-medya/${JOB_ID}/`);
           }
@@ -405,8 +432,8 @@ async function main() {
           if (decoded) {
             const slot = slotForQuestion(idx, "question");
             const slotStr = String(slot).padStart(2, "0");
-            await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
-            const filename = `gorsel-${slotStr}-${Date.now()}.${decoded.ext}`;
+            await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}[-.]`));
+            const filename = `gorsel-${slotStr}.${decoded.ext}`; // deterministik ad, timestamp yok
             const filepath = `/tmp/${filename}`;
             fs.writeFileSync(filepath, decoded.buffer);
             try {
@@ -427,8 +454,8 @@ async function main() {
           if (decoded) {
             const slot = slotForQuestion(idx, "fact");
             const slotStr = String(slot).padStart(2, "0");
-            await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
-            const filename = `gorsel-${slotStr}-${Date.now()}.${decoded.ext}`;
+            await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}[-.]`));
+            const filename = `gorsel-${slotStr}.${decoded.ext}`; // deterministik ad, timestamp yok
             const filepath = `/tmp/${filename}`;
             fs.writeFileSync(filepath, decoded.buffer);
             try {
@@ -484,9 +511,9 @@ async function main() {
           const slot = slotForQuestion(idx, "question");
           // Eski dosyayı sil
           const slotStr = String(slot).padStart(2, "0");
-          await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
+          await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}[-.]`));
           // Yeni dosyayı yükle
-          const filename = `gorsel-${slotStr}-${Date.now()}.${decoded.ext}`;
+          const filename = `gorsel-${slotStr}.${decoded.ext}`; // deterministik ad, timestamp yok
           const filepath = `/tmp/${filename}`;
           fs.writeFileSync(filepath, decoded.buffer);
           try {
@@ -508,8 +535,8 @@ async function main() {
         if (decoded) {
           const slot = slotForQuestion(idx, "fact");
           const slotStr = String(slot).padStart(2, "0");
-          await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
-          const filename = `gorsel-${slotStr}-${Date.now()}.${decoded.ext}`;
+          await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}[-.]`));
+          const filename = `gorsel-${slotStr}.${decoded.ext}`; // deterministik ad, timestamp yok
           const filepath = `/tmp/${filename}`;
           fs.writeFileSync(filepath, decoded.buffer);
           try {
@@ -555,62 +582,52 @@ async function main() {
     // 7. FLUX regen
     let fluxRegenSayisi = 0;
     
+    let regenDriveHata = 0;
+    let regenFluxHata = 0;
+
     if (regenQuestionImages.length > 0) {
       console.log(`FLUX: ${regenQuestionImages.length} soru gorseli regen...`);
-      for (const r of regenQuestionImages) {
-        const slot = slotForQuestion(r.index, "question");
-        const slotStr = String(slot).padStart(2, "0");
-        await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
-      }
       const prompts = regenQuestionImages.map(r => r.prompt);
       const res = await fluxRotationCagri(prompts, {
         width: 1920,
         height: 1080,
         onSuccess: async (filteredIdx, buffer) => {
-          const orijinal = regenQuestionImages[filteredIdx];
-          const slot = slotForQuestion(orijinal.index, "question");
-          const slotStr = String(slot).padStart(2, "0");
-          const filename = `gorsel-${slotStr}-${Date.now()}.jpg`;
-          const filepath = `/tmp/${filename}`;
-          fs.writeFileSync(filepath, buffer);
-          try {
-            await driveDosyaYukle({ filename, filepath }, gorselKlasorId, "image/jpeg");
-            fluxRegenSayisi++;
-          } finally {
-            try { fs.unlinkSync(filepath); } catch (e) {}
-          }
+          const slot = slotForQuestion(regenQuestionImages[filteredIdx].index, "question");
+          const ok = await regenSlotYaz(gorselKlasorId, slot, buffer, filteredIdx + 1, prompts.length, "soru");
+          if (ok) fluxRegenSayisi++; else regenDriveHata++;
         },
       });
-      console.log(`Soru regen: ${res.sonuclar.length}/${prompts.length}`);
+      regenFluxHata += (res.hatalar || []).length;
+      for (const h of res.hatalar || []) {
+        const slot = slotForQuestion(regenQuestionImages[h.index].index, "question");
+        console.error(`soru regen ${h.index + 1}/${prompts.length} (slot ${String(slot).padStart(2, "0")}): FLUX HATA (${String(h.hata).substring(0, 120)}) -> eski gorsel korundu`);
+      }
+      console.log(`Soru regen: ${res.sonuclar.length}/${prompts.length} FLUX ok, ${fluxRegenSayisi} Drive ok`);
     }
-    
+
     if (regenFactImages.length > 0) {
       console.log(`FLUX: ${regenFactImages.length} fact gorseli regen...`);
-      for (const r of regenFactImages) {
-        const slot = slotForQuestion(r.index, "fact");
-        const slotStr = String(slot).padStart(2, "0");
-        await driveDosyaSil(gorselKlasorId, new RegExp(`^gorsel-${slotStr}-`));
-      }
       const prompts = regenFactImages.map(r => r.prompt);
       const res = await fluxRotationCagri(prompts, {
         width: 1920,
         height: 1080,
         onSuccess: async (filteredIdx, buffer) => {
-          const orijinal = regenFactImages[filteredIdx];
-          const slot = slotForQuestion(orijinal.index, "fact");
-          const slotStr = String(slot).padStart(2, "0");
-          const filename = `gorsel-${slotStr}-${Date.now()}.jpg`;
-          const filepath = `/tmp/${filename}`;
-          fs.writeFileSync(filepath, buffer);
-          try {
-            await driveDosyaYukle({ filename, filepath }, gorselKlasorId, "image/jpeg");
-            fluxRegenSayisi++;
-          } finally {
-            try { fs.unlinkSync(filepath); } catch (e) {}
-          }
+          const slot = slotForQuestion(regenFactImages[filteredIdx].index, "fact");
+          const ok = await regenSlotYaz(gorselKlasorId, slot, buffer, filteredIdx + 1, prompts.length, "fact");
+          if (ok) fluxRegenSayisi++; else regenDriveHata++;
         },
       });
-      console.log(`Fact regen: ${res.sonuclar.length}/${prompts.length}`);
+      regenFluxHata += (res.hatalar || []).length;
+      for (const h of res.hatalar || []) {
+        const slot = slotForQuestion(regenFactImages[h.index].index, "fact");
+        console.error(`fact regen ${h.index + 1}/${prompts.length} (slot ${String(slot).padStart(2, "0")}): FLUX HATA (${String(h.hata).substring(0, 120)}) -> eski gorsel korundu`);
+      }
+      console.log(`Fact regen: ${res.sonuclar.length}/${prompts.length} FLUX ok`);
+    }
+
+    const regenIstenen = regenQuestionImages.length + regenFactImages.length;
+    if (regenIstenen > 0) {
+      console.log(`📊 Regen özeti: istenen ${regenIstenen}, Drive ok ${fluxRegenSayisi}, Drive hata ${regenDriveHata}, FLUX hata ${regenFluxHata}`);
     }
     
     const editCount = Object.keys(edits).length;
@@ -622,7 +639,7 @@ async function main() {
       // Sadece görsel + text değişiklikleri uygulandı, yeni onay turuna git
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}\n\nYeni onay sayfasi hazirlaniyor...`
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}\n\nYeni onay sayfasi hazirlaniyor...`
       );
       // 02.5'i tetikle (yeni link gönderecek)
       await tetikle("onay_tetikle", { job_id: JOB_ID, chat_id: job.chat_id });
@@ -631,7 +648,7 @@ async function main() {
       // TTS atla, doğrudan 07-video-montaj
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}\n\nVideo render basliyor (ses korunuyor)...`
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}\n\nVideo render basliyor (ses korunuyor)...`
       );
       await tetikle("video_montaj", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("07-video-montaj tetiklendi");
@@ -640,7 +657,7 @@ async function main() {
       const ilkSesMi = !String(job.ses_status || "").startsWith("completed");
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
       );
       await tetikle("seslendirme_uret", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("03-seslendirme tetiklendi");

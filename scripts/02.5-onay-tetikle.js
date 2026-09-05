@@ -1,4 +1,4 @@
-// REV 007/24JUN26 - option_emojis payload'a eklendi (stage=1 emoji oneri)
+// REV 008/05SEP26 - gorsel-NN.jpg deterministik ad destegi + bos-klasor uyarisi (onay sayfasi bos gorsel bug)
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -36,7 +36,7 @@ const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
 
 /**
  * Drive klasöründeki tüm görselleri listele, public link üret.
- * Filename pattern: "gorsel-NN-..." veya "fun-fact-NN-..." gibi.
+ * Filename pattern: "gorsel-NN.jpg" (yeni standart) veya "gorsel-NN-<ts>.jpg" (legacy).
  */
 async function driveGorselUrlleri(klasorId, pattern) {
   const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
@@ -182,10 +182,21 @@ async function main() {
     }
     const gorselKlasorId = altKlasorler[0].id;
     
-    // Tek pattern: tüm görseller "gorsel-NN-" formatında
-    // Sıralama: 1=soru1, 2=fact1, 3=soru2, 4=fact2, ..., son=background
-    const tumGorseller = await driveGorselUrlleri(gorselKlasorId, /^gorsel-(\d+)-/);
-    
+    // Tek pattern: tüm görseller "gorsel-NN" formatında
+    // Yeni standart: "gorsel-01.jpg" (timestamp yok). Legacy "gorsel-01-<ts>.jpg" da kabul edilir.
+    // Sıralama: 1=soru1, 2=fact1, 3=soru2, 4=fact2, ...
+    const tumGorseller = await driveGorselUrlleri(gorselKlasorId, /^gorsel-(\d+)[-.]/);
+    const doluSlot = Object.keys(tumGorseller).length;
+    const beklenenSlot = questionsData.questions.length * 2;
+    console.log(`🖼 Drive eşleşmesi: ${doluSlot}/${beklenenSlot} slot dolu`);
+    if (doluSlot === 0) {
+      console.error(`⛔ 01-gorseller klasöründe hiç "gorsel-NN" dosyası yok (klasör: ${gorselKlasorId}).`);
+      console.error(`   Onay sayfasındaki TÜM görsel slotları "Görsel yok" görünecek — 02-gorsel-uret loglarını kontrol et.`);
+      try {
+        await telegram(job.chat_id, `⚠️ *Onay sayfasında görsel yok:* Drive 01-gorseller klasöründe hiç "gorsel-NN" dosyası bulunamadı.\n02-gorsel-uret loglarına bak.`);
+      } catch (e) {}
+    }
+
     // Sürpriz kutu URL'leri (WYR sorular için)
     const isAnyWyr = questionsData.questions.some(q => q.question_type === "would_you_rather");
     let surpriseBoxUrls = [];

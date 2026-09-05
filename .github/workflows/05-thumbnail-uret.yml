@@ -1,3 +1,4 @@
+# REV 002/05SEP26 - olu CLOUDFLARE_HESAP_A_KOTADA env satiri kaldirildi (cloudflare.js artik okumuyor)
 name: 05 - Thumbnail Üret
 on:
   repository_dispatch:
@@ -47,7 +48,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID_2: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_2 }}
           CLOUDFLARE_API_TOKEN_3: ${{ secrets.CLOUDFLARE_API_TOKEN_3 }}
           CLOUDFLARE_ACCOUNT_ID_3: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_3 }}
-          CLOUDFLARE_HESAP_A_KOTADA: ${{ vars.CLOUDFLARE_HESAP_A_KOTADA }}
           GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
