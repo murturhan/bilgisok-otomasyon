@@ -1,4 +1,4 @@
-// REV 014/05SEP26 - flux cagrilarindan width/height kaldirildi (model desteklemiyor)
+// REV 015/08SEP26 - ekran_basligi (videoda gorunen kisa baslik) stage1+stage2 questions.json a yaziliyor
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -44,6 +44,7 @@ const {
   GITHUB_REPO_NAME,
   GDRIVE_FOLDER_ID,
   VIDEO_BASLIK,
+  EKRAN_BASLIGI,
 } = process.env;
 
 const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
@@ -300,6 +301,9 @@ async function main() {
       const sorular = edits.sorular || [];
       const silinenIndices = edits.silinen_original_indices || [];
       const videoBaslik = meta.video_baslik || "";
+      // Ekran basligi: videoda gorunen KISA baslik (07 topic olarak bunu kullanir).
+      // env > _stage1_meta sirasi; ** isaretleri atilir, 40 karakterle sinirlanir.
+      const ekranBasligi = String(EKRAN_BASLIGI || meta.ekran_basligi || "").replace(/[*]{2}/g, "").trim().substring(0, 40);
       const action = STAGE1_ACTION || meta.action || "skip_stage2";
 
       console.log(`Stage=1: ${sorular.length} soru, ${silinenIndices.length} silinen, action=${action}`);
@@ -309,6 +313,12 @@ async function main() {
         questionsData.baslik = videoBaslik.trim();
         await jobGuncelle(JOB_ID, { baslik: videoBaslik.trim() });
         console.log(`Video başlığı güncellendi (stage1, questions.json + Sheet): "${videoBaslik.trim()}"`);
+      }
+
+      // a2) Ekran başlığı güncelle (videoda görünen kısa başlık — 07 inputProps.topic)
+      if (ekranBasligi) {
+        questionsData.ekran_basligi = ekranBasligi;
+        console.log(`Ekran başlığı güncellendi (stage1): "${ekranBasligi}"`);
       }
 
       // b) Silinen soruların Drive görsellerini yedekle
@@ -566,6 +576,13 @@ async function main() {
       questionsData.baslik = VIDEO_BASLIK.trim();
       await jobGuncelle(JOB_ID, { baslik: VIDEO_BASLIK.trim() });
       console.log(`Video başlığı güncellendi (stage2, questions.json + Sheet): "${VIDEO_BASLIK.trim()}"`);
+    }
+
+    // 5d. Ekran başlığı güncelle (onay2den geliyorsa) — videoda görünen KISA başlık
+    if (EKRAN_BASLIGI && EKRAN_BASLIGI.trim()) {
+      const eb = String(EKRAN_BASLIGI).replace(/[*]{2}/g, "").trim().substring(0, 40);
+      questionsData.ekran_basligi = eb;
+      console.log(`Ekran başlığı güncellendi (stage2): "${eb}"`);
     }
 
     // 6. questions.json'u Drive'a geri yaz

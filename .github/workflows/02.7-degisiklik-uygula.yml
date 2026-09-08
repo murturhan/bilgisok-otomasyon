@@ -1,4 +1,4 @@
-# REV 002/24JUN26 - VIDEO_BASLIK input eklendi (onay2 baslik degistirme)
+# REV 003/08SEP26 - EKRAN_BASLIGI input eklendi (videoda gorunen kisa baslik)
 name: 02.7 - Değişiklik Uygula
 
 on:
@@ -52,4 +52,5 @@ jobs:
           STAGE: ${{ github.event.client_payload.stage }}
           STAGE1_ACTION: ${{ github.event.client_payload.stage1_action }}
           VIDEO_BASLIK: ${{ github.event.client_payload.video_baslik }}
+          EKRAN_BASLIGI: ${{ github.event.client_payload.ekran_basligi }}
         run: node scripts/02.7-degisiklik-uygula.js

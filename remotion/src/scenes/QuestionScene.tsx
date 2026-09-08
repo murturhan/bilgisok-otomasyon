@@ -1,4 +1,4 @@
-// REV 024/30JUN26 - DEFAULT NET: show_image=true → net (blur YOK), false → flu+fünye+reveal; fünye border merkezine hizalandı
+// REV 025/08SEP26 - sik karti sagdan tasiyordu: reveal olcegi (1.15x) icin kolona yatay pay eklendi (sagda >=40px bosluk)
 import React from "react";
 import {
   AbsoluteFill,
@@ -389,6 +389,15 @@ const LongLayout: React.FC<LayoutProps> = ({
   const colGap = 50;
   const leftWidth = Math.floor((width - 100 - colGap) * 0.5);
   const rightWidth = width - 100 - colGap - leftWidth;
+
+  // ŞIK KARTI TAŞMA DÜZELTMESİ:
+  // AnswerCard reveal'de büyüyor (revealedCorrect scale 1.15 × correctPulse ~1.03 ≈ 1.185).
+  // Kart kolon genişliğini birebir doldurduğu için büyüyen kart sağ kenardan taşıyordu.
+  // Kolona yatay padding bırakıyoruz: kart dar olur ama MAX ölçekte bile kolonun içinde kalır.
+  //   p = W * (S-1) / (2S)   →   (W-2p) * (S-1)/2 = p  (büyüme payı = padding)
+  // Kolon zaten sağda 50px kenar boşluğu bırakıyor (talimat: en az 40px). ✓
+  const ANSWER_MAX_SCALE = 1.15 * 1.03;
+  const answerPadX = Math.ceil((rightWidth * (ANSWER_MAX_SCALE - 1)) / (2 * ANSWER_MAX_SCALE));
   
   const imageHeight = Math.min(height - bodyTop - bodyBottom, 600);
   // Fact modunda alan 1/3 büyük (kullanıcı talebi)
@@ -463,6 +472,10 @@ const LongLayout: React.FC<LayoutProps> = ({
               flexDirection: "column",
               justifyContent: "center",
               gap: 22,
+              // reveal büyümesi kolonun dışına taşmasın (sağda 50px kenar boşluğu korunur)
+              paddingLeft: answerPadX,
+              paddingRight: answerPadX,
+              boxSizing: "border-box",
             }}
           >
             <AnswerStack
@@ -532,7 +545,11 @@ const ShortsLayout: React.FC<LayoutProps> = ({
   const padding = 40;
   const contentWidth = width - padding * 2;
   const imageHeight = Math.floor(height * 0.34);
-  
+
+  // Long layout ile aynı taşma düzeltmesi: reveal büyümesi (~1.185x) için yatay pay bırak
+  const ANSWER_MAX_SCALE = 1.15 * 1.03;
+  const answerPadX = Math.ceil((contentWidth * (ANSWER_MAX_SCALE - 1)) / (2 * ANSWER_MAX_SCALE));
+
   const bodyBottom = inFunFact ? 60 : 240;  // soru fazlarında: Jess için 240
   
   // Progress bar countdown veya drumRoll/silentPause sırasında görünür
@@ -600,6 +617,10 @@ const ShortsLayout: React.FC<LayoutProps> = ({
               display: "flex",
               flexDirection: "column",
               gap: 22,
+              // reveal büyümesi ekran dışına taşmasın
+              paddingLeft: answerPadX,
+              paddingRight: answerPadX,
+              boxSizing: "border-box",
             }}
           >
             <AnswerStack

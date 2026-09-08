@@ -1,4 +1,4 @@
-// REV 072/05SEP26 - stage1 upload-medya: gorsel-NN.<ext> deterministik ad (timestamp kaldirildi), eski slot silme regex ile (gorsel-0 vs gorsel-05 yanlis eslesmesi)
+// REV 073/08SEP26 - ekran_basligi duzenlenebilir input (2 onay sayfasi + payload); stage1 option_flags SILME BUGU duzeltildi (input yoksa mevcut deger korunuyor)
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -398,7 +398,9 @@ async function handleSubmit(request, env, url, ctx) {
   const jobId = url.pathname.split("/").pop();
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
-  const { edits = {}, approval_level = "full", chat_id = "", video_baslik = "" } = body;
+  const { edits = {}, approval_level = "full", chat_id = "", video_baslik = "", ekran_basligi = "" } = body;
+  // Ekran basligi: videoda gorunen KISA baslik. 40 karakterle sinirla, ** isaretlerini at.
+  const ekranBasligiTemiz = String(ekran_basligi || "").replace(/[*]{2}/g, "").trim().substring(0, 40);
   const isSave = approval_level === "save_only";
 
   const mevcut = await issueVeriOku(jobId, env);
@@ -406,7 +408,7 @@ async function handleSubmit(request, env, url, ctx) {
     const eskiJob = mevcut.data?.job || {};
     // save_only: metin edit'lerini job.questions + baslik'a uygula ki reload'da gorunsun ve kaybolmasin
     const job = isSave
-      ? { ...eskiJob, baslik: video_baslik || eskiJob.baslik, questions: editTextUygula(eskiJob.questions || [], edits) }
+      ? { ...eskiJob, baslik: video_baslik || eskiJob.baslik, ekran_basligi: ekranBasligiTemiz || eskiJob.ekran_basligi || "", questions: editTextUygula(eskiJob.questions || [], edits) }
       : eskiJob;
     const yeni = { job, edits };
     const yazildi = await issueGuncelle(mevcut.number, yeni, env);
@@ -428,6 +430,7 @@ async function handleSubmit(request, env, url, ctx) {
     chat_id: String(chat_id),
     approval_level,
     video_baslik: String(video_baslik || ""),
+    ekran_basligi: ekranBasligiTemiz,
   }, env);
   if (!dispatched) {
     return json({ ok: false, error: "GitHub dispatch basarisiz — GITHUB_TOKEN kontrol et" }, 500);
@@ -454,6 +457,8 @@ async function handleApprovalPage(request, env, url) {
 
   const job = mevcut.data.job;
   const { topic = "", format = "", baslik = "", questions = [], chat_id = "", topic_emojis = [] } = job;
+  // Ekran basligi: videoda gorunen KISA baslik. Ham konu paragrafi ASLA kullanilmaz.
+  const ekranBasligi = String(job.ekran_basligi || job.intro_title || "").replace(/[*]{2}/g, "").trim();
   const qCards = questions.map((q, i) =>
     q.question_type === "would_you_rather" ? buildWyrCard(q, i) : buildQuestionCard(q, i)
   ).join("\n");
@@ -535,7 +540,10 @@ textarea{min-height:56px}
     <div class="topbar h1">🦊 GeniMini — Onay</div>
     <div class="topbar meta">${esc(jobId)} · ${esc(format)} · ${questions.length} soru · ${esc(topic)}</div>
   </div>
-  <input type="text" id="video_baslik_s2" value="${esc(baslik)}" placeholder="Video başlığı..." style="flex:1;margin:0 10px;min-width:0;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 10px;font-size:.82em">
+  <div style="flex:1;margin:0 10px;min-width:0;display:flex;flex-direction:column;gap:4px">
+    <input type="text" id="video_baslik_s2" value="${esc(baslik)}" placeholder="Video başlığı (YouTube)..." style="width:100%;box-sizing:border-box;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 10px;font-size:.82em">
+    <input type="text" id="ekran_basligi_s2" value="${esc(ekranBasligi)}" maxlength="40" placeholder="Ekran başlığı (videoda görünür, max 4 kelime)..." style="width:100%;box-sizing:border-box;background:#111827;color:#fcd34d;border:1px solid #b45309;border-radius:6px;padding:6px 10px;font-size:.82em">
+  </div>
   <div class="sticky-btns">
     <button type="button" class="b1" onclick="submit_('full',true)">✅ Değiştir<br>+ Ses + Render</button>
     <button type="button" class="b2" onclick="submit_('render_only',true)">🎬 Değiştir<br>+ Sadece Render</button>
@@ -877,7 +885,7 @@ async function submit_(level, applyEdits){
   const st=document.getElementById("status");
   st.style.display="block";st.className="";
   st.textContent="⏳ "+(msgs[level+"+"+applyEdits]||"Gönderiliyor...");
-  const payload=JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2')});
+  const payload=JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2')});
   // Cok buyuk govde uyarisi (custom gorseller base64 data URL olarak gomulu -> "Failed to fetch" sebebi)
   const mb=payload.length/1048576;
   if(applyEdits) console.log("[submit_] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
@@ -929,7 +937,7 @@ async function kaydet(){
   const edits=collectEdits();
   console.log("[KAYDET] toplanan edits:", edits);
   console.log("[KAYDET] customImages:", customImages, "| customVideos:", customVideos, "| selectedSurpriseBoxes:", selectedSurpriseBoxes);
-  const payload=JSON.stringify({edits,approval_level:"save_only",chat_id:CHAT_ID,video_baslik:val('video_baslik_s2')});
+  const payload=JSON.stringify({edits,approval_level:"save_only",chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2')});
   const mb=payload.length/1048576;
   console.log("[KAYDET] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
   if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB) — custom gorselleri tek tek 'Yukle' butonuyla yukle.";allBtns.forEach(function(b){b.disabled=false;});return;}
@@ -1308,6 +1316,8 @@ async function handleContentApprovalPage(request, env, url) {
 
   const job = mevcut.data.job;
   const { baslik = "", format = "", chat_id = "", topic_emojis = [], questions = [], konu = "" } = job;
+  // Ekran basligi: videoda gorunen KISA baslik (max 4 kelime). Ham konu paragrafi ASLA kullanilmaz.
+  const ekranBasligi = String(job.ekran_basligi || job.intro_title || "").replace(/[*]{2}/g, "").trim();
 
   // Server-side kart render (JS render problemini bypass eder)
   const typeOptsHtml = (qtype) =>
@@ -1475,7 +1485,8 @@ input[type=radio]{accent-color:#a78bfa;cursor:pointer}
   <div class="topbar-left">
     <div class="topbar h1">🦊 GeniMini — İçerik Onayı (Aşama 1)</div>
     <div class="topbar meta">📋 <b>${esc(jobId)}</b> · ${esc(format)} · ${esc(konu)}</div>
-    <input type="text" id="video_baslik" class="title-inp" value="${esc(baslik)}" placeholder="Video başlığı...">
+    <input type="text" id="video_baslik" class="title-inp" value="${esc(baslik)}" placeholder="Video başlığı (YouTube)...">
+    <input type="text" id="ekran_basligi" class="title-inp" value="${esc(ekranBasligi)}" maxlength="40" placeholder="Ekran başlığı (videoda görünür, max 4 kelime)..." style="color:#fcd34d;border-color:#b45309">
   </div>
   <div class="sticky-btns">
     <button type="button" class="bc" onclick="submitAction('save_only')">💾 Sadece<br>Kaydet</button>
@@ -1793,8 +1804,17 @@ function collectSorular(){
         options:opts,
         correct_answer:ca,
         fun_fact:ff,
-        // prob4: option_flags stage=1'de duzenlendi, collect et
-        option_flags:[val('q'+i+'_f0'),val('q'+i+'_f1'),val('q'+i+'_f2')],
+        // BAYRAK KORUMA: stage=1 sayfasinda q{i}_f{j} inputlari RENDER EDILMIYOR.
+        // Eskiden burada kosulsuz val(...) cagriliyordu; val() eleman yoksa '' donduruyor,
+        // ve 02.7 stage=1 tum questions dizisini bununla degistirdigi icin 01'in urettigi
+        // option_flags SILINIYORDU -> videoda hic bayrak cikmiyordu.
+        // Artik: input varsa oku, YOKSA mevcut degeri oldugu gibi koru.
+        option_flags:(function(){
+          var els=[document.getElementById('q'+i+'_f0'),document.getElementById('q'+i+'_f1'),document.getElementById('q'+i+'_f2')];
+          var mevcut=(q&&q.option_flags)||(q&&q.option_emojis)||['','',''];
+          if(!els.some(function(e){return !!e;})) return [mevcut[0]||'',mevcut[1]||'',mevcut[2]||''];
+          return els.map(function(e,j){return e?e.value:(mevcut[j]||'');});
+        })(),
         image_prompt:val('q'+i+'_p_image'),
         fun_fact_image_prompt:val('q'+i+'_p_fact_image'),
         question_image_stili:val('q'+i+'_s_image')||'pixar_3d',
@@ -1831,7 +1851,7 @@ async function submitAction(action){
     const silineenOriginalIndices=[...deletedIdx];
     const r=await fetch('/api/icerik-onay/'+JOB_ID,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({video_baslik:val('video_baslik'),sorular,action,chat_id:CHAT_ID,silinen_original_indices:silineenOriginalIndices}),
+      body:JSON.stringify({video_baslik:val('video_baslik'),ekran_basligi:val('ekran_basligi'),sorular,action,chat_id:CHAT_ID,silinen_original_indices:silineenOriginalIndices}),
     });
     const d=await r.json();
     if(d.ok){
@@ -1865,17 +1885,20 @@ async function handleIcerikOnay(request, env, url, ctx) {
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
   const {
     video_baslik = "",
+    ekran_basligi = "",
     sorular = [],
     action = "stage2_flux",
     chat_id = "",
     silinen_original_indices = [],
   } = body;
+  // Ekran basligi: videoda gorunen KISA baslik. 40 karakterle sinirla, ** isaretlerini at.
+  const ekranBasligiTemiz = String(ekran_basligi || "").replace(/[*]{2}/g, "").trim().substring(0, 40);
 
   const mevcut = await issueVeriOku(jobId, env);
   if (mevcut) {
     // Structured stage=1 edits (02.7 okuyacak)
     const stage1Edits = {
-      _stage1_meta: { stage: "1", action, video_baslik },
+      _stage1_meta: { stage: "1", action, video_baslik, ekran_basligi: ekranBasligiTemiz },
       sorular,
       silinen_original_indices,
     };
@@ -1883,6 +1906,7 @@ async function handleIcerikOnay(request, env, url, ctx) {
       job: {
         ...(mevcut.data?.job || {}),
         baslik: video_baslik,
+        ekran_basligi: ekranBasligiTemiz || (mevcut.data?.job?.ekran_basligi || ""),
         questions: sorular,
       },
       edits: stage1Edits,

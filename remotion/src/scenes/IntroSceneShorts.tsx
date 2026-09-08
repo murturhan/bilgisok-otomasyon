@@ -1,4 +1,4 @@
-// REV 006/30MAY26 - Scene2 logo kucultuldu, baslik zIndex yukseltildi
+// REV 007/08SEP26 - topic 40 karakter guvenlik siniri + overflow hidden/max 2 satir
 import React from "react";
 import {
   AbsoluteFill,
@@ -171,7 +171,16 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
   const localFrame = frame - startFrame;
 
   const topicEmojis = topicEmojisProp && topicEmojisProp.length > 0 ? topicEmojisProp : getTopicEmojis(topic);
-  const topicUpper = (topic || "").toUpperCase().replace(/\*\*/g, "");
+  // GÜVENLİK SINIRI: topic 40 karakterden uzunsa kes (IntroSceneLong ile aynı kural).
+  const TOPIC_MAX_CHARS = 40;
+  const topicSafe = (() => {
+    const t = (topic || "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
+    if (t.length <= TOPIC_MAX_CHARS) return t;
+    const kesik = t.substring(0, TOPIC_MAX_CHARS);
+    const sonBosluk = kesik.lastIndexOf(" ");
+    return (sonBosluk > 12 ? kesik.substring(0, sonBosluk) : kesik).trim();
+  })();
+  const topicUpper = topicSafe.toUpperCase();
 
   const smallLogoAnim = spring({ frame: localFrame, fps, config: { damping: 12, stiffness: 110 } });
   const smallLogoX = interpolate(smallLogoAnim, [0, 1], [-200, 0]);
@@ -244,6 +253,7 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
         position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
         paddingLeft: 40, paddingRight: 40, zIndex: 10,
+        overflow: "hidden", // başlık kutunun dışına ASLA taşmasın
       }}>
         <div style={{
           transform: `scale(${topicPulse}) rotate(${topicWobble}deg) translateY(${topicFloat}px)`,
@@ -251,6 +261,9 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
           textShadow: topicTextShadow,
           maxWidth: "94%", textAlign: "center", letterSpacing: 2,
           textTransform: "uppercase", lineHeight: 1.05,
+          // TAŞMA KORUMASI: en fazla 2 satır yüksekliği
+          maxHeight: Math.round(topicFontSize * 1.05 * 2),
+          overflow: "hidden",
         }}>
           <AnimatedTitleWords
             text={topicUpper}

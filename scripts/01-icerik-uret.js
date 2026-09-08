@@ -1,4 +1,4 @@
-// REV 026/30JUN26 - WYR reveal_audio_text fallback (son WYR Jess susmasın); SEO video_baslik (REV025)
+// REV 027/08SEP26 - ekran_basligi alani: Gemini semasi + max 4 kelime kurali + zorunlu kisaltma fallback (ham konu paragrafi videoya cikmasin)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -81,6 +81,7 @@ OUTPUT (valid JSON, no markdown):
   "konu": "${konu}",
   "format": "${FORMAT}",
   "intro_title": "**Would** You Rather?",
+  "ekran_basligi": "Would You Rather",
   "topic_emojis": ["🤔","🎁","✨","🎯","🎉"],
   "baslik": "Would You Rather? Kids Edition with Jess the Fox! 🤔",
   "thumbnail_title": "Would You Rather?",
@@ -317,6 +318,7 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "konu": "${konu}",
   "intro_title": "Topic as intro big title — wrap the most important 1-2 words with **double stars** (e.g. '**Wild** Animals' or 'Amazing **Oceans**')",
   "format": "${FORMAT}",
+  "ekran_basligi": "SHORT on-screen title shown IN the video (max 4 words, NO emoji, NO stars)",
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
   "video_baslik": "SEO-friendly suggested video title (50-70 chars, question format, kid-friendly)",
   "konu_kisa": "${konu}",
@@ -396,6 +398,15 @@ CRITICAL:
   * NEVER use clickbait words (SHOCKING/INSANE/YOU WON'T BELIEVE).
 - **question_text MUST be MAX 6 WORDS** — short and impactful, never exceed 6 words. Wrong: "What is the name of the largest ocean on Earth?". Right: "Which is Earth's largest ocean?"
 - **intro_title CRITICAL — MANDATORY STARS**: Short topic title for the video intro screen (MAX 4 WORDS). You MUST wrap the 1-2 most important words with **double stars**. Examples: "**Wild** Animals", "Amazing **Oceans**", "**Rocket** Science", "**Dino** World". NEVER output intro_title without ** markers — it MUST contain ** or the UI breaks. Wrong: "Animal Adaptations". Right: "**Animal** Adaptations".
+- **ekran_basligi CRITICAL — MANDATORY**: The SHORT title displayed ON SCREEN in the video (intro + title card).
+  * MAX 4 WORDS. Hard limit.
+  * NO emoji, NO ** stars, NO trailing punctuation.
+  * Must fit ONE line in UPPERCASE — keep it under 40 characters total.
+  * DO NOT repeat or copy the topic paragraph "${konu}". Extract its ESSENCE.
+  * BAD: "World famous foods and which country they come from. Each question shows a famous dish..." (that is the topic paragraph — FORBIDDEN)
+  * GOOD: topic "World famous foods and which country they come from. Each question shows a famous dish and asks which country it originated from" -> ekran_basligi "WORLD FAMOUS FOODS"
+  * GOOD: topic "planets of the solar system for kids" -> ekran_basligi "PLANETS"
+  * GOOD: topic "wild animals of africa" -> ekran_basligi "WILD ANIMALS"
 - **show_image** (boolean, per question): Decide if showing the image during question helps or spoils.
   * TRUE — image is a visual *clue* (blurred during guess, revealed with confetti). Examples: cross-sections, silhouettes, partial views, mood scenes.
   * FALSE — image would obviously reveal the answer ("What is this?" with clear apple photo → false). Shows fancy "?" placeholder instead.
@@ -590,6 +601,35 @@ TOPIC EMOJIS (for intro screen emoji band)
         }
       }
       
+      // EKRAN BAŞLIĞI: videoda görünen KISA başlık (07 → inputProps.topic).
+      // Gemini vermezse/uzun verirse burada zorla kısaltılır — ham konu paragrafı
+      // ASLA ekrana çıkmasın (intro'da logoyu/Jess'i örten uzun metin bug'ı).
+      {
+        const EKRAN_BASLIGI_MAX = 40;
+        const kisalt = (t) => {
+          let x = String(t || "").replace(/[*]{2}/g, "").replace(/\s+/g, " ").trim();
+          // İlk cümleyi al (konu paragrafı gelirse ilk noktada kes)
+          const nokta = x.search(/[.!?]/);
+          if (nokta > 0) x = x.substring(0, nokta).trim();
+          // En fazla 4 kelime
+          const kelimeler = x.split(" ").filter(Boolean).slice(0, 4);
+          x = kelimeler.join(" ");
+          if (x.length > EKRAN_BASLIGI_MAX) x = x.substring(0, EKRAN_BASLIGI_MAX).trim();
+          return x;
+        };
+        let eb = kisalt(json.ekran_basligi);
+        if (!eb) {
+          eb = kisalt(json.intro_title);
+          if (eb) console.log(`ekran_basligi yok, intro_title'dan türetildi: "${eb}"`);
+        }
+        if (!eb) {
+          eb = kisalt(konu);
+          if (eb) console.log(`ekran_basligi + intro_title yok, konu'dan kısaltıldı: "${eb}"`);
+        }
+        json.ekran_basligi = eb;
+        console.log(`Ekran başlığı (videoda görünecek): "${json.ekran_basligi}"`);
+      }
+
       // SEO başlık önerisi: Gemini video_baslik verdiyse THE final başlık o olur.
       // Yoksa eski baslik alanı, o da yoksa fallback: original konu metni (eski davranış).
       if (json.video_baslik && String(json.video_baslik).trim()) {

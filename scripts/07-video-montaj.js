@@ -1,4 +1,4 @@
-// REV 018/05SEP26 - gorsel_status guard esnetildi: completed* + partial:X/N (X>0) gecer, error/running bloklar
+// REV 019/08SEP26 - inputProps.topic artik ekran_basligi (ham konu paragrafi kaldirildi, 40 kr limit); option_flags fallback+teshis logu
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -676,9 +676,45 @@ async function main() {
     if (questionsData.skip_intro === true) console.log("⏭ skip_intro: intro render atlanıyor");
     if (questionsData.skip_outro === true) console.log("⏭ skip_outro: outro render atlanıyor");
 
+    // EKRAN BAŞLIĞI: videoda görünen KISA başlık.
+    // Ham konu paragrafı (questionsData.konu / job.konu) ARTIK KULLANILMIYOR — uzun metin
+    // intro'da logoyu ve Jess'i örtüyordu. Sıra: ekran_basligi > intro_title > baslik.
+    // Ek emniyet: 40 karakterle kes (Gemini/onay sayfası bozuk veri gönderse bile video bozulmasın).
+    const EKRAN_BASLIGI_MAX = 40;
+    let ekranBasligi = String(
+      questionsData.ekran_basligi || questionsData.intro_title || questionsData.baslik || ""
+    ).replace(/\s+/g, " ").trim();
+    if (ekranBasligi.replace(/[*]{2}/g, "").length > EKRAN_BASLIGI_MAX) {
+      const kisa = ekranBasligi.replace(/[*]{2}/g, "").substring(0, EKRAN_BASLIGI_MAX).trim();
+      console.warn(`⚠ Ekran başlığı çok uzun (${ekranBasligi.length} karakter), kesildi: "${kisa}"`);
+      ekranBasligi = kisa;
+    }
+    console.log(`🏷 Ekran başlığı (inputProps.topic): "${ekranBasligi}" [kaynak: ${
+      questionsData.ekran_basligi ? "ekran_basligi" : questionsData.intro_title ? "intro_title" : "baslik"
+    }]`);
+
+    // BAYRAK KONTROLÜ: option_flags boşsa option_emojis'e düş (01 ikisini de üretiyor,
+    // eski job'larda stage-1 onayı option_flags'i silmiş olabilir).
+    let bayrakDolu = 0;
+    for (const q of questions) {
+      if (q.question_type === "would_you_rather") continue;
+      const mevcut = Array.isArray(q.option_flags) ? q.option_flags : [];
+      const doluMu = mevcut.some(f => f && String(f).trim());
+      if (!doluMu && Array.isArray(q.option_emojis) && q.option_emojis.some(f => f && String(f).trim())) {
+        q.option_flags = q.option_emojis.slice(0, 3).map(f => String(f || ""));
+      }
+      if ((q.option_flags || []).some(f => f && String(f).trim())) bayrakDolu++;
+    }
+    const mcSayisi = questions.filter(q => q.question_type !== "would_you_rather").length;
+    console.log(`🏳 option_flags: ${bayrakDolu}/${mcSayisi} soruda dolu`);
+    console.log(`🏳 İlk sorunun option_flags değeri: ${JSON.stringify(questions[0]?.option_flags ?? null)}`);
+    if (mcSayisi > 0 && bayrakDolu === 0) {
+      console.warn("⚠ HİÇBİR soruda option_flags yok — videoda bayrak çıkmayacak. 01-icerik-uret / onay sayfası zincirini kontrol et.");
+    }
+
     const inputProps = {
       title: "GeniMini Tests",
-      topic: questionsData.intro_title || questionsData.konu || job.konu || "",
+      topic: ekranBasligi,
       channel_name: "GeniMini Tests",
       questions: questions,
       jess_poses: jessPosesForRemotion,
