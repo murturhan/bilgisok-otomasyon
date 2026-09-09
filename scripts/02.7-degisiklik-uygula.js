@@ -1,4 +1,4 @@
-// REV 015/08SEP26 - ekran_basligi (videoda gorunen kisa baslik) stage1+stage2 questions.json a yaziliyor
+// REV 016/09SEP26 - Jess giris-kapanis metni + ekran basligi kaydi, degisiklik tespiti, ses_yeniden_uret isareti, Telegram raporu
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -45,6 +45,8 @@ const {
   GDRIVE_FOLDER_ID,
   VIDEO_BASLIK,
   EKRAN_BASLIGI,
+  JESS_INTRO,
+  JESS_OUTRO,
 } = process.env;
 
 const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
@@ -578,11 +580,42 @@ async function main() {
       console.log(`Video başlığı güncellendi (stage2, questions.json + Sheet): "${VIDEO_BASLIK.trim()}"`);
     }
 
-    // 5d. Ekran başlığı güncelle (onay2den geliyorsa) — videoda görünen KISA başlık
+    // 5d. Ekran başlığı + Jess giriş/kapanış metinleri (onay2'den geliyorsa)
+    // Jess metni DEĞİŞTİYSE ilgili ses segmentinin yeniden üretilmesi gerekir —
+    // questions.json'a işaret bırakılır, 03-seslendirme bunu okur.
+    let ekranBasligiDegisti = false;
+    let jessIntroDegisti = false;
+    let jessOutroDegisti = false;
+
     if (EKRAN_BASLIGI && EKRAN_BASLIGI.trim()) {
       const eb = String(EKRAN_BASLIGI).replace(/[*]{2}/g, "").trim().substring(0, 40);
+      ekranBasligiDegisti = eb !== String(questionsData.ekran_basligi || "").trim();
       questionsData.ekran_basligi = eb;
-      console.log(`Ekran başlığı güncellendi (stage2): "${eb}"`);
+      console.log(`Ekran başlığı (stage2): "${eb}" [${ekranBasligiDegisti ? "DEĞİŞTİ" : "aynı"}]`);
+    }
+
+    const jessMetniUygula = (envDeger, alan, etiket) => {
+      const yeni = String(envDeger || "").replace(/\s+/g, " ").trim();
+      if (!yeni) return false;
+      const eski = String(questionsData[alan] || "").replace(/\s+/g, " ").trim();
+      const degisti = yeni !== eski;
+      questionsData[alan] = yeni;
+      console.log(`${etiket} (stage2, ${yeni.split(" ").filter(Boolean).length} kelime): "${yeni.substring(0, 90)}" [${degisti ? "DEĞİŞTİ" : "aynı"}]`);
+      return degisti;
+    };
+    jessIntroDegisti = jessMetniUygula(JESS_INTRO, "intro_audio_text", "Jess giriş metni");
+    jessOutroDegisti = jessMetniUygula(JESS_OUTRO, "outro_audio_text", "Jess kapanış metni");
+
+    // 03-seslendirme'nin okuyacağı yeniden-üretim işareti
+    if (jessIntroDegisti || jessOutroDegisti) {
+      const yenidenUret = [];
+      if (jessIntroDegisti) yenidenUret.push("topic-announce");
+      if (jessOutroDegisti) yenidenUret.push("outro-announce");
+      questionsData.ses_yeniden_uret = yenidenUret;
+      console.log(`🔁 Ses yeniden üretilecek segmentler: ${yenidenUret.join(", ")}`);
+    } else {
+      // Eski bir işaret kaldıysa temizle (yanlışlıkla tekrar üretim olmasın)
+      if (questionsData.ses_yeniden_uret) delete questionsData.ses_yeniden_uret;
     }
 
     // 6. questions.json'u Drive'a geri yaz
@@ -654,25 +687,34 @@ async function main() {
       // Sadece görsel + text değişiklikleri uygulandı, yeni onay turuna git
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}\n\nYeni onay sayfasi hazirlaniyor...`
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
+Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess intro: ${jessIntroDegisti ? "degisti" : "ayni"} / Jess outro: ${jessOutroDegisti ? "degisti" : "ayni"}\n\nYeni onay sayfasi hazirlaniyor...`
       );
       // 02.5'i tetikle (yeni link gönderecek)
       await tetikle("onay_tetikle", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("02.5-onay-tetikle yeniden cagrildi");
-    } else if (APPROVAL === "render_only") {
+    } else if (APPROVAL === "render_only" && !jessIntroDegisti && !jessOutroDegisti) {
       // TTS atla, doğrudan 07-video-montaj
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}\n\nVideo render basliyor (ses korunuyor)...`
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
+Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess intro: ${jessIntroDegisti ? "degisti" : "ayni"} / Jess outro: ${jessOutroDegisti ? "degisti" : "ayni"}\n\nVideo render basliyor (ses korunuyor)...`
       );
       await tetikle("video_montaj", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("07-video-montaj tetiklendi");
     } else {
+      // NOT: "render_only" seçilmiş olsa bile Jess intro/outro metni DEĞİŞTİYSE
+      // buraya düşülür — aksi halde yeni metin sese hiç dönüşmez, video eski sesle
+      // render edilirdi. Metin değiştiyse TTS zorunlu.
+      if (APPROVAL === "render_only") {
+        console.log("⚠ render_only seçildi ama Jess metni değişti → 03-seslendirme'ye yönlendiriliyor (yeni metin seslendirilmeli)");
+      }
       // full: 03-seslendirme (sonra 07 zaten otomatik tetikleniyor)
       const ilkSesMi = !String(job.ses_status || "").startsWith("completed");
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
+Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess intro: ${jessIntroDegisti ? "degisti" : "ayni"} / Jess outro: ${jessOutroDegisti ? "degisti" : "ayni"}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
       );
       await tetikle("seslendirme_uret", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("03-seslendirme tetiklendi");

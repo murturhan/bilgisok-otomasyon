@@ -1,4 +1,4 @@
-// REV 019/08SEP26 - inputProps.topic artik ekran_basligi (ham konu paragrafi kaldirildi, 40 kr limit); option_flags fallback+teshis logu
+// REV 020/09SEP26 - ekran basligi sert karakter kesimi KALDIRILDI, kelime sinirinda kisaltma (yarim kelime cikmiyor)
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -680,14 +680,36 @@ async function main() {
     // Ham konu paragrafı (questionsData.konu / job.konu) ARTIK KULLANILMIYOR — uzun metin
     // intro'da logoyu ve Jess'i örtüyordu. Sıra: ekran_basligi > intro_title > baslik.
     // Ek emniyet: 40 karakterle kes (Gemini/onay sayfası bozuk veri gönderse bile video bozulmasın).
-    const EKRAN_BASLIGI_MAX = 40;
-    let ekranBasligi = String(
+    // ASLA karakter ortasından kesme — hep KELİME SINIRINDA kısalt.
+    // (Eskiden substring(0,40) yapıyordu ve ekranda "FUN WOR" gibi yarım kelime çıkıyordu.)
+    const EKRAN_BASLIGI_MAX = 25;
+    const EKRAN_BASLIGI_MAX_KELIME = 4;
+    const kelimeSinirindaKisalt = (t, maxKarakter, maxKelime) => {
+      const x = String(t || "")
+        .replace(/[*]{2}/g, "")
+        .replace(/[?!.,;:]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!x) return "";
+      const kelimeler = x.split(" ").filter(Boolean).slice(0, maxKelime);
+      const secilen = [];
+      for (const k of kelimeler) {
+        const aday = secilen.length === 0 ? k : `${secilen.join(" ")} ${k}`;
+        if (aday.length > maxKarakter) break;
+        secilen.push(k);
+      }
+      // Tek kelime bile limiti aşıyorsa onu BÖLME, olduğu gibi bırak
+      if (secilen.length === 0 && kelimeler.length > 0) return kelimeler[0];
+      return secilen.join(" ");
+    };
+
+    const ekranBasligiHam = String(
       questionsData.ekran_basligi || questionsData.intro_title || questionsData.baslik || ""
     ).replace(/\s+/g, " ").trim();
-    if (ekranBasligi.replace(/[*]{2}/g, "").length > EKRAN_BASLIGI_MAX) {
-      const kisa = ekranBasligi.replace(/[*]{2}/g, "").substring(0, EKRAN_BASLIGI_MAX).trim();
-      console.warn(`⚠ Ekran başlığı çok uzun (${ekranBasligi.length} karakter), kesildi: "${kisa}"`);
-      ekranBasligi = kisa;
+    let ekranBasligi = kelimeSinirindaKisalt(ekranBasligiHam, EKRAN_BASLIGI_MAX, EKRAN_BASLIGI_MAX_KELIME);
+    if (!ekranBasligi) ekranBasligi = ekranBasligiHam.replace(/[*]{2}/g, "").trim();
+    if (ekranBasligi !== ekranBasligiHam.replace(/[*]{2}/g, "").trim()) {
+      console.warn(`⚠ Ekran başlığı kelime sınırında kısaltıldı: "${ekranBasligiHam}" → "${ekranBasligi}"`);
     }
     console.log(`🏷 Ekran başlığı (inputProps.topic): "${ekranBasligi}" [kaynak: ${
       questionsData.ekran_basligi ? "ekran_basligi" : questionsData.intro_title ? "intro_title" : "baslik"

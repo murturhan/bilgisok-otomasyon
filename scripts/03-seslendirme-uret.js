@@ -1,4 +1,4 @@
-// REV 007/30JUN26 - son WYR Jess susmasın: reveal metni boşsa surprise outcome'dan fallback üret
+// REV 008/09SEP26 - Jess giris/kapanis metni artik intro_audio_text/outro_audio_text tan geliyor (konu paragrafi okunmuyor)
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -218,14 +218,48 @@ async function main() {
     // OUTRO ANNOUNCE — Outro Sahne 2 (Subscribe) sahnesinde oynar
     // Format'a göre cümle değişir
     const format = questionsData.format || "shorts";
-    const konu = questionsData.konu || "today's quiz";
-    
-    const topicAnnounceText = format === "shorts"
-      ? `Today: ${konu}! Let's play!`
-      : `Today's topic: ${konu}! Are you ready? Let's play!`;
-    const outroAnnounceText = format === "shorts"
+
+    // JESS GİRİŞ/KAPANIŞ METNİ
+    // ÖNEMLİ: burada ARTIK questionsData.konu KULLANILMIYOR. Eskiden metin
+    // `Today's topic: ${konu}!` diye kuruluyordu ve konu alanı kullanıcının forma
+    // yazdığı UZUN talimat paragrafı olduğu için Jess talimatı baştan sona okuyordu.
+    // Artık 01-icerik-uret'in ürettiği (ve onay sayfasından düzenlenebilen)
+    // intro_audio_text / outro_audio_text kullanılıyor.
+    const kisaBaslik = String(questionsData.ekran_basligi || "").replace(/[*]{2}/g, "").trim();
+    const VARSAYILAN_INTRO = kisaBaslik
+      ? `Hi friends! I am Jess the Fox! Today we are playing ${kisaBaslik}! Are you ready?`
+      : "Hi friends! I am Jess the Fox! Are you ready for today's quiz?";
+    const VARSAYILAN_OUTRO = format === "shorts"
       ? "Don't forget to subscribe! See you next time!"
       : "If you enjoyed this quiz, please subscribe and hit the bell! See you next time, friends!";
+
+    // Emniyet: metin çok uzunsa (Jess dakikalarca konuşmasın) varsayılana düş
+    const JESS_MAX_KELIME = 50;
+    const jessMetniSec = (alan, varsayilan) => {
+      const metin = String(questionsData[alan] || "").replace(/\s+/g, " ").trim();
+      if (!metin) {
+        console.log(`  ${alan} yok → varsayılan metin kullanılıyor`);
+        return varsayilan;
+      }
+      const kelime = metin.split(" ").filter(Boolean).length;
+      if (kelime > JESS_MAX_KELIME) {
+        console.warn(`  ⚠ ${alan} çok uzun (${kelime} kelime) → varsayılan metne düşüldü`);
+        return varsayilan;
+      }
+      console.log(`  ${alan} kullanılıyor (${kelime} kelime): "${metin.substring(0, 100)}"`);
+      return metin;
+    };
+
+    const topicAnnounceText = jessMetniSec("intro_audio_text", VARSAYILAN_INTRO);
+    const outroAnnounceText = jessMetniSec("outro_audio_text", VARSAYILAN_OUTRO);
+
+    // 02.7 onay sayfasından gelen metin değişikliğini işaretlemiş olabilir.
+    // Bu script zaten HER çalışmada tüm segmentleri baştan üretiyor, yani işaretli
+    // segmentler otomatik yenilenir; burada sadece loglanır ve işaret temizlenir.
+    if (Array.isArray(questionsData.ses_yeniden_uret) && questionsData.ses_yeniden_uret.length) {
+      console.log(`🔁 02.7 şu segmentleri yeniden üretilecek diye işaretlemiş: ${questionsData.ses_yeniden_uret.join(", ")}`);
+      console.log("   (03 zaten tüm segmentleri baştan üretiyor — yeni metinler seslendirilecek)");
+    }
     
     segmentTasks.push({
       key: "topic-announce",

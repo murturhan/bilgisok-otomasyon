@@ -1,4 +1,4 @@
-// REV 073/08SEP26 - ekran_basligi duzenlenebilir input (2 onay sayfasi + payload); stage1 option_flags SILME BUGU duzeltildi (input yoksa mevcut deger korunuyor)
+// REV 074/09SEP26 - onay2 ust bolum: ekran basligi (25kr sayac) + Jess giris/kapanis textarea (kelime sayac), payload+dispatch zinciri
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -398,9 +398,15 @@ async function handleSubmit(request, env, url, ctx) {
   const jobId = url.pathname.split("/").pop();
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
-  const { edits = {}, approval_level = "full", chat_id = "", video_baslik = "", ekran_basligi = "" } = body;
+  const {
+    edits = {}, approval_level = "full", chat_id = "", video_baslik = "",
+    ekran_basligi = "", intro_audio_text = "", outro_audio_text = "",
+  } = body;
   // Ekran basligi: videoda gorunen KISA baslik. 40 karakterle sinirla, ** isaretlerini at.
   const ekranBasligiTemiz = String(ekran_basligi || "").replace(/[*]{2}/g, "").trim().substring(0, 40);
+  // Jess'in sesli okudugu metinler (03-seslendirme bunlari kullanir)
+  const jessIntroTemiz = String(intro_audio_text || "").replace(/\s+/g, " ").trim().substring(0, 600);
+  const jessOutroTemiz = String(outro_audio_text || "").replace(/\s+/g, " ").trim().substring(0, 600);
   const isSave = approval_level === "save_only";
 
   const mevcut = await issueVeriOku(jobId, env);
@@ -408,7 +414,7 @@ async function handleSubmit(request, env, url, ctx) {
     const eskiJob = mevcut.data?.job || {};
     // save_only: metin edit'lerini job.questions + baslik'a uygula ki reload'da gorunsun ve kaybolmasin
     const job = isSave
-      ? { ...eskiJob, baslik: video_baslik || eskiJob.baslik, ekran_basligi: ekranBasligiTemiz || eskiJob.ekran_basligi || "", questions: editTextUygula(eskiJob.questions || [], edits) }
+      ? { ...eskiJob, baslik: video_baslik || eskiJob.baslik, ekran_basligi: ekranBasligiTemiz || eskiJob.ekran_basligi || "", intro_audio_text: jessIntroTemiz || eskiJob.intro_audio_text || "", outro_audio_text: jessOutroTemiz || eskiJob.outro_audio_text || "", questions: editTextUygula(eskiJob.questions || [], edits) }
       : eskiJob;
     const yeni = { job, edits };
     const yazildi = await issueGuncelle(mevcut.number, yeni, env);
@@ -431,6 +437,8 @@ async function handleSubmit(request, env, url, ctx) {
     approval_level,
     video_baslik: String(video_baslik || ""),
     ekran_basligi: ekranBasligiTemiz,
+    intro_audio_text: jessIntroTemiz,
+    outro_audio_text: jessOutroTemiz,
   }, env);
   if (!dispatched) {
     return json({ ok: false, error: "GitHub dispatch basarisiz — GITHUB_TOKEN kontrol et" }, 500);
@@ -459,6 +467,9 @@ async function handleApprovalPage(request, env, url) {
   const { topic = "", format = "", baslik = "", questions = [], chat_id = "", topic_emojis = [] } = job;
   // Ekran basligi: videoda gorunen KISA baslik. Ham konu paragrafi ASLA kullanilmaz.
   const ekranBasligi = String(job.ekran_basligi || job.intro_title || "").replace(/[*]{2}/g, "").trim();
+  // Jess'in sesli okudugu giris/kapanis metinleri (03-seslendirme bunlari kullanir)
+  const jessIntro = String(job.intro_audio_text || "").replace(/\s+/g, " ").trim();
+  const jessOutro = String(job.outro_audio_text || "").replace(/\s+/g, " ").trim();
   const qCards = questions.map((q, i) =>
     q.question_type === "would_you_rather" ? buildWyrCard(q, i) : buildQuestionCard(q, i)
   ).join("\n");
@@ -540,10 +551,7 @@ textarea{min-height:56px}
     <div class="topbar h1">🦊 GeniMini — Onay</div>
     <div class="topbar meta">${esc(jobId)} · ${esc(format)} · ${questions.length} soru · ${esc(topic)}</div>
   </div>
-  <div style="flex:1;margin:0 10px;min-width:0;display:flex;flex-direction:column;gap:4px">
-    <input type="text" id="video_baslik_s2" value="${esc(baslik)}" placeholder="Video başlığı (YouTube)..." style="width:100%;box-sizing:border-box;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 10px;font-size:.82em">
-    <input type="text" id="ekran_basligi_s2" value="${esc(ekranBasligi)}" maxlength="40" placeholder="Ekran başlığı (videoda görünür, max 4 kelime)..." style="width:100%;box-sizing:border-box;background:#111827;color:#fcd34d;border:1px solid #b45309;border-radius:6px;padding:6px 10px;font-size:.82em">
-  </div>
+  <input type="text" id="video_baslik_s2" value="${esc(baslik)}" placeholder="Video başlığı (YouTube)..." style="flex:1;margin:0 10px;min-width:0;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 10px;font-size:.82em">
   <div class="sticky-btns">
     <button type="button" class="b1" onclick="submit_('full',true)">✅ Değiştir<br>+ Ses + Render</button>
     <button type="button" class="b2" onclick="submit_('render_only',true)">🎬 Değiştir<br>+ Sadece Render</button>
@@ -555,6 +563,37 @@ textarea{min-height:56px}
 </div>
 <div id="status"></div>
 <form id="frm" onsubmit="return false" class="cards">
+<div class="card" style="padding:12px 14px;border:1px solid #b45309">
+  <div style="font-size:.8em;color:#fcd34d;font-weight:700;margin-bottom:10px">🎬 VİDEO METİNLERİ (ekranda görünen + Jess'in konuştuğu)</div>
+
+  <div style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <label for="ekran_basligi_s2" style="font-size:.74em;color:#9ca3af">EKRAN BAŞLIĞI <span style="opacity:.7">— videoda görünen kısa başlık</span></label>
+      <span id="eb_sayac" style="font-size:.72em;color:#9ca3af">0/25</span>
+    </div>
+    <input type="text" id="ekran_basligi_s2" value="${esc(ekranBasligi)}" maxlength="40" oninput="ebSayac()" placeholder="örn: WORLD FAMOUS FOODS" style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#fcd34d;border:1px solid #b45309;border-radius:6px;padding:7px 10px;font-size:.9em;font-weight:700">
+  </div>
+
+  <div style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <label for="jess_intro_s2" style="font-size:.74em;color:#9ca3af">JESS GİRİŞ METNİ <span style="opacity:.7">— Jess'in intro konuşması</span></label>
+      <span id="ji_sayac" style="font-size:.72em;color:#9ca3af">0 kelime</span>
+    </div>
+    <textarea id="jess_intro_s2" rows="3" oninput="jiSayac()" placeholder="Hi friends! I am Jess the Fox! ..." style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical">${esc(jessIntro)}</textarea>
+  </div>
+
+  <div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
+      <label for="jess_outro_s2" style="font-size:.74em;color:#9ca3af">JESS KAPANIŞ METNİ <span style="opacity:.7">— Jess'in outro konuşması</span></label>
+      <span id="jo_sayac" style="font-size:.72em;color:#9ca3af">0 kelime</span>
+    </div>
+    <textarea id="jess_outro_s2" rows="3" oninput="joSayac()" placeholder="That was so much fun! Subscribe ..." style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical">${esc(jessOutro)}</textarea>
+  </div>
+
+  <div style="font-size:.7em;color:#6b7280;margin-top:8px">
+    Jess metni değişirse ilgili ses parçası (intro/outro) yeniden üretilir.
+  </div>
+</div>
 ${topic_emojis.length ? `<div class="card" style="padding:10px 14px">
   <span style="font-size:.75em;color:#9ca3af">🎨 Intro Emojileri (videoda başlık altında görünür)</span>
   <div class="emoji-row" style="margin-top:8px">${topic_emojis.map((e,i)=>`<div class="emoji-cell"><button type="button" class="emoji-pick-btn" id="te_${i}_btn" onclick="editEmoji('te_${i}')">${esc(e)||"❓"}</button><input type="text" class="emoji-edit-inp" id="te_${i}" value="${esc(e)}" maxlength="8"><span class="emoji-hint">Değiştir</span></div>`).join("")}</div>
@@ -589,6 +628,28 @@ const customVideos = {};
 const s1VideoUrls = {};
 
 function val(id){const e=document.getElementById(id);return e?e.value:"";}
+
+// ─── CANLI SAYAÇLAR (ekran başlığı: 25 karakter · Jess metinleri: 30 hedef / 50 limit)
+function kelimeSay(t){return String(t||"").trim().split(/\\s+/).filter(Boolean).length;}
+function ebSayac(){
+  var e=document.getElementById("ekran_basligi_s2"), s=document.getElementById("eb_sayac");
+  if(!e||!s) return;
+  var n=e.value.length, k=kelimeSay(e.value);
+  s.textContent=n+"/25 karakter · "+k+" kelime";
+  s.style.color = (n>25||k>4) ? "#f87171" : (n>20 ? "#fbbf24" : "#6ee7b7");
+  e.style.borderColor = (n>25||k>4) ? "#dc2626" : "#b45309";
+}
+function jessSayacUygula(inputId, sayacId){
+  var e=document.getElementById(inputId), s=document.getElementById(sayacId);
+  if(!e||!s) return;
+  var k=kelimeSay(e.value);
+  s.textContent=k+" kelime (hedef 30, limit 50)";
+  s.style.color = k>50 ? "#f87171" : (k>30 ? "#fbbf24" : "#6ee7b7");
+  e.style.borderColor = k>50 ? "#dc2626" : "#374151";
+}
+function jiSayac(){jessSayacUygula("jess_intro_s2","ji_sayac");}
+function joSayac(){jessSayacUygula("jess_outro_s2","jo_sayac");}
+document.addEventListener("DOMContentLoaded",function(){ebSayac();jiSayac();joSayac();});
 function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
 
 // Resim seclince ANINDA Drive'a yukle, state'te sadece URL tut (base64 YOK -> body sismez).
@@ -885,7 +946,7 @@ async function submit_(level, applyEdits){
   const st=document.getElementById("status");
   st.style.display="block";st.className="";
   st.textContent="⏳ "+(msgs[level+"+"+applyEdits]||"Gönderiliyor...");
-  const payload=JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2')});
+  const payload=JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2'),intro_audio_text:val('jess_intro_s2'),outro_audio_text:val('jess_outro_s2')});
   // Cok buyuk govde uyarisi (custom gorseller base64 data URL olarak gomulu -> "Failed to fetch" sebebi)
   const mb=payload.length/1048576;
   if(applyEdits) console.log("[submit_] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
@@ -937,7 +998,7 @@ async function kaydet(){
   const edits=collectEdits();
   console.log("[KAYDET] toplanan edits:", edits);
   console.log("[KAYDET] customImages:", customImages, "| customVideos:", customVideos, "| selectedSurpriseBoxes:", selectedSurpriseBoxes);
-  const payload=JSON.stringify({edits,approval_level:"save_only",chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2')});
+  const payload=JSON.stringify({edits,approval_level:"save_only",chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2'),intro_audio_text:val('jess_intro_s2'),outro_audio_text:val('jess_outro_s2')});
   const mb=payload.length/1048576;
   console.log("[KAYDET] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
   if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB) — custom gorselleri tek tek 'Yukle' butonuyla yukle.";allBtns.forEach(function(b){b.disabled=false;});return;}

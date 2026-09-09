@@ -1,4 +1,4 @@
-// REV 027/08SEP26 - ekran_basligi alani: Gemini semasi + max 4 kelime kurali + zorunlu kisaltma fallback (ham konu paragrafi videoya cikmasin)
+// REV 028/09SEP26 - ekran_basligi 25kr kelime-sinirinda validation; intro/outro_audio_text alanlari + konu-kopyasi tespiti (Jess talimati okumasin)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -82,6 +82,8 @@ OUTPUT (valid JSON, no markdown):
   "format": "${FORMAT}",
   "intro_title": "**Would** You Rather?",
   "ekran_basligi": "Would You Rather",
+  "intro_audio_text": "Hi friends! I am Jess the Fox! Today we are playing Would You Rather! Can you pick the best one?",
+  "outro_audio_text": "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!",
   "topic_emojis": ["🤔","🎁","✨","🎯","🎉"],
   "baslik": "Would You Rather? Kids Edition with Jess the Fox! 🤔",
   "thumbnail_title": "Would You Rather?",
@@ -318,7 +320,9 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "konu": "${konu}",
   "intro_title": "Topic as intro big title — wrap the most important 1-2 words with **double stars** (e.g. '**Wild** Animals' or 'Amazing **Oceans**')",
   "format": "${FORMAT}",
-  "ekran_basligi": "SHORT on-screen title shown IN the video (max 4 words, NO emoji, NO stars)",
+  "ekran_basligi": "WORLD FAMOUS FOODS",
+  "intro_audio_text": "Hi friends! I am Jess the Fox! Today we are tasting foods from around the world! Can you guess where they come from?",
+  "outro_audio_text": "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!",
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
   "video_baslik": "SEO-friendly suggested video title (50-70 chars, question format, kid-friendly)",
   "konu_kisa": "${konu}",
@@ -398,15 +402,41 @@ CRITICAL:
   * NEVER use clickbait words (SHOCKING/INSANE/YOU WON'T BELIEVE).
 - **question_text MUST be MAX 6 WORDS** — short and impactful, never exceed 6 words. Wrong: "What is the name of the largest ocean on Earth?". Right: "Which is Earth's largest ocean?"
 - **intro_title CRITICAL — MANDATORY STARS**: Short topic title for the video intro screen (MAX 4 WORDS). You MUST wrap the 1-2 most important words with **double stars**. Examples: "**Wild** Animals", "Amazing **Oceans**", "**Rocket** Science", "**Dino** World". NEVER output intro_title without ** markers — it MUST contain ** or the UI breaks. Wrong: "Animal Adaptations". Right: "**Animal** Adaptations".
-- **ekran_basligi CRITICAL — MANDATORY**: The SHORT title displayed ON SCREEN in the video (intro + title card).
-  * MAX 4 WORDS. Hard limit.
-  * NO emoji, NO ** stars, NO trailing punctuation.
-  * Must fit ONE line in UPPERCASE — keep it under 40 characters total.
-  * DO NOT repeat or copy the topic paragraph "${konu}". Extract its ESSENCE.
-  * BAD: "World famous foods and which country they come from. Each question shows a famous dish..." (that is the topic paragraph — FORBIDDEN)
-  * GOOD: topic "World famous foods and which country they come from. Each question shows a famous dish and asks which country it originated from" -> ekran_basligi "WORLD FAMOUS FOODS"
-  * GOOD: topic "planets of the solar system for kids" -> ekran_basligi "PLANETS"
-  * GOOD: topic "wild animals of africa" -> ekran_basligi "WILD ANIMALS"
+- **ekran_basligi — HIGHEST PRIORITY FIELD. NEVER leave it empty.**
+  This is the BIG TITLE painted on the video screen. It is NOT the YouTube title.
+  HARD RULES:
+  * MAX 4 WORDS. Never more.
+  * MAX 25 CHARACTERS total (including spaces).
+  * NO emoji. NO ** stars. NO punctuation at all — no ? no ! no . no ,
+  * NEVER copy the topic paragraph "${konu}". Read it, then write its ESSENCE in 2-4 words.
+  * NEVER reuse baslik / video_baslik (those are long YouTube titles with punctuation).
+  * If you cannot decide, use the 2-3 most important NOUNS from the topic.
+  EXAMPLES:
+  * topic "World famous foods and which country they come from. Each question shows a famous dish and asks which country it originated from"
+      -> ekran_basligi: "WORLD FAMOUS FOODS"   (3 words, 18 chars)
+  * topic "planets of the solar system for kids"  -> ekran_basligi: "PLANETS"
+  * topic "wild animals of africa"                -> ekran_basligi: "WILD ANIMALS"
+  * topic "ocean creatures deep sea quiz"         -> ekran_basligi: "DEEP SEA ANIMALS"
+  FORBIDDEN OUTPUT (these are the exact mistakes to avoid):
+  * "World famous foods and which country they come from. Each question..."  (topic paragraph copied)
+  * "Where Do Famous Foods Come From? Fun World Food Quiz!"                  (that is the YouTube title)
+  * "WORLD FAMOUS FOODS!"                                                    (punctuation not allowed)
+- **intro_audio_text — Jess THE FOX SPEAKS THIS OUT LOUD at the start of the video.**
+  It is a SPOKEN GREETING, not a description and NOT a read-back of the topic.
+  HARD RULES:
+  * NEVER repeat, read out, quote or paraphrase the topic instruction "${konu}". Not one sentence of it.
+  * NEVER list the examples mentioned in the topic (do NOT say "pizza, sushi, tacos, ...").
+  * MAX 30 WORDS. 2-3 short sentences.
+  * Structure ONLY: greeting + 3-4 word summary of the subject + one line of excitement.
+  * Natural spoken English for kids aged 4-12. No emoji, no markdown, no stage directions.
+  RIGHT: "Hi friends! I am Jess the Fox! Today we are tasting foods from around the world! Can you guess where they come from?"
+  WRONG: reading the topic paragraph sentence by sentence.
+  WRONG: "Today we look at pizza, sushi, tacos, croissants, paella, kebab and more..." (listing examples)
+- **outro_audio_text — Jess speaks this at the END of the video.** Same rules as intro_audio_text:
+  * NEVER repeat the topic instruction, NEVER list examples.
+  * MAX 30 WORDS, 2-3 short sentences.
+  * Structure ONLY: short congratulation + subscribe call + goodbye.
+  RIGHT: "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!"
 - **show_image** (boolean, per question): Decide if showing the image during question helps or spoils.
   * TRUE — image is a visual *clue* (blurred during guess, revealed with confetti). Examples: cross-sections, silhouettes, partial views, mood scenes.
   * FALSE — image would obviously reveal the answer ("What is this?" with clear apple photo → false). Shows fancy "?" placeholder instead.
@@ -601,33 +631,98 @@ TOPIC EMOJIS (for intro screen emoji band)
         }
       }
       
-      // EKRAN BAŞLIĞI: videoda görünen KISA başlık (07 → inputProps.topic).
-      // Gemini vermezse/uzun verirse burada zorla kısaltılır — ham konu paragrafı
-      // ASLA ekrana çıkmasın (intro'da logoyu/Jess'i örten uzun metin bug'ı).
+      // ─── EKRAN BAŞLIĞI ────────────────────────────────────────────────────
+      // Videoda görünen KISA başlık (07 → inputProps.topic).
+      // KURAL: max 4 kelime / 25 karakter, noktalama yok. ASLA karakter ortasından
+      // kesme — hep KELİME SINIRINDA kısalt ("FUN WOR" gibi yarım kelime çıkmasın).
       {
-        const EKRAN_BASLIGI_MAX = 40;
-        const kisalt = (t) => {
-          let x = String(t || "").replace(/[*]{2}/g, "").replace(/\s+/g, " ").trim();
-          // İlk cümleyi al (konu paragrafı gelirse ilk noktada kes)
-          const nokta = x.search(/[.!?]/);
-          if (nokta > 0) x = x.substring(0, nokta).trim();
-          // En fazla 4 kelime
-          const kelimeler = x.split(" ").filter(Boolean).slice(0, 4);
-          x = kelimeler.join(" ");
-          if (x.length > EKRAN_BASLIGI_MAX) x = x.substring(0, EKRAN_BASLIGI_MAX).trim();
-          return x;
+        const EKRAN_BASLIGI_MAX = 25;
+        const EKRAN_BASLIGI_MAX_KELIME = 4;
+        // Kelime sınırında kısalt: kelimeleri sırayla ekler, limiti aşacaksa durur.
+        const kelimeSinirindaKisalt = (t, maxKarakter, maxKelime) => {
+          let x = String(t || "")
+            .replace(/[*]{2}/g, "")
+            .replace(/[?!.,;:]+/g, " ")   // noktalama yasak
+            .replace(/\s+/g, " ")
+            .trim();
+          if (!x) return "";
+          const kelimeler = x.split(" ").filter(Boolean).slice(0, maxKelime);
+          const secilen = [];
+          for (const k of kelimeler) {
+            const aday = secilen.length === 0 ? k : `${secilen.join(" ")} ${k}`;
+            if (aday.length > maxKarakter) break;
+            secilen.push(k);
+          }
+          // Tek kelime bile limiti aşıyorsa o kelimeyi olduğu gibi bırak (yarım kelime yapma)
+          if (secilen.length === 0 && kelimeler.length > 0) return kelimeler[0];
+          return secilen.join(" ");
         };
-        let eb = kisalt(json.ekran_basligi);
-        if (!eb) {
-          eb = kisalt(json.intro_title);
-          if (eb) console.log(`ekran_basligi yok, intro_title'dan türetildi: "${eb}"`);
+
+        const ham = String(json.ekran_basligi || "").trim();
+        let eb = kelimeSinirindaKisalt(ham, EKRAN_BASLIGI_MAX, EKRAN_BASLIGI_MAX_KELIME);
+
+        // Gemini boş bıraktı VEYA 25 karakteri aştı → Gemini'ye tekrar sorma,
+        // baslik'ten ilk 3 kelimeyi al (talimat b).
+        if (!ham || ham.length > EKRAN_BASLIGI_MAX) {
+          const kaynak = json.baslik || json.video_baslik || json.intro_title || konu;
+          const yedek = kelimeSinirindaKisalt(kaynak, EKRAN_BASLIGI_MAX, 3);
+          console.warn(
+            `⚠ ekran_basligi ${!ham ? "BOŞ geldi" : `çok uzun (${ham.length} karakter)`} → ` +
+            `baslik'ten ilk 3 kelime alındı: "${yedek}"`
+          );
+          eb = yedek || eb;
         }
-        if (!eb) {
-          eb = kisalt(konu);
-          if (eb) console.log(`ekran_basligi + intro_title yok, konu'dan kısaltıldı: "${eb}"`);
-        }
+        if (!eb) eb = kelimeSinirindaKisalt(konu, EKRAN_BASLIGI_MAX, 3);
+
         json.ekran_basligi = eb;
-        console.log(`Ekran başlığı (videoda görünecek): "${json.ekran_basligi}"`);
+        console.log(`🏷 Ekran başlığı (videoda görünecek): "${json.ekran_basligi}" (${json.ekran_basligi.length} karakter)`);
+      }
+
+      // ─── JESS GİRİŞ / KAPANIŞ METİNLERİ ───────────────────────────────────
+      // Jess bu metinleri sesli okuyor. Kullanıcının konu talimatını GERİ OKUMASI
+      // yasak — eskiden 03-seslendirme metni koddan `Today's topic: ${konu}` diye
+      // üretiyordu ve Jess uzun talimatı baştan sona okuyordu.
+      {
+        const MAX_KELIME = 50;
+        const kelimeSay = (t) => String(t || "").trim().split(/\s+/).filter(Boolean).length;
+
+        // Konu metninden 10+ kelimelik bir bloğu birebir içeriyor mu?
+        const konuKopyasiMi = (metin) => {
+          const norm = (t) => String(t || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+          const mNorm = norm(metin);
+          const kKelime = norm(konu).split(" ").filter(Boolean);
+          if (!mNorm || kKelime.length < 10) return false;
+          for (let i = 0; i + 10 <= kKelime.length; i++) {
+            if (mNorm.includes(kKelime.slice(i, i + 10).join(" "))) return true;
+          }
+          return false;
+        };
+
+        const GUVENLI_INTRO = `Hi friends! I am Jess the Fox! Today we are playing ${json.ekran_basligi || "a fun quiz"}! Are you ready?`;
+        const GUVENLI_OUTRO = "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!";
+
+        const dogrula = (alan, guvenli) => {
+          const metin = String(json[alan] || "").replace(/\s+/g, " ").trim();
+          if (!metin) {
+            console.warn(`⚠ ${alan} boş geldi → güvenli varsayılan metne düşüldü.`);
+            return guvenli;
+          }
+          const kelime = kelimeSay(metin);
+          if (kelime > MAX_KELIME) {
+            console.warn(`⚠ ${alan} ÇOK UZUN (${kelime} kelime > ${MAX_KELIME}) → güvenli varsayılan metne düşüldü. Reddedilen: "${metin.substring(0, 120)}..."`);
+            return guvenli;
+          }
+          if (konuKopyasiMi(metin)) {
+            console.warn(`⚠ ${alan} konu metninden 10+ kelimelik bir bölümü BİREBİR içeriyor (Jess talimatı geri okuyor) → güvenli varsayılan metne düşüldü. Reddedilen: "${metin.substring(0, 120)}..."`);
+            return guvenli;
+          }
+          return metin;
+        };
+
+        json.intro_audio_text = dogrula("intro_audio_text", GUVENLI_INTRO);
+        json.outro_audio_text = dogrula("outro_audio_text", GUVENLI_OUTRO);
+        console.log(`🦊 Jess giriş (${kelimeSay(json.intro_audio_text)} kelime): "${json.intro_audio_text}"`);
+        console.log(`🦊 Jess kapanış (${kelimeSay(json.outro_audio_text)} kelime): "${json.outro_audio_text}"`);
       }
 
       // SEO başlık önerisi: Gemini video_baslik verdiyse THE final başlık o olur.

@@ -1,4 +1,4 @@
-// REV 011/08SEP26 - topic 40 karakter guvenlik siniri + overflow hidden/max 2 satir (uzun konu paragrafi logoyu ve Jess i ortuyordu)
+// REV 012/09SEP26 - baslik kirpilmasi giderildi: sert karakter kesimi yok, kademeli font kucultme (40-220), golge payi, overflow kaldirildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -194,17 +194,10 @@ const Scene2Long: React.FC<{ topic: string; topicEmojis?: string[]; startFrame: 
   const localFrame = frame - startFrame;
 
   const topicEmojis = topicEmojisProp && topicEmojisProp.length > 0 ? topicEmojisProp : getTopicEmojis(topic);
-  // GÜVENLİK SINIRI: topic 40 karakterden uzunsa kes. Gemini/onay sayfası ham konu
-  // paragrafını gönderirse bile başlık ekranı kaplamasın, logoyu ve Jess'i örtmesin.
-  const TOPIC_MAX_CHARS = 40;
-  const topicSafe = (() => {
-    const t = (topic || "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
-    if (t.length <= TOPIC_MAX_CHARS) return t;
-    const kesik = t.substring(0, TOPIC_MAX_CHARS);
-    const sonBosluk = kesik.lastIndexOf(" ");
-    return (sonBosluk > 12 ? kesik.substring(0, sonBosluk) : kesik).trim();
-  })();
-  const topicUpper = topicSafe.toUpperCase();
+  // SERT KARAKTER KESİMİ YOK. Yarım kelime ("FUN WOR") asla çıkmasın diye
+  // metin olduğu gibi alınır; sığdırma işi aşağıdaki font-fit'e bırakılır ve
+  // gerekirse KELİME atılarak (karakter değil) kısaltılır.
+  const topicUpper = (topic || "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim().toUpperCase();
 
   const smallLogoAnim = spring({ frame: localFrame, fps, config: { damping: 12, stiffness: 110 } });
   const smallLogoX = interpolate(smallLogoAnim, [0, 1], [-200, 0]);
@@ -215,51 +208,71 @@ const Scene2Long: React.FC<{ topic: string; topicEmojis?: string[]; startFrame: 
   const topicWobble = Math.sin(localFrame * 0.07) * 1.8;
   const topicFloat = Math.cos(localFrame * 0.09) * 12;
   
-  // Emoji giriş zamanlaması: başlık animasyonu bittikten sonra
-  const titleWords = topicUpper.split(/\s+/).filter(Boolean);
-  const titleEndLocalFrame = Math.max(0, titleWords.length - 2) * 12 + 25;
   const EMOJI_STAGGER = 12;
   const emojisToShow = topicEmojis.slice(0, 5);
   const emojiCount = emojisToShow.length;
   const emojiSingleCount = Math.max(0, emojiCount - 2);
 
-  // Font: long için daha küçük max (yükseklik kısıtlı)
-  const topicForFit = topicUpper;
-  const topicLen = topicForFit.length;
-  let maxTargetFont: number;
-  if (topicLen < 18) maxTargetFont = 220;
-  else if (topicLen < 30) maxTargetFont = 170;
-  else if (topicLen < 45) maxTargetFont = 130;
-  else maxTargetFont = 100;
-  
+  // ─── BAŞLIK SIĞDIRMA ────────────────────────────────────────────────────
+  // Kural: metin ASLA yatayda veya dikeyde kırpılmaz.
+  //  1) Font boyutu kademeli küçültülerek (binary search, 40..220) 2 satıra sığdırılır
+  //  2) 40px'te bile sığmıyorsa SONDAN KELİME atılır (karakter kesme YOK)
+  // Yükseklik hesabına text-shadow/3D gölge payı da katılır ki harflerin altı traşlanmasın.
+  const LINE_HEIGHT = 1.12;
+  const SHADOW_PAD_RATIO = 0.40;   // 3D gölge + stroke için font boyutunun oranı kadar pay
+  const MAX_LINES = 2;
+  const MIN_FONT = 40;
+  const MAX_FONT = 220;
+  const CHAR_W_RATIO = 0.58;       // display font için ortalama karakter genişliği oranı
+
   const titleInnerWidth = Math.floor(width * 0.80) - 80;
-  const titleInnerHeight = Math.floor(height * 0.50); // ekran yarısı (emoji bandı altta yer alabilsin)
-  
-  const fitTopicFont = (() => {
-    const words = topicForFit.split(/\s+/).filter(Boolean);
-    if (words.length === 0) return maxTargetFont;
-    const fits = (fs: number): boolean => {
-      const maxChars = Math.floor(titleInnerWidth / (fs * 0.55));
-      if (maxChars < 3) return false;
-      let lines = 1, lineLen = 0;
-      for (const w of words) {
-        if (w.length > maxChars) return false;
-        const need = lineLen === 0 ? w.length : lineLen + 1 + w.length;
-        if (need <= maxChars) lineLen = need;
-        else { lines++; lineLen = w.length; }
-      }
-      return lines * fs * 1.05 <= titleInnerHeight;
-    };
-    let lo = 60, hi = maxTargetFont, best = 60;
+  const titleInnerHeight = Math.floor(height * 0.50); // ekran yarısı (emoji bandı altta)
+
+  // Verilen font boyutunda kaç satır olur? (sığmıyorsa null)
+  const satirSayisi = (words: string[], fs: number): number | null => {
+    const maxChars = Math.floor(titleInnerWidth / (fs * CHAR_W_RATIO));
+    if (maxChars < 3) return null;
+    let lines = 1, lineLen = 0;
+    for (const w of words) {
+      if (w.length > maxChars) return null;   // tek kelime satıra sığmıyor
+      const need = lineLen === 0 ? w.length : lineLen + 1 + w.length;
+      if (need <= maxChars) lineLen = need;
+      else { lines++; lineLen = w.length; }
+    }
+    return lines;
+  };
+  const sigarMi = (words: string[], fs: number): boolean => {
+    const lines = satirSayisi(words, fs);
+    if (lines === null || lines > MAX_LINES) return false;
+    return lines * fs * LINE_HEIGHT + fs * SHADOW_PAD_RATIO <= titleInnerHeight;
+  };
+  const enBuyukFont = (words: string[]): number | null => {
+    let lo = MIN_FONT, hi = MAX_FONT, best: number | null = null;
     while (lo <= hi) {
       const mid = Math.floor((lo + hi) / 2);
-      if (fits(mid)) { best = mid; lo = mid + 1; }
+      if (sigarMi(words, mid)) { best = mid; lo = mid + 1; }
       else hi = mid - 1;
     }
     return best;
+  };
+
+  const { topicFitted, topicFontSize } = (() => {
+    let words = topicUpper.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return { topicFitted: "", topicFontSize: MAX_FONT };
+    // 1) Olduğu gibi sığıyor mu?
+    let fs = enBuyukFont(words);
+    // 2) Sığmıyorsa sondan KELİME at (karakter bölme yok)
+    while (fs === null && words.length > 1) {
+      words = words.slice(0, -1);
+      fs = enBuyukFont(words);
+    }
+    return { topicFitted: words.join(" "), topicFontSize: fs ?? MIN_FONT };
   })();
-  
-  const topicFontSize = fitTopicFont;
+
+  // Emoji giriş zamanlaması: başlık animasyonu bittikten sonra
+  // (sığdırılmış metne göre — kelime atıldıysa emoji de daha erken girer)
+  const titleWords = topicFitted.split(/\s+/).filter(Boolean);
+  const titleEndLocalFrame = Math.max(0, titleWords.length - 2) * 12 + 25;
   const topicTextShadow = buildTopic3DShadow(topicFontSize);
   const smallLogoWidth = width * 0.14;
 
@@ -278,22 +291,21 @@ const Scene2Long: React.FC<{ topic: string; topicEmojis?: string[]; startFrame: 
         position: "absolute", top: "8%", left: 0, right: 0, bottom: "40%",
         display: "flex", alignItems: "center", justifyContent: "center",
         paddingLeft: 40, paddingRight: 40, zIndex: 10,
-        overflow: "hidden", // başlık kutunun dışına ASLA taşmasın (logo/Jess örtülmesin)
+        // overflow:hidden YOK — font-fit metni zaten 2 satıra sığdırıyor.
+        // Kırpma açıkken harflerin ALT KISMI ve 3D gölge traşlanıyordu.
       }}>
         <div style={{
           transform: `scale(${topicPulse}) rotate(${topicWobble}deg) translateY(${topicFloat}px)`,
           fontSize: topicFontSize, fontFamily: FONTS.display, fontWeight: 900,
           textShadow: topicTextShadow,
           maxWidth: "94%", textAlign: "center", letterSpacing: 2,
-          textTransform: "uppercase", lineHeight: 1.05,
-          // TAŞMA KORUMASI: en fazla 2 satır yüksekliği, dışarı sarkan kısım kırpılır.
-          // (AnimatedTitleWords kelime span'leri kullandığı için -webkit-box/line-clamp
-          //  yerine düz maxHeight+overflow tercih edildi; kelime animasyonu bozulmasın.)
-          maxHeight: Math.round(topicFontSize * 1.05 * 2),
-          overflow: "hidden",
+          textTransform: "uppercase", lineHeight: LINE_HEIGHT,
+          // KIRPMA YOK: font-fit metni 2 satıra sığdırıyor. 3D gölge/stroke kesilmesin
+          // diye altta en az 20px (font boyutuna göre daha fazla) boşluk bırakılıyor.
+          paddingBottom: Math.max(20, Math.round(topicFontSize * SHADOW_PAD_RATIO * 0.5)),
         }}>
           <AnimatedTitleWords
-            text={topicUpper}
+            text={topicFitted}
             localFrame={localFrame}
             absoluteStartFrame={startFrame}
             sfx_pop_single={sfx_pop_single}

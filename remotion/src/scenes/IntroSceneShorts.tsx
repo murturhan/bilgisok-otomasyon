@@ -1,4 +1,4 @@
-// REV 007/08SEP26 - topic 40 karakter guvenlik siniri + overflow hidden/max 2 satir
+// REV 008/09SEP26 - baslik kirpilmasi giderildi: sert karakter kesimi yok, kademeli font kucultme, golge payi, overflow kaldirildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -171,16 +171,8 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
   const localFrame = frame - startFrame;
 
   const topicEmojis = topicEmojisProp && topicEmojisProp.length > 0 ? topicEmojisProp : getTopicEmojis(topic);
-  // GÜVENLİK SINIRI: topic 40 karakterden uzunsa kes (IntroSceneLong ile aynı kural).
-  const TOPIC_MAX_CHARS = 40;
-  const topicSafe = (() => {
-    const t = (topic || "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
-    if (t.length <= TOPIC_MAX_CHARS) return t;
-    const kesik = t.substring(0, TOPIC_MAX_CHARS);
-    const sonBosluk = kesik.lastIndexOf(" ");
-    return (sonBosluk > 12 ? kesik.substring(0, sonBosluk) : kesik).trim();
-  })();
-  const topicUpper = topicSafe.toUpperCase();
+  // SERT KARAKTER KESİMİ YOK (IntroSceneLong ile aynı kural): yarım kelime çıkmasın.
+  const topicUpper = (topic || "").replace(/\*\*/g, "").replace(/\s+/g, " ").trim().toUpperCase();
 
   const smallLogoAnim = spring({ frame: localFrame, fps, config: { damping: 12, stiffness: 110 } });
   const smallLogoX = interpolate(smallLogoAnim, [0, 1], [-200, 0]);
@@ -191,51 +183,65 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
   const topicWobble = Math.sin(localFrame * 0.07) * 1.8;
   const topicFloat = Math.cos(localFrame * 0.09) * 12;
 
-  // Emoji giriş zamanlaması: başlık animasyonu bittikten sonra
-  const titleWords = topicUpper.split(/\s+/).filter(Boolean);
-  const titleEndLocalFrame = Math.max(0, titleWords.length - 2) * 12 + 25;
   const EMOJI_STAGGER = 12;
   const emojisToShow = topicEmojis.slice(0, 3);
   const emojiCount = emojisToShow.length;
   const emojiSingleCount = Math.max(0, emojiCount - 2);
 
-  // Font: shorts 2.5x büyütülmüş, binary search ile fit
-  const topicForFit = topicUpper;
-  const topicLen = topicForFit.length;
-  let maxTargetFont: number;
-  if (topicLen < 18) maxTargetFont = 325;
-  else if (topicLen < 30) maxTargetFont = 250;
-  else if (topicLen < 45) maxTargetFont = 195;
-  else maxTargetFont = 150;
-  
+  // ─── BAŞLIK SIĞDIRMA (IntroSceneLong ile aynı mantık, shorts ölçeği) ────
+  const LINE_HEIGHT = 1.12;
+  const SHADOW_PAD_RATIO = 0.40;
+  const MAX_LINES = 2;
+  const MIN_FONT = 60;
+  const MAX_FONT = 325;
+  const CHAR_W_RATIO = 0.58;
+
   const titleInnerWidth = Math.floor(width * 0.94) - 112;
   const titleInnerHeight = Math.floor(height * 0.55);
-  
-  const fitTopicFont = (() => {
-    const words = topicForFit.split(/\s+/).filter(Boolean);
-    if (words.length === 0) return maxTargetFont;
-    const fits = (fs: number): boolean => {
-      const maxChars = Math.floor(titleInnerWidth / (fs * 0.55));
-      if (maxChars < 3) return false;
-      let lines = 1, lineLen = 0;
-      for (const w of words) {
-        if (w.length > maxChars) return false;
-        const need = lineLen === 0 ? w.length : lineLen + 1 + w.length;
-        if (need <= maxChars) lineLen = need;
-        else { lines++; lineLen = w.length; }
-      }
-      return lines * fs * 1.05 <= titleInnerHeight;
-    };
-    let lo = 60, hi = maxTargetFont, best = 60;
+
+  const satirSayisi = (words: string[], fs: number): number | null => {
+    const maxChars = Math.floor(titleInnerWidth / (fs * CHAR_W_RATIO));
+    if (maxChars < 3) return null;
+    let lines = 1, lineLen = 0;
+    for (const w of words) {
+      if (w.length > maxChars) return null;
+      const need = lineLen === 0 ? w.length : lineLen + 1 + w.length;
+      if (need <= maxChars) lineLen = need;
+      else { lines++; lineLen = w.length; }
+    }
+    return lines;
+  };
+  const sigarMi = (words: string[], fs: number): boolean => {
+    const lines = satirSayisi(words, fs);
+    if (lines === null || lines > MAX_LINES) return false;
+    return lines * fs * LINE_HEIGHT + fs * SHADOW_PAD_RATIO <= titleInnerHeight;
+  };
+  const enBuyukFont = (words: string[]): number | null => {
+    let lo = MIN_FONT, hi = MAX_FONT, best: number | null = null;
     while (lo <= hi) {
       const mid = Math.floor((lo + hi) / 2);
-      if (fits(mid)) { best = mid; lo = mid + 1; }
+      if (sigarMi(words, mid)) { best = mid; lo = mid + 1; }
       else hi = mid - 1;
     }
     return best;
+  };
+
+  const { topicFitted, topicFontSize } = (() => {
+    let words = topicUpper.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return { topicFitted: "", topicFontSize: MAX_FONT };
+    let fs = enBuyukFont(words);
+    // Sığmıyorsa sondan KELİME at (karakter bölme YOK)
+    while (fs === null && words.length > 1) {
+      words = words.slice(0, -1);
+      fs = enBuyukFont(words);
+    }
+    return { topicFitted: words.join(" "), topicFontSize: fs ?? MIN_FONT };
   })();
-  
-  const topicFontSize = fitTopicFont;
+
+  // Emoji giriş zamanlaması: sığdırılmış başlığa göre
+  const titleWords = topicFitted.split(/\s+/).filter(Boolean);
+  const titleEndLocalFrame = Math.max(0, titleWords.length - 2) * 12 + 25;
+
   const topicTextShadow = buildTopic3DShadow(topicFontSize);
   const smallLogoWidth = width * 0.26;
 
@@ -253,20 +259,19 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
         position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
         display: "flex", alignItems: "center", justifyContent: "center",
         paddingLeft: 40, paddingRight: 40, zIndex: 10,
-        overflow: "hidden", // başlık kutunun dışına ASLA taşmasın
+        // overflow:hidden YOK — font-fit metni zaten 2 satıra sığdırıyor.
       }}>
         <div style={{
           transform: `scale(${topicPulse}) rotate(${topicWobble}deg) translateY(${topicFloat}px)`,
           fontSize: topicFontSize, fontFamily: FONTS.display, fontWeight: 900,
           textShadow: topicTextShadow,
           maxWidth: "94%", textAlign: "center", letterSpacing: 2,
-          textTransform: "uppercase", lineHeight: 1.05,
-          // TAŞMA KORUMASI: en fazla 2 satır yüksekliği
-          maxHeight: Math.round(topicFontSize * 1.05 * 2),
-          overflow: "hidden",
+          textTransform: "uppercase", lineHeight: LINE_HEIGHT,
+          // KIRPMA YOK; 3D gölge kesilmesin diye alt boşluk
+          paddingBottom: Math.max(20, Math.round(topicFontSize * SHADOW_PAD_RATIO * 0.5)),
         }}>
           <AnimatedTitleWords
-            text={topicUpper}
+            text={topicFitted}
             localFrame={localFrame}
             absoluteStartFrame={startFrame}
             sfx_pop_single={sfx_pop_single}
