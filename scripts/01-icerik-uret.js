@@ -1,4 +1,4 @@
-// REV 031/16SEP26 - SEGMENT 1 Geminiden CIKARILDI (sabit); ekran_basligi sadece KONUDAN turer, soruya kilitliyse yeniden uretilir
+// REV 032/16SEP26 - IS2: ekran_basligi KIRPILMIYOR konudan yeniden turer; konu_duyuru 20-40 kelime + spesifik terim + tutarlilik dogrulamasi
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -82,7 +82,7 @@ OUTPUT (valid JSON, no markdown):
   "format": "${FORMAT}",
   "intro_title": "**Would** You Rather?",
   "ekran_basligi": "Would You Rather",
-  "konu_duyuru_audio_text": "In this video we are playing Would You Rather! Can you pick the best one? This is going to be so much fun!",
+  "konu_duyuru_audio_text": "Today we are playing Would You Rather! I will show you two choices, and you pick the one you like more. There are no wrong answers, so have fun!",
   "outro_audio_text": "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!",
   "topic_emojis": ["🤔","🎁","✨","🎯","🎉"],
   "baslik": "Would You Rather? Kids Edition with Jess the Fox! 🤔",
@@ -321,7 +321,7 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "intro_title": "Topic as intro big title — wrap the most important 1-2 words with **double stars** (e.g. '**Wild** Animals' or 'Amazing **Oceans**')",
   "format": "${FORMAT}",
   "ekran_basligi": "WORLD FAMOUS FOODS",
-  "konu_duyuru_audio_text": "In this video we are tasting famous foods from around the world! Can you guess where each one comes from? This is going to be so much fun!",
+  "konu_duyuru_audio_text": "Today we are travelling around the world to discover famous dishes! I will show you a dish, and you guess which country it comes from. Let us see how many you get right!",
   "outro_audio_text": "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!",
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
   "video_baslik": "SEO-friendly suggested video title (50-70 chars, question format, kid-friendly)",
@@ -420,7 +420,9 @@ CRITICAL:
   * DERIVE IT FROM THE TOPIC ONLY. Do NOT look at the questions.
   * NEVER name a specific thing that appears in a question (no "Pizza", "Lion", "Mars", "Eiffel Tower").
     The title describes the WHOLE quiz, not one question.
-  * NEVER write a QUESTION. No "?" ever. "Which Country Invented Pizza?" is FORBIDDEN.
+  * NEVER write a QUESTION. No "?" ever. NEVER start with which/where/what/how/why.
+  * It will NOT be cropped. If it breaks a rule the system THROWS IT AWAY and writes
+    its own title from the topic. A half sentence like "WHICH COUNTRY INVENTED" must never appear.
   * NEVER copy the first sentence of baslik / video_baslik.
   * Write ONLY the 2-3 word ESSENCE, like a poster headline:
       "FAMOUS WORLD FOODS", "WILD ANIMALS", "SPACE FACTS", "DEEP SEA ANIMALS"
@@ -437,8 +439,17 @@ Your job is only the SUBJECT ANNOUNCEMENT (segment 2) and the CLOSING (segment 3
 The viewer is ALREADY greeted before segment 2 plays, so segment 2 must NOT greet again.
 
 - **konu_duyuru_audio_text — SEGMENT 2: THE SUBJECT ANNOUNCEMENT.** Plays on the TITLE SCREEN.
-  * Announces the subject and builds excitement.
-  * MAX 30 WORDS. 2-3 short sentences.
+  * It is MORE DETAILED than ekran_basligi. Do NOT just repeat the title —
+    OPEN IT UP and explain what we are going to do.
+  * But stay GENERAL: never drop down to a single question, never name a specific thing.
+  * 25-35 WORDS. Below 20 words means you only repeated the title — that is REJECTED.
+  * DERIVE IT FROM THE TOPIC ONLY. Do NOT look at the questions.
+  * ekran_basligi and konu_duyuru_audio_text MUST describe THE SAME subject.
+    If one says "famous foods", the other CANNOT say "pizza".
+  RIGHT: "Today we are travelling around the world to discover famous dishes! I will show you a dish,
+          and you guess which country it comes from. Let us see how many you get right!"
+  WRONG (too short, just the title again): "Today we are exploring famous foods!"
+  WRONG (locked to one question): "Today we are learning about pizza!"
   * ABSOLUTELY FORBIDDEN WORDS/PHRASES — the viewer was already greeted in segment 1:
       "hi", "hello", "hey", "welcome", "ready", "I am Jess", "I'm Jess", "Jess the Fox", "Jess here"
     Do NOT greet. Do NOT say your name. Start straight with the subject.
@@ -729,53 +740,55 @@ TOPIC EMOJIS (for intro screen emoji band)
           String(t || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/)
             .some(k => k.length >= 4 && soruKelimeleri.has(k));
 
+        const SORU_KELIMELERI = /^(which|where|what|how|why|who|whom|whose|when|do|does|did|is|are|can|could)\b/i;
+
         const ham = String(json.ekran_basligi || "").trim();
-        let eb = kelimeSinirindaKisalt(ham, EKRAN_BASLIGI_MAX, EKRAN_BASLIGI_MAX_KELIME);
-
-        // 25 karakteri aşıyor VEYA 4 kelimeyi geçiyor VEYA boş → KOD İÇİ KISALTMA.
-        // Gemini'ye tekrar sorulmaz.
         const hamKelime = ham ? ham.split(/\s+/).filter(Boolean).length : 0;
-        const kilitli = ham ? soruyaKilitliMi(ham) : false;
 
-        // Soruya kilitliyse KONUDAN türet (baslik'tan DEĞİL — o da soruya kilitli olabilir)
-        if (kilitli) {
-          const konudan = anlamliKisalt(konu);
-          console.warn(
-            `⚠ ekran_basligi TEK SORUYA kilitlenmiş ("${ham}" içindeki bir kelime soruların şıkkı) → ` +
-            `KONUDAN yeniden türetildi: "${konudan}"`
-          );
-          eb = konudan || eb;
-        } else if (!ham || ham.length > EKRAN_BASLIGI_MAX || hamKelime > EKRAN_BASLIGI_MAX_KELIME) {
-          // Kural dışı: önce başlığın kendisini kısalt, çıkan sonuç soruya kilitliyse konuya düş
-          const adaylar = [ham, json.baslik, json.video_baslik, json.intro_title, konu].filter(Boolean);
-          let yedek = "";
-          for (const aday of adaylar) {
-            const k = anlamliKisalt(aday);
-            if (k && !soruyaKilitliMi(k)) { yedek = k; break; }
+        // KIRPMA YASAK. Kural dışıysa başlığı KESMİYORUZ — KONUDAN yeni ve kısa
+        // bir başlık TÜRETİYORUZ. "WHICH COUNTRY INVENTED" gibi yarım cümle
+        // ASLA ekrana çıkmaz.
+        const redSebepleri = [];
+        if (!ham) redSebepleri.push("BOŞ geldi");
+        if (ham && ham.length > EKRAN_BASLIGI_MAX) redSebepleri.push(`${ham.length} karakter > ${EKRAN_BASLIGI_MAX}`);
+        if (ham && hamKelime > EKRAN_BASLIGI_MAX_KELIME) redSebepleri.push(`${hamKelime} kelime > ${EKRAN_BASLIGI_MAX_KELIME}`);
+        if (ham && SORU_KELIMELERI.test(ham)) redSebepleri.push("soru kelimesiyle başlıyor");
+        if (ham && /\?/.test(ham)) redSebepleri.push("soru işareti içeriyor");
+        if (ham && soruyaKilitliMi(ham)) redSebepleri.push("sorularda geçen spesifik bir terim içeriyor");
+
+        let eb;
+        if (redSebepleri.length === 0) {
+          eb = ham;
+        } else {
+          // KONUDAN türet (baslik/video_baslik'tan DEĞİL — onlar da soruya kilitli olabilir)
+          eb = anlamliKisalt(konu);
+          if (!eb || soruyaKilitliMi(eb)) {
+            // Konu da yetmediyse: konudaki soru-dışı en anlamlı kelimeleri al
+            const adaylar = [json.intro_title, json.baslik, json.video_baslik].filter(Boolean);
+            for (const aday of adaylar) {
+              const k = anlamliKisalt(aday);
+              if (k && !soruyaKilitliMi(k) && !SORU_KELIMELERI.test(k)) { eb = k; break; }
+            }
           }
-          if (!yedek) yedek = anlamliKisalt(konu);
           console.warn(
-            `⚠ ekran_basligi ${!ham ? "BOŞ geldi" : `kural dışı (${ham.length} karakter, ${hamKelime} kelime)`} → ` +
-            `kod içi kısaltma: "${ham || konu}" → "${yedek}"`
+            `⚠ ekran_basligi REDDEDİLDİ (${redSebepleri.join(", ")}): "${ham || "(boş)"}" → ` +
+            `KIRPILMADI, KONUDAN yeniden türetildi: "${eb}"`
           );
-          eb = yedek || eb;
         }
-        // Kısaltma sonrası yarım cümle kalmasın: son kelime dolgu ise at
+
+        // Emniyet: yarım cümle kalmasın (sondaki bağlaç/dolgu at)
         if (eb) eb = anlamliKisalt(eb) || eb;
         if (!eb) eb = anlamliKisalt(konu);
         if (!eb) eb = kelimeSinirindaKisalt(konu, EKRAN_BASLIGI_MAX, 3);
 
         json.ekran_basligi = eb;
         console.log(`🏷 Ekran başlığı (videoda görünecek): "${json.ekran_basligi}" (${json.ekran_basligi.length} karakter)`);
-      }
 
-      // ─── JESS GİRİŞ / KAPANIŞ METİNLERİ ───────────────────────────────────
-      // Jess bu metinleri sesli okuyor. Kullanıcının konu talimatını GERİ OKUMASI
-      // yasak — eskiden 03-seslendirme metni koddan `Today's topic: ${konu}` diye
-      // üretiyordu ve Jess uzun talimatı baştan sona okuyordu.
-      {
-        const MAX_KELIME_SELAMLAMA = 15;  // SEGMENT 1
-        const MAX_KELIME_DUYURU = 30;     // SEGMENT 2 ve kapanış
+      // ─── JESS KONU DUYURUSU / KAPANIŞ METİNLERİ ───────────────────────────
+      // NOT: Bu blok yukarıdaki ekran-başlığı bloğuyla AYNI kapsamda tutuluyor —
+      // soruyaKilitliMi / BAS_DOLGU / SON_DOLGU / anlamliKisalt burada da kullanılıyor.
+      // Ayrı bloğa alınırsa ReferenceError olur.
+        const MAX_KELIME_DUYURU = 40;     // kapanış için üst sınır
         const kelimeSay = (t) => String(t || "").trim().split(/\s+/).filter(Boolean).length;
 
         // Konu metninden 10+ kelimelik bir bloğu birebir içeriyor mu?
@@ -840,7 +853,8 @@ TOPIC EMOJIS (for intro screen emoji band)
         // ham konu paragrafı ASLA kullanılmaz.
         const konuOzeti = String(json.ekran_basligi || "").trim().toLowerCase() || "this quiz";
         const GUVENLI_INTRO = "Hi friends! I am Jess the Fox! Are you ready to play?";
-        const GUVENLI_DUYURU = `In this video we are exploring ${konuOzeti}! Can you guess them all? This is going to be so much fun!`;
+        // 25-35 kelime: başlığı TEKRAR ETMEZ, açar ve ne yapacağımızı anlatır
+        const GUVENLI_DUYURU = `Today we are exploring ${konuOzeti}! I will show you something, and you try to guess the answer before the timer runs out. Let us see how many you get right!`;
         const GUVENLI_OUTRO = "That was so much fun! Do not forget to subscribe and join me for more quizzes! See you next time!";
 
         const dogrula = (alan, guvenli, maxKelime) => {
@@ -869,24 +883,58 @@ TOPIC EMOJIS (for intro screen emoji band)
           delete json.intro_audio_text;
         }
 
-        // SEGMENT 2: konu duyurusu — max 30 kelime, SELAMLAMA YASAK.
-        // Gemini yine de selamlarsa önce TEMİZLENİR, temizlenemezse varsayılana düşülür.
+        // SEGMENT 2: konu duyurusu — BAŞLIKTAN DAHA DETAYLI, 20-40 kelime,
+        // SELAMLAMA YASAK, spesifik soru terimi YASAK, başlıkla TUTARLI olmalı.
         {
+          const DUYURU_MIN = 20;   // altı = başlık tekrarı
+          const DUYURU_MAX = 40;   // üstü = çok uzun (hedef 25-35)
           const ham = String(json.konu_duyuru_audio_text || "").replace(/\s+/g, " ").trim();
-          let duyuru = dogrula("konu_duyuru_audio_text", GUVENLI_DUYURU, MAX_KELIME_DUYURU);
-          if (selamlamaVarMi(duyuru)) {
-            const temiz = selamlamaTemizle(duyuru);
-            if (temiz && !selamlamaVarMi(temiz) && kelimeSay(temiz) >= 5) {
-              console.warn(`⚠ konu_duyuru_audio_text SELAMLAMA içeriyordu (Jess ikinci kez selamlıyordu) → temizlendi.\n   Önce: "${duyuru}"\n   Sonra: "${temiz}"`);
-              duyuru = temiz;
-            } else {
-              console.warn(`⚠ konu_duyuru_audio_text SELAMLAMA içeriyordu ve temizlenemedi → güvenli varsayılana düşüldü. Reddedilen: "${duyuru}"`);
-              duyuru = GUVENLI_DUYURU;
+          let duyuru = ham;
+          const redler = [];
+
+          if (!duyuru) {
+            redler.push("BOŞ geldi");
+          } else {
+            // 1) Selamlama → önce cümle bazında temizle
+            if (selamlamaVarMi(duyuru)) {
+              const temiz = selamlamaTemizle(duyuru);
+              if (temiz && !selamlamaVarMi(temiz) && kelimeSay(temiz) >= DUYURU_MIN) {
+                console.warn(`⚠ konu_duyuru_audio_text SELAMLAMA içeriyordu → temizlendi.\n   Önce: "${duyuru}"\n   Sonra: "${temiz}"`);
+                duyuru = temiz;
+              } else {
+                redler.push("selamlama içeriyor, temizlenince çok kısa kaldı");
+              }
+            }
+            // 2) Konu talimatını geri okuyor mu
+            if (konuKopyasiMi(duyuru)) redler.push("konu metnini birebir geri okuyor");
+            // 3) Uzunluk
+            const kd = kelimeSay(duyuru);
+            if (kd < DUYURU_MIN) redler.push(`${kd} kelime < ${DUYURU_MIN} (başlık tekrarı)`);
+            if (kd > DUYURU_MAX) redler.push(`${kd} kelime > ${DUYURU_MAX}`);
+            // 4) Spesifik soru terimi
+            if (soruyaKilitliMi(duyuru)) redler.push("sorularda geçen spesifik bir terim içeriyor");
+          }
+
+          if (redler.length) {
+            console.warn(`⚠ konu_duyuru_audio_text REDDEDİLDİ (${redler.join(", ")}) → güvenli varsayılana düşüldü.` +
+              (ham ? `\n   Reddedilen: "${ham}"` : ""));
+            duyuru = GUVENLI_DUYURU;
+          }
+
+          // 5) TUTARLILIK: başlığın ana kelimesi duyuruda geçmeli
+          {
+            const basAna = String(json.ekran_basligi || "")
+              .toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/)
+              .filter(k => k.length >= 4 && !BAS_DOLGU.has(k) && !SON_DOLGU.has(k));
+            const duyuruNorm = duyuru.toLowerCase();
+            if (basAna.length && !basAna.some(k => duyuruNorm.includes(k))) {
+              console.warn(
+                `⚠ TUTARSIZLIK: ekran_basligi "${json.ekran_basligi}" ana kelimeleri (${basAna.join(", ")}) ` +
+                `konu duyurusunda GEÇMİYOR → ikisi farklı konuyu anlatıyor olabilir.\n   Duyuru: "${duyuru}"`
+              );
             }
           }
-          if (!ham && duyuru === GUVENLI_DUYURU) {
-            console.log("   (konu_duyuru_audio_text Gemini'den gelmedi, güvenli varsayılan kullanıldı)");
-          }
+
           json.konu_duyuru_audio_text = duyuru;
         }
 
