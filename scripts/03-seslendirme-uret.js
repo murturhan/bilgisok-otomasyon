@@ -1,4 +1,4 @@
-// REV 009/15SEP26 - BESINCI SEGMENT: intro-announce.mp3 (Jess selamlama) eklendi; baslik ekrani konu_duyuru_audio_text ten; formul 2N+3
+// REV 010/16SEP26 - SEGMENT 1 SABIT: metin shared/jess-intro.js ten, ses Drive da kalici (TTS bir kez), ekran ile ses ayni
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -31,9 +31,54 @@ import {
   getOAuthClient,
 } from "./lib/google.js";
 import { telegram } from "./lib/telegram.js";
+// TEK KAYNAK: giriş metni Remotion bileşeniyle AYNI dosyadan okunur
+import { jessIntroMetni, jessIntroSesDosyaAdi, jessIntroDil } from "../shared/jess-intro.js";
 
 const execAsync = promisify(exec);
-const { JOB_ID } = process.env;
+const { JOB_ID, GDRIVE_JESS_FOLDER_ID } = process.env;
+
+/**
+ * Kalıcı Jess giriş sesini Drive'da ara, varsa indir.
+ * Neden Drive (repo değil): GitHub Actions binary'yi repoya geri commit edemiyor,
+ * Jess intro/outro VİDEOLARI da zaten aynı klasörde yaşıyor (aynı yaşam döngüsü),
+ * ve repo şişmiyor. Klasör: GDRIVE_JESS_FOLDER_ID
+ * @returns {Promise<string|null>} indirilen dosyanın yolu, yoksa null
+ */
+async function kaliciJessSesiIndir(dosyaAdi, hedefYol, auth) {
+  if (!GDRIVE_JESS_FOLDER_ID) {
+    console.warn(`  ⚠ GDRIVE_JESS_FOLDER_ID yok → kalıcı giriş sesi kullanılamıyor, TTS'e düşülecek`);
+    return null;
+  }
+  const drive = google.drive({ version: "v3", auth });
+  const res = await drive.files.list({
+    q: `'${GDRIVE_JESS_FOLDER_ID}' in parents and name='${dosyaAdi}' and trashed=false`,
+    fields: "files(id, name)",
+    pageSize: 1,
+  });
+  if (!res.data.files?.length) return null;
+  const stream = await drive.files.get({ fileId: res.data.files[0].id, alt: "media" }, { responseType: "stream" });
+  await new Promise((resolve, reject) => {
+    const ws = fs.createWriteStream(hedefYol);
+    stream.data.on("end", resolve).on("error", reject).pipe(ws);
+  });
+  return hedefYol;
+}
+
+/** Üretilen kalıcı giriş sesini Drive'a BİR KEZ yükle. */
+async function kaliciJessSesiYukle(dosyaAdi, kaynakYol) {
+  if (!GDRIVE_JESS_FOLDER_ID) {
+    console.warn(`  ⚠ GDRIVE_JESS_FOLDER_ID yok → ${dosyaAdi} kalıcı kaydedilemedi (her job'da yeniden üretilir)`);
+    return false;
+  }
+  try {
+    await driveDosyaYukle({ filename: dosyaAdi, filepath: kaynakYol }, GDRIVE_JESS_FOLDER_ID, "audio/mpeg");
+    console.log(`  💾 ${dosyaAdi} Drive'a kalıcı kaydedildi — sonraki job'larda TTS ÇAĞRISI YAPILMAYACAK`);
+    return true;
+  } catch (e) {
+    console.warn(`  ⚠ ${dosyaAdi} Drive'a kaydedilemedi: ${e.message}`);
+    return false;
+  }
+}
 
 // ⚠️ DEĞİŞTİ: Kore → Leda (daha yumuşak, sempatik kadın sesi)
 const VOICE_NAME = "en-US-Chirp3-HD-Leda";
@@ -295,13 +340,17 @@ async function main() {
       }
     }
 
-    // SEGMENT 1 metni: Jess selamlaması (intro sahnesinde çalar)
-    const introAnnounceText = jessMetniSec("intro_audio_text", VARSAYILAN_SELAMLAMA);
+    // SEGMENT 1 — SABİT. questions.json'dan OKUNMAZ, Gemini üretmez, onay sayfasından
+    // değiştirilemez. Metin shared/jess-intro.js'ten gelir (Remotion ekran yazısı da
+    // aynı dosyadan okur → EKRAN ile SES birebir aynı).
+    const jessDil = jessIntroDil(questionsData.dil || questionsData.language || "en");
+    const introAnnounceText = jessIntroMetni(format, jessDil);
+    const kaliciIntroDosya = jessIntroSesDosyaAdi(format, jessDil);
 
     const outroAnnounceText = jessMetniSec("outro_audio_text", VARSAYILAN_OUTRO);
 
     console.log("🎙 SES SEGMENT DAĞILIMI (formül: soru × 2 + 3):");
-    console.log(`   SEGMENT 1 (intro sahnesi)  → intro-announce.mp3 : "${introAnnounceText}"`);
+    console.log(`   SEGMENT 1 (intro sahnesi)  → intro-announce.mp3 [SABİT, kalıcı: ${kaliciIntroDosya}] : "${introAnnounceText}"`);
     console.log(`   SEGMENT 2 (başlık ekranı)  → topic-announce.mp3 : "${topicAnnounceText}"`);
     console.log(`   SEGMENT 3 (outro sahnesi)  → outro-announce.mp3 : "${outroAnnounceText}"`);
     console.log(`   + ${soruSayisi} soru × 2 (question + answer) = ${soruSayisi * 2}`);
@@ -323,6 +372,8 @@ async function main() {
       filename: "intro-announce.mp3",
       text: introAnnounceText,
       type: "announce",
+      sabit: true,                    // TTS her job'da ÇAĞRILMAZ
+      kaliciDosya: kaliciIntroDosya,  // Drive'da tutulan kalıcı mp3 adı
     });
     segmentTasks.push({
       key: "topic-announce",
@@ -387,7 +438,31 @@ async function main() {
       const task = segmentTasks[i];
       console.log(`Parça ${i+1}/${segmentTasks.length}: ${task.filename}`);
       
-      const sonuc = await sesParcasiUret(task.text, task.filename, accessToken, tmpDir);
+      let sonuc = null;
+
+      // SABİT SEGMENT (Jess girişi): kalıcı dosya varsa TTS ÇAĞRISI YAPILMAZ
+      if (task.sabit && task.kaliciDosya) {
+        const hedef = path.join(tmpDir, task.filename);
+        try {
+          const indirilen = await kaliciJessSesiIndir(task.kaliciDosya, hedef, oauthAuth);
+          if (indirilen) {
+            const sure = await mp3Suresi(hedef);
+            const st = fs.statSync(hedef);
+            console.log(`  ♻ ${task.kaliciDosya} Drive'dan alindi (TTS cagrisi YAPILMADI): ${sure.toFixed(2)}s, ${(st.size / 1024).toFixed(0)}KB`);
+            sonuc = { filename: task.filename, filepath: hedef, duration: sure, text: task.text, size: st.size };
+          }
+        } catch (e) {
+          console.warn(`  ⚠ Kalici giris sesi alinamadi (${e.message}) -> bir kez uretilecek`);
+        }
+        if (!sonuc) {
+          console.log(`  🆕 ${task.kaliciDosya} Drive'da YOK -> BIR KEZ uretiliyor...`);
+          sonuc = await sesParcasiUret(task.text, task.filename, accessToken, tmpDir);
+          if (sonuc) await kaliciJessSesiYukle(task.kaliciDosya, sonuc.filepath);
+        }
+      } else {
+        sonuc = await sesParcasiUret(task.text, task.filename, accessToken, tmpDir);
+      }
+
       if (sonuc) {
         segments.push({
           key: task.key,

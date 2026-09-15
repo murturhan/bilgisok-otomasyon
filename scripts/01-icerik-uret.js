@@ -1,4 +1,4 @@
-// REV 030/15SEP26 - ekran_basligi KOD ICI anlamli kisaltma (soru kelimeleri + dolgu fiil atilir); yedek Jess metinleri asla bos kalmiyor
+// REV 031/16SEP26 - SEGMENT 1 Geminiden CIKARILDI (sabit); ekran_basligi sadece KONUDAN turer, soruya kilitliyse yeniden uretilir
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -82,7 +82,6 @@ OUTPUT (valid JSON, no markdown):
   "format": "${FORMAT}",
   "intro_title": "**Would** You Rather?",
   "ekran_basligi": "Would You Rather",
-  "intro_audio_text": "Hi friends! I am Jess the Fox! Are you ready to play?",
   "konu_duyuru_audio_text": "In this video we are playing Would You Rather! Can you pick the best one? This is going to be so much fun!",
   "outro_audio_text": "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!",
   "topic_emojis": ["🤔","🎁","✨","🎯","🎉"],
@@ -322,7 +321,6 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "intro_title": "Topic as intro big title — wrap the most important 1-2 words with **double stars** (e.g. '**Wild** Animals' or 'Amazing **Oceans**')",
   "format": "${FORMAT}",
   "ekran_basligi": "WORLD FAMOUS FOODS",
-  "intro_audio_text": "Hi friends! I am Jess the Fox! Are you ready to play?",
   "konu_duyuru_audio_text": "In this video we are tasting famous foods from around the world! Can you guess where each one comes from? This is going to be so much fun!",
   "outro_audio_text": "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!",
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
@@ -419,28 +417,24 @@ CRITICAL:
   * topic "planets of the solar system for kids"  -> ekran_basligi: "PLANETS"
   * topic "wild animals of africa"                -> ekran_basligi: "WILD ANIMALS"
   * topic "ocean creatures deep sea quiz"         -> ekran_basligi: "DEEP SEA ANIMALS"
-  * NEVER write a QUESTION. No "?" ever. "Where Did Famous Foods Originate?" is FORBIDDEN.
+  * DERIVE IT FROM THE TOPIC ONLY. Do NOT look at the questions.
+  * NEVER name a specific thing that appears in a question (no "Pizza", "Lion", "Mars", "Eiffel Tower").
+    The title describes the WHOLE quiz, not one question.
+  * NEVER write a QUESTION. No "?" ever. "Which Country Invented Pizza?" is FORBIDDEN.
   * NEVER copy the first sentence of baslik / video_baslik.
   * Write ONLY the 2-3 word ESSENCE, like a poster headline:
-      "FAMOUS FOODS", "WILD ANIMALS", "SPACE FACTS", "DEEP SEA ANIMALS"
+      "FAMOUS WORLD FOODS", "WILD ANIMALS", "SPACE FACTS", "DEEP SEA ANIMALS"
   FORBIDDEN OUTPUT (these are the exact mistakes to avoid):
   * "World famous foods and which country they come from. Each question..."  (topic paragraph copied)
   * "Where Do Famous Foods Come From? Fun World Food Quiz!"                  (that is the YouTube title)
-  * "Where Did Famous Foods Originate?"                                      (question sentence — write "FAMOUS FOODS" instead)
+  * "Where Did Famous Foods Originate?"                                      (question sentence — write "FAMOUS WORLD FOODS" instead)
+  * "Which Country Invented Pizza?"                                          (one question only + specific name — write "FAMOUS WORLD FOODS")
   * "Fun Food Quiz for Kids"                                                 (filler words, no subject)
   * "WORLD FAMOUS FOODS!"                                                    (punctuation not allowed)
-### TWO SEPARATE SPOKEN SEGMENTS — DO NOT MERGE THEM, DO NOT REPEAT INFORMATION
-The video greets the viewer ONCE (segment 1) and announces the subject ONCE (segment 2).
-If segment 2 greets again, the viewer hears the same thing twice. That is a BUG.
-
-- **intro_audio_text — SEGMENT 1: JESS GREETS THE VIEWER.** Plays over the intro.
-  * Greeting + her name + excitement. NOTHING ELSE.
-  * MUST NOT mention the subject/topic AT ALL.
-  * MAX 15 WORDS. Hard limit.
-  * NEVER repeat, quote or paraphrase the topic instruction "${konu}".
-  * NEVER list the examples mentioned in the topic (no "pizza, sushi, tacos, ...").
-  RIGHT: "Hi friends! I am Jess the Fox! Are you ready to play?"
-  WRONG: "Hi friends! I am Jess the Fox! Today we are tasting foods from around the world!" (mentions the subject — that belongs to segment 2)
+### SPOKEN SEGMENTS
+The intro greeting is FIXED by the system — you do NOT write it and it is NOT part of this JSON.
+Your job is only the SUBJECT ANNOUNCEMENT (segment 2) and the CLOSING (segment 3).
+The viewer is ALREADY greeted before segment 2 plays, so segment 2 must NOT greet again.
 
 - **konu_duyuru_audio_text — SEGMENT 2: THE SUBJECT ANNOUNCEMENT.** Plays on the TITLE SCREEN.
   * Announces the subject and builds excitement.
@@ -691,9 +685,13 @@ TOPIC EMOJIS (for intro screen emoji band)
           "this","that","these","those","it","its","lets","let",
         ]);
         const SON_DOLGU = new Set([
-          "originate","originated","originates","come","comes","came","quiz","quizzes",
-          "test","tests","facts","fact","kids","kid","fun","video","videos","guess",
-          "know","name","names","from","edition","challenge","game","games","trivia","for",
+          // fiil / dolgu
+          "originate","originated","originates","invented","invent","invents","come","comes","came",
+          "quiz","quizzes","test","tests","facts","fact","kids","kid","fun","video","videos",
+          "guess","know","name","names","edition","challenge","game","games","trivia","shows","asks",
+          // bağlaç / edat — sonda kalırsa cümle YARIM görünür ("WORLD FAMOUS FOODS AND")
+          "and","or","with","but","from","for","of","in","on","at","to","by","about",
+          "which","that","they","their","them","each","its","the","a","an",
         ]);
         const anlamliKisalt = (t) => {
           // 1) SADECE İLK CÜMLE (YouTube başlıkları "Soru? Fun Quiz for Kids!" şeklinde)
@@ -710,22 +708,61 @@ TOPIC EMOJIS (for intro screen emoji band)
           return kelimeSinirindaKisalt(kelimeler.join(" "), EKRAN_BASLIGI_MAX, EKRAN_BASLIGI_MAX_KELIME);
         };
 
+        // Başlık TEK SORUYA kilitlenmiş mi? Sorularda geçen özel isimleri topla.
+        // "Which Country Invented Pizza?" → "pizza" soruların şıkkı → başlık testin
+        // GENELİNİ anlatmıyor demektir, KONUDAN yeniden türetilir.
+        const soruKelimeleri = new Set();
+        for (const q of (json.questions || [])) {
+          const parcalar = [
+            ...(q.options || []),
+            q.correct_answer !== undefined ? (q.options || [])[q.correct_answer] : null,
+            q.visible_option?.label,
+            q.surprise_option?.surprise_outcome,
+          ];
+          for (const parca of parcalar) {
+            for (const k of String(parca || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/)) {
+              if (k.length >= 4) soruKelimeleri.add(k);
+            }
+          }
+        }
+        const soruyaKilitliMi = (t) =>
+          String(t || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/)
+            .some(k => k.length >= 4 && soruKelimeleri.has(k));
+
         const ham = String(json.ekran_basligi || "").trim();
         let eb = kelimeSinirindaKisalt(ham, EKRAN_BASLIGI_MAX, EKRAN_BASLIGI_MAX_KELIME);
 
         // 25 karakteri aşıyor VEYA 4 kelimeyi geçiyor VEYA boş → KOD İÇİ KISALTMA.
         // Gemini'ye tekrar sorulmaz.
         const hamKelime = ham ? ham.split(/\s+/).filter(Boolean).length : 0;
-        if (!ham || ham.length > EKRAN_BASLIGI_MAX || hamKelime > EKRAN_BASLIGI_MAX_KELIME) {
-          const kaynak = ham || json.baslik || json.video_baslik || json.intro_title || konu;
-          const yedek = anlamliKisalt(kaynak);
+        const kilitli = ham ? soruyaKilitliMi(ham) : false;
+
+        // Soruya kilitliyse KONUDAN türet (baslik'tan DEĞİL — o da soruya kilitli olabilir)
+        if (kilitli) {
+          const konudan = anlamliKisalt(konu);
+          console.warn(
+            `⚠ ekran_basligi TEK SORUYA kilitlenmiş ("${ham}" içindeki bir kelime soruların şıkkı) → ` +
+            `KONUDAN yeniden türetildi: "${konudan}"`
+          );
+          eb = konudan || eb;
+        } else if (!ham || ham.length > EKRAN_BASLIGI_MAX || hamKelime > EKRAN_BASLIGI_MAX_KELIME) {
+          // Kural dışı: önce başlığın kendisini kısalt, çıkan sonuç soruya kilitliyse konuya düş
+          const adaylar = [ham, json.baslik, json.video_baslik, json.intro_title, konu].filter(Boolean);
+          let yedek = "";
+          for (const aday of adaylar) {
+            const k = anlamliKisalt(aday);
+            if (k && !soruyaKilitliMi(k)) { yedek = k; break; }
+          }
+          if (!yedek) yedek = anlamliKisalt(konu);
           console.warn(
             `⚠ ekran_basligi ${!ham ? "BOŞ geldi" : `kural dışı (${ham.length} karakter, ${hamKelime} kelime)`} → ` +
-            `kod içi kısaltma: "${ham || kaynak}" → "${yedek}"`
+            `kod içi kısaltma: "${ham || konu}" → "${yedek}"`
           );
           eb = yedek || eb;
         }
-        if (!eb) eb = anlamliKisalt(json.baslik || konu);
+        // Kısaltma sonrası yarım cümle kalmasın: son kelime dolgu ise at
+        if (eb) eb = anlamliKisalt(eb) || eb;
+        if (!eb) eb = anlamliKisalt(konu);
         if (!eb) eb = kelimeSinirindaKisalt(konu, EKRAN_BASLIGI_MAX, 3);
 
         json.ekran_basligi = eb;
@@ -824,22 +861,12 @@ TOPIC EMOJIS (for intro screen emoji band)
           return metin;
         };
 
-        // SEGMENT 1: Jess selamlaması — max 15 kelime, konudan bahsetmez,
-        // kendini SADECE BİR KEZ tanıtır (ikinci "Jess" cümlesi atılır).
-        {
-          let selam = dogrula("intro_audio_text", GUVENLI_INTRO, MAX_KELIME_SELAMLAMA);
-          const jessAdedi = (selam.match(/\bjess\b/gi) || []).length;
-          if (jessAdedi > 1) {
-            const temiz = ikinciJessiAt(selam);
-            if (temiz && kelimeSay(temiz) >= 3) {
-              console.warn(`⚠ intro_audio_text içinde "Jess" ${jessAdedi} kez geçiyordu (ikinci tanıtım) → fazlası atıldı.\n   Önce: "${selam}"\n   Sonra: "${temiz}"`);
-              selam = temiz;
-            } else {
-              console.warn(`⚠ intro_audio_text içinde "Jess" ${jessAdedi} kez geçiyordu, temizlenemedi → güvenli varsayılana düşüldü.`);
-              selam = GUVENLI_INTRO;
-            }
-          }
-          json.intro_audio_text = selam;
+        // SEGMENT 1 (Jess selamlaması) ARTIK GEMINI'DEN GELMİYOR.
+        // Sabit metin shared/jess-intro.js'te; Remotion ekran yazısı ve 03-seslendirme
+        // oradan okur. Gemini yanlışlıkla üretirse SİLİNİR ki questions.json'a sızmasın.
+        if (json.intro_audio_text !== undefined) {
+          console.log("ℹ intro_audio_text Gemini'den geldi ama SABİT alan → yok sayıldı/silindi (kaynak: shared/jess-intro.js)");
+          delete json.intro_audio_text;
         }
 
         // SEGMENT 2: konu duyurusu — max 30 kelime, SELAMLAMA YASAK.
@@ -857,8 +884,7 @@ TOPIC EMOJIS (for intro screen emoji band)
               duyuru = GUVENLI_DUYURU;
             }
           }
-          // Geriye dönük uyum: alan hiç gelmediyse eski intro_audio_text'ten türet
-          if (!ham && json.intro_audio_text && duyuru === GUVENLI_DUYURU) {
+          if (!ham && duyuru === GUVENLI_DUYURU) {
             console.log("   (konu_duyuru_audio_text Gemini'den gelmedi, güvenli varsayılan kullanıldı)");
           }
           json.konu_duyuru_audio_text = duyuru;
@@ -867,7 +893,7 @@ TOPIC EMOJIS (for intro screen emoji band)
         // SEGMENT 3: kapanış
         json.outro_audio_text = dogrula("outro_audio_text", GUVENLI_OUTRO, MAX_KELIME_DUYURU);
 
-        console.log(`🦊 SEGMENT 1 — Jess selamlama (${kelimeSay(json.intro_audio_text)}/${MAX_KELIME_SELAMLAMA} kelime): "${json.intro_audio_text}"`);
+        console.log(`🦊 SEGMENT 1 — Jess selamlama: SABİT (shared/jess-intro.js). Gemini üretmez, questions.json'a yazılmaz.`);
         console.log(`🎬 SEGMENT 2 — Konu duyurusu (${kelimeSay(json.konu_duyuru_audio_text)}/${MAX_KELIME_DUYURU} kelime): "${json.konu_duyuru_audio_text}"`);
         console.log(`🦊 SEGMENT 3 — Jess kapanış (${kelimeSay(json.outro_audio_text)}/${MAX_KELIME_DUYURU} kelime): "${json.outro_audio_text}"`);
       }

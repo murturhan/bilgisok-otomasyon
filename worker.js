@@ -1,4 +1,4 @@
-// REV 077/15SEP26 - ekran basligi worker tarafinda da 25kr/4kelime kurala getiriliyor; konu ozeti ondan turuyor
+// REV 078/16SEP26 - JESS SELAMLAMA salt okunur (sabit metin shared/jess-intro.js ten), kaydetme mantigindan cikarildi
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -40,6 +40,9 @@ function stilOptsServer(selected) {
     `<option value="${s.v}"${sel === s.v ? " selected" : ""}>${s.l}</option>`
   ).join("");
 }
+
+// TEK KAYNAK: Jess giris metni — Remotion ve 03-seslendirme ile AYNI dosya
+import { jessIntroMetni } from "./shared/jess-intro.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -400,12 +403,11 @@ async function handleSubmit(request, env, url, ctx) {
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
   const {
     edits = {}, approval_level = "full", chat_id = "", video_baslik = "",
-    ekran_basligi = "", intro_audio_text = "", konu_duyuru_audio_text = "", outro_audio_text = "",
+    ekran_basligi = "", konu_duyuru_audio_text = "", outro_audio_text = "",
   } = body;
   // Ekran basligi: videoda gorunen KISA baslik. 40 karakterle sinirla, ** isaretlerini at.
   const ekranBasligiTemiz = String(ekran_basligi || "").replace(/[*]{2}/g, "").trim().substring(0, 40);
   // Jess'in sesli okudugu metinler (03-seslendirme bunlari kullanir)
-  const jessIntroTemiz = String(intro_audio_text || "").replace(/\s+/g, " ").trim().substring(0, 600);
   const konuDuyuruTemiz = String(konu_duyuru_audio_text || "").replace(/\s+/g, " ").trim().substring(0, 600);
   const jessOutroTemiz = String(outro_audio_text || "").replace(/\s+/g, " ").trim().substring(0, 600);
   const isSave = approval_level === "save_only";
@@ -415,7 +417,7 @@ async function handleSubmit(request, env, url, ctx) {
     const eskiJob = mevcut.data?.job || {};
     // save_only: metin edit'lerini job.questions + baslik'a uygula ki reload'da gorunsun ve kaybolmasin
     const job = isSave
-      ? { ...eskiJob, baslik: video_baslik || eskiJob.baslik, ekran_basligi: ekranBasligiTemiz || eskiJob.ekran_basligi || "", intro_audio_text: jessIntroTemiz || eskiJob.intro_audio_text || "", konu_duyuru_audio_text: konuDuyuruTemiz || eskiJob.konu_duyuru_audio_text || "", outro_audio_text: jessOutroTemiz || eskiJob.outro_audio_text || "", questions: editTextUygula(eskiJob.questions || [], edits) }
+      ? { ...eskiJob, baslik: video_baslik || eskiJob.baslik, ekran_basligi: ekranBasligiTemiz || eskiJob.ekran_basligi || "", konu_duyuru_audio_text: konuDuyuruTemiz || eskiJob.konu_duyuru_audio_text || "", outro_audio_text: jessOutroTemiz || eskiJob.outro_audio_text || "", questions: editTextUygula(eskiJob.questions || [], edits) }
       : eskiJob;
     const yeni = { job, edits };
     const yazildi = await issueGuncelle(mevcut.number, yeni, env);
@@ -438,7 +440,6 @@ async function handleSubmit(request, env, url, ctx) {
     approval_level,
     video_baslik: String(video_baslik || ""),
     ekran_basligi: ekranBasligiTemiz,
-    intro_audio_text: jessIntroTemiz,
     konu_duyuru_audio_text: konuDuyuruTemiz,
     outro_audio_text: jessOutroTemiz,
   }, env);
@@ -497,11 +498,12 @@ async function handleApprovalPage(request, env, url) {
   // konuya uygun GERÇEK bir metin üretilir (placeholder DEĞİL; kullanıcı okur,
   // beğenirse dokunmaz, beğenmezse üstüne yazar).
   const konuOzeti = (ekranBasligi || ebKisalt(baslik) || "this quiz").trim().toLowerCase() || "this quiz";
-  const VARSAYILAN_SELAMLAMA = "Hi friends! I'm Jess the Fox! Are you ready to play?";
   const VARSAYILAN_DUYURU = `In this video we're exploring ${konuOzeti}! Can you guess them all? This is going to be so much fun!`;
   const VARSAYILAN_KAPANIS = "That was so much fun! Don't forget to subscribe and join me for more quizzes! See you next time!";
 
-  const jessIntro = String(job.intro_audio_text || "").replace(/\s+/g, " ").trim() || VARSAYILAN_SELAMLAMA;
+  // SEGMENT 1 SABİT: questions.json'dan okunmaz, düzenlenemez, kaydedilmez.
+  // Metin shared/jess-intro.js'ten — Remotion ekran yazısı ve 03-seslendirme ile AYNI.
+  const jessIntroSabit = jessIntroMetni(String(format) === "shorts" ? "shorts" : "long", "en");
   const konuDuyuru = String(job.konu_duyuru_audio_text || "").replace(/\s+/g, " ").trim() || VARSAYILAN_DUYURU;
   const jessOutro = String(job.outro_audio_text || "").replace(/\s+/g, " ").trim() || VARSAYILAN_KAPANIS;
   const qCards = questions.map((q, i) =>
@@ -610,10 +612,11 @@ textarea{min-height:56px}
 
   <div style="margin-bottom:10px">
     <div style="display:flex;justify-content:space-between;align-items:baseline">
-      <label for="jess_intro_s2" style="font-size:.74em;color:#9ca3af">JESS SELAMLAMA <span style="opacity:.7">— SEGMENT 1, intro sahnesi. Sadece selamlama + isim, konudan bahsetme.</span></label>
-      <span id="ji_sayac" style="font-size:.72em;color:#9ca3af">0 kelime</span>
+      <label for="jess_intro_s2" style="font-size:.74em;color:#9ca3af">JESS SELAMLAMA <span style="opacity:.7">— SEGMENT 1, intro sahnesi</span></label>
+      <span style="font-size:.72em;color:#fbbf24">🔒 sabit — değiştirilemez</span>
     </div>
-    <textarea id="jess_intro_s2" rows="3" oninput="jiSayac()" style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical">${esc(jessIntro)}</textarea>
+    <textarea id="jess_intro_s2" rows="3" disabled readonly style="width:100%;box-sizing:border-box;margin-top:4px;background:#0b1220;color:#9ca3af;border:1px dashed #4b5563;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical;cursor:not-allowed">${esc(jessIntroSabit)}</textarea>
+    <div style="font-size:.68em;color:#6b7280;margin-top:3px">Her videoda aynı. Değiştirmek için: shared/jess-intro.js</div>
   </div>
 
   <div style="margin-bottom:10px">
@@ -689,10 +692,9 @@ function jessSayacUygula(inputId, sayacId, limit){
   s.style.color = k>limit ? "#f87171" : (k>limit*0.8 ? "#fbbf24" : "#6ee7b7");
   e.style.borderColor = k>limit ? "#dc2626" : "#374151";
 }
-function jiSayac(){jessSayacUygula("jess_intro_s2","ji_sayac",15);}   // SEGMENT 1: 15 kelime
 function kdSayac(){jessSayacUygula("konu_duyuru_s2","kd_sayac",30);}  // SEGMENT 2: 30 kelime
 function joSayac(){jessSayacUygula("jess_outro_s2","jo_sayac",30);}   // SEGMENT 3: 30 kelime
-document.addEventListener("DOMContentLoaded",function(){ebSayac();jiSayac();kdSayac();joSayac();});
+document.addEventListener("DOMContentLoaded",function(){ebSayac();kdSayac();joSayac();});
 function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
 
 // Resim seclince ANINDA Drive'a yukle, state'te sadece URL tut (base64 YOK -> body sismez).
@@ -989,7 +991,7 @@ async function submit_(level, applyEdits){
   const st=document.getElementById("status");
   st.style.display="block";st.className="";
   st.textContent="⏳ "+(msgs[level+"+"+applyEdits]||"Gönderiliyor...");
-  const payload=JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2'),intro_audio_text:val('jess_intro_s2'),konu_duyuru_audio_text:val('konu_duyuru_s2'),outro_audio_text:val('jess_outro_s2')});
+  const payload=JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2'),konu_duyuru_audio_text:val('konu_duyuru_s2'),outro_audio_text:val('jess_outro_s2')});
   // Cok buyuk govde uyarisi (custom gorseller base64 data URL olarak gomulu -> "Failed to fetch" sebebi)
   const mb=payload.length/1048576;
   if(applyEdits) console.log("[submit_] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
@@ -1041,7 +1043,7 @@ async function kaydet(){
   const edits=collectEdits();
   console.log("[KAYDET] toplanan edits:", edits);
   console.log("[KAYDET] customImages:", customImages, "| customVideos:", customVideos, "| selectedSurpriseBoxes:", selectedSurpriseBoxes);
-  const payload=JSON.stringify({edits,approval_level:"save_only",chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2'),intro_audio_text:val('jess_intro_s2'),konu_duyuru_audio_text:val('konu_duyuru_s2'),outro_audio_text:val('jess_outro_s2')});
+  const payload=JSON.stringify({edits,approval_level:"save_only",chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2'),konu_duyuru_audio_text:val('konu_duyuru_s2'),outro_audio_text:val('jess_outro_s2')});
   const mb=payload.length/1048576;
   console.log("[KAYDET] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
   if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB) — custom gorselleri tek tek 'Yukle' butonuyla yukle.";allBtns.forEach(function(b){b.disabled=false;});return;}

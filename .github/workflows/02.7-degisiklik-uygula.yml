@@ -1,4 +1,4 @@
-# REV 005/15SEP26 - JESS_KONU_DUYURU inputu eklendi (segment 2)
+# REV 006/16SEP26 - JESS_INTRO kaldirildi (segment 1 artik sabit)
 name: 02.7 - Değişiklik Uygula
 
 on:
@@ -53,7 +53,6 @@ jobs:
           STAGE1_ACTION: ${{ github.event.client_payload.stage1_action }}
           VIDEO_BASLIK: ${{ github.event.client_payload.video_baslik }}
           EKRAN_BASLIGI: ${{ github.event.client_payload.ekran_basligi }}
-          JESS_INTRO: ${{ github.event.client_payload.intro_audio_text }}
           JESS_KONU_DUYURU: ${{ github.event.client_payload.konu_duyuru_audio_text }}
           JESS_OUTRO: ${{ github.event.client_payload.outro_audio_text }}
         run: node scripts/02.7-degisiklik-uygula.js

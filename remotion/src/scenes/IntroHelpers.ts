@@ -1,7 +1,12 @@
+// REV 001/16SEP26 - giris metni shared/jess-intro.js ten okunuyor (gomulu metin silindi)
 import { BRAND } from "../styles/theme";
 
-export const SHORTS_GREETING_TEXT = "Hey, curious minds! Jess the Fox here… are you ready?";
-export const LONG_GREETING_TEXT = "Hey curious minds! I'm Jess the Fox, and welcome to Geni-Mini Tests! Ready for today's fun challenge?";
+// ─── TEK KAYNAK ──────────────────────────────────────────────────────────
+// Giriş metni artık burada GÖMÜLÜ DEĞİL. shared/jess-intro.js tek kaynak;
+// aynı dosyayı scripts/03-seslendirme-uret.js de okuyor, böylece EKRANDAKİ
+// YAZI ile JESS'İN KONUŞTUĞU metin birebir aynı oluyor.
+// @ts-ignore - shared/ düz ESM JS; tsconfig include'u dışında ama bundler çözer.
+export { LONG_GREETING_TEXT, SHORTS_GREETING_TEXT } from "../../../shared/jess-intro.js";
 
 export function getTopicEmojis(topic: string): string[] {
   const t = topic.toLowerCase();
