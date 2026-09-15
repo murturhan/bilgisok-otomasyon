@@ -1,4 +1,4 @@
-// REV 008/05SEP26 - gorsel-NN.jpg deterministik ad destegi + bos-klasor uyarisi (onay sayfasi bos gorsel bug)
+// REV 009/15SEP26 - video metinleri (ekran_basligi, intro/konu_duyuru/outro_audio_text) payloada eklendi - onay sayfasi alanlari bos geliyordu
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -189,6 +189,14 @@ async function main() {
     const doluSlot = Object.keys(tumGorseller).length;
     const beklenenSlot = questionsData.questions.length * 2;
     console.log(`🖼 Drive eşleşmesi: ${doluSlot}/${beklenenSlot} slot dolu`);
+    const kSay = (t) => String(t || "").trim().split(/\s+/).filter(Boolean).length;
+    console.log(
+      `📝 Video metinleri payload'a ekleniyor: ` +
+      `ekran_basligi=${JSON.stringify(String(questionsData.ekran_basligi || "").substring(0, 40))} ` +
+      `intro=${kSay(questionsData.intro_audio_text)}k ` +
+      `konu_duyuru=${kSay(questionsData.konu_duyuru_audio_text)}k ` +
+      `outro=${kSay(questionsData.outro_audio_text)}k`
+    );
     if (doluSlot === 0) {
       console.error(`⛔ 01-gorseller klasöründe hiç "gorsel-NN" dosyası yok (klasör: ${gorselKlasorId}).`);
       console.error(`   Onay sayfasındaki TÜM görsel slotları "Görsel yok" görünecek — 02-gorsel-uret loglarını kontrol et.`);
@@ -218,6 +226,13 @@ async function main() {
       topic: questionsData.topic || job.konu,
       format: job.video_format || questionsData.format,
       baslik: questionsData.baslik,
+      // VİDEO METİNLERİ — onay sayfasındaki 4 alan bunlardan doluyor.
+      // Bunlar payload'a KONMAZSA worker'da job.* undefined olur ve alanlar
+      // BOŞ render edilir (kullanıcı mevcut metni göremez).
+      ekran_basligi: String(questionsData.ekran_basligi || questionsData.intro_title || "").replace(/[*]{2}/g, "").trim(),
+      intro_audio_text: String(questionsData.intro_audio_text || "").trim(),
+      konu_duyuru_audio_text: String(questionsData.konu_duyuru_audio_text || "").trim(),
+      outro_audio_text: String(questionsData.outro_audio_text || "").trim(),
       topic_emojis: questionsData.topic_emojis || [],
       questions: questionsData.questions.map((q, i) => {
         // Soru i (0-indexed) için:

@@ -1,4 +1,4 @@
-// REV 012/09SEP26 - baslik kirpilmasi giderildi: sert karakter kesimi yok, kademeli font kucultme (40-220), golge payi, overflow kaldirildi
+// REV 013/15SEP26 - muteJessVoice: selamlama TTS ten gelince Jess videosunun kendi sesi kisilir (cift selamlama)
 import React from "react";
 import {
   AbsoluteFill,
@@ -32,6 +32,8 @@ interface Props {
   jessVideoDurationFrames: number;
   sfx_pop_single?: string;
   sfx_pop_double?: string;
+  /** true ise Jess intro videosunun kendi sesi kisilir (selamlama ayri TTS segmentinden geliyor) */
+  muteJessVoice?: boolean;
 }
 
 /**
@@ -46,6 +48,7 @@ export const IntroSceneLong: React.FC<Props> = ({
   jessVideoDurationFrames,
   sfx_pop_single,
   sfx_pop_double,
+  muteJessVoice = false,
 }) => {
   const frame = useCurrentFrame();
   const theme = THEME_COLORS[0];
@@ -80,7 +83,7 @@ export const IntroSceneLong: React.FC<Props> = ({
           transform: `scale(${scene1Scale})`,
           filter: scene1Blur > 0 ? `blur(${scene1Blur}px)` : undefined,
         }}>
-          <Scene1Long sfx_pop_single={sfx_pop_single} />
+          <Scene1Long sfx_pop_single={sfx_pop_single} muteJessVoice={muteJessVoice} />
         </div>
       )}
       
@@ -111,7 +114,7 @@ const WORD_COLORS = ['#f59e0b', '#10b981', '#ec4899', '#3b82f6'];
 const WORD_STAGGER = 9;
 const WORD_START_FRAME = 26;
 
-const Scene1Long: React.FC<{ sfx_pop_single?: string }> = ({ sfx_pop_single }) => {
+const Scene1Long: React.FC<{ sfx_pop_single?: string; muteJessVoice?: boolean }> = ({ sfx_pop_single, muteJessVoice = false }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -176,10 +179,12 @@ const Scene1Long: React.FC<{ sfx_pop_single?: string }> = ({ sfx_pop_single }) =
         position: "absolute", right: "2%", bottom: 0, width: "40%",
         display: "flex", justifyContent: "center",
       }}>
+        {/* muteJessVoice: selamlama ayri TTS segmentinden (intro-announce.mp3) geliyorsa
+            videonun kendi sesi KISILIR — yoksa Jess iki kez selamlamis olur. */}
         <Video
           src={staticFile("jess/intro.webm")}
           style={{ width: 600, height: 600, objectFit: "contain" }}
-          volume={1}
+          volume={muteJessVoice ? 0 : 1}
         />
       </div>
 

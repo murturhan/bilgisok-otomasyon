@@ -1,4 +1,4 @@
-// REV 020/09SEP26 - ekran basligi sert karakter kesimi KALDIRILDI, kelime sinirinda kisaltma (yarim kelime cikmiyor)
+// REV 021/15SEP26 - intro-announce.mp3 intro sahnesine baglandi (jess sesi kisiliyor), baslik ekrani topic-announce, sahne1 selamlama bitene kadar uzatiliyor
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -651,16 +651,31 @@ async function main() {
     }
     
     // Topic + Outro announce ses parçaları (03-seslendirme'den geldi, audio/ altında)
+    // SEGMENT DAĞILIMI (03-seslendirme v9, formül: soru × 2 + 3)
+    //   intro-announce.mp3 → INTRO SAHNESİ  (Jess selamlar)
+    //   topic-announce.mp3 → BAŞLIK EKRANI  (konu duyurusu)
+    //   outro-announce.mp3 → OUTRO SAHNESİ
+    const introAnnounceSeg = segByKey["intro-announce"];   // v9'da eklendi, eski job'larda yok
     const topicAnnounceSeg = segByKey["topic-announce"];
     const outroAnnounceSeg = segByKey["outro-announce"];
     if (!topicAnnounceSeg) throw new Error("topic-announce.mp3 yok! 03-seslendirme v8 çalıştırıldı mı?");
     if (!outroAnnounceSeg) throw new Error("outro-announce.mp3 yok! 03-seslendirme v8 çalıştırıldı mı?");
+    if (!introAnnounceSeg) {
+      console.warn("⚠ intro-announce.mp3 yok (eski job veya 03 v9 öncesi) — intro selamlaması Jess videosunun kendi sesinden gelecek.");
+    }
     
     // Sahne süreleri:
-    // Intro = Jess video + topic announce + 2s buffer (en az 7s)
-    // Outro = Jess outro video + outro announce + 2s buffer (en az 8s)
+    // Intro Sahne 1 = Jess selamlaması (intro-announce) BURADA biter, başlık ekranına TAŞMAZ.
+    //                 Selamlama Jess videosundan uzunsa sahne uzatılır.
+    // Intro Sahne 2 = başlık ekranı (topic-announce) + buffer
+    // Outro         = Jess outro video + outro announce + 2s buffer (en az 8s)
+    const introAnnounceSure = introAnnounceSeg ? introAnnounceSeg.duration : 0;
+    const sahne1Suresi = Math.max(jessSureleri.introDuration, introAnnounceSure + 0.5);
+    if (sahne1Suresi > jessSureleri.introDuration + 0.01) {
+      console.log(`  ⏱ Intro Sahne 1 uzatıldı: Jess videosu ${jessSureleri.introDuration.toFixed(2)}s, selamlama ${introAnnounceSure.toFixed(2)}s → sahne ${sahne1Suresi.toFixed(2)}s (selamlama başlık ekranına taşmasın)`);
+    }
     const introMinDuration = Math.max(
-      jessSureleri.introDuration + topicAnnounceSeg.duration + 2,
+      sahne1Suresi + topicAnnounceSeg.duration + 2,
       7
     );
     const outroMinDuration = Math.max(
@@ -668,6 +683,11 @@ async function main() {
       8
     );
     console.log(`  ⏱ Intro toplam: ${introMinDuration.toFixed(2)}s, Outro toplam: ${outroMinDuration.toFixed(2)}s`);
+    console.log("🎙 SES SEGMENT → SAHNE eşlemesi:");
+    console.log(`   INTRO SAHNESİ  → ${introAnnounceSeg ? introAnnounceSeg.filename + " (" + introAnnounceSeg.duration.toFixed(2) + "s)" : "YOK (Jess videosunun kendi sesi)"}`);
+    console.log(`   BAŞLIK EKRANI  → ${topicAnnounceSeg.filename} (${topicAnnounceSeg.duration.toFixed(2)}s)`);
+    console.log(`   OUTRO SAHNESİ  → ${outroAnnounceSeg.filename} (${outroAnnounceSeg.duration.toFixed(2)}s)`);
+    console.log(`   Toplam segment: ${segmentsManifest.total_segments} (beklenen: ${soruSayisi} × 2 + 3 = ${soruSayisi * 2 + 3})`);
 
     const IS_TEST_MODE = questionsData.is_test_mode === true;
     if (IS_TEST_MODE) console.log("🧪 TEST MODE: intro/outro render edilmeyecek, sadece sorular");
@@ -741,17 +761,19 @@ async function main() {
       questions: questions,
       jess_poses: jessPosesForRemotion,
 
-      // Intro/outro: ayrı mp3 yok, Jess video kendi sesini taşıyor.
-      // Sahne 1 = Jess video süresi, Sahne 2 = kalan zaman (topic announce + buffer)
-      intro_audio_path: null,
+      // SEGMENT 1 — Jess selamlaması, INTRO SAHNESİ (Sahne 1) başında çalar.
+      // Varsa Jess videosunun kendi sesi kısılır (jess_intro_muted), yoksa iki ses üst üste biner.
+      intro_audio_path: introAnnounceSeg ? `audio/${introAnnounceSeg.filename}` : null,
+      jess_intro_muted: !!introAnnounceSeg,
       outro_audio_path: null,
       intro_audio_duration: SKIP_INTRO ? 0 : introMinDuration,
       outro_audio_duration: SKIP_OUTRO ? 0 : outroMinDuration,
       is_test_mode: IS_TEST_MODE,
       skip_outro: SKIP_OUTRO,
 
-      // Jess video gerçek süreleri (composition Sahne 1 / Sahne 2 ayrım noktası için)
-      jess_intro_video_duration: jessSureleri.introDuration,
+      // Sahne 1 / Sahne 2 ayrım noktası. Selamlama Jess videosundan uzunsa
+      // Sahne 1 uzatılır ki selamlama BAŞLIK EKRANINA TAŞMASIN.
+      jess_intro_video_duration: sahne1Suresi,
       jess_outro_video_duration: jessSureleri.outroDuration,
       
       // Topic announcement - Intro Sahne 2'de oynar (03-seslendirme'den)

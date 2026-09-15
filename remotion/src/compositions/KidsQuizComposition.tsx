@@ -1,4 +1,4 @@
-// REV 018/25JUN26 - uploaded_image_url onceligi image_path'in onune gecti
+// REV 019/15SEP26 - muteJessVoice prop IntroScene e gecirildi (intro-announce TTS varken video sesi kisilsin)
 import React from "react";
 import {
   AbsoluteFill,
@@ -35,6 +35,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
   intro_audio_duration,
   outro_audio_duration,
   jess_intro_video_duration,
+  jess_intro_muted,
   jess_outro_video_duration,
   topic_announce_path,
   topic_announce_duration,
@@ -172,6 +173,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
             jessPoses={resolvedJessPoses}
             durationFrames={introFrames}
             jessVideoDurationFrames={Math.ceil(jess_intro_video_duration * FPS)}
+            muteJessVoice={!!jess_intro_muted || !!intro_audio_path}
             sfx_pop_single={sfx_pop_single}
             sfx_pop_double={sfx_pop_double}
           />

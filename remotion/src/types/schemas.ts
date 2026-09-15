@@ -1,4 +1,4 @@
-// REV 005/02JUN26 - video_url alanları eklendi (question/fact/wyr visible+surprise)
+// REV 006/15SEP26 - jess_intro_muted alani (selamlama TTS ten gelince video sesi kisilir)
 import { z } from "zod";
 
 export const questionSchema = z.object({
@@ -104,6 +104,8 @@ export const quizCompositionSchema = z.object({
   
   // Jess video gerçek süresi (Sahne 1 / Sahne 2 ayrım noktası için)
   jess_intro_video_duration: z.number().default(3.0),
+  // true ise Jess intro videosunun kendi sesi kisilir (selamlama TTS ten geliyor)
+  jess_intro_muted: z.boolean().default(false),
   jess_outro_video_duration: z.number().default(2.5),
   
   // Topic announcement - Sahne 2'de oynar
@@ -154,6 +156,7 @@ export const defaultQuizProps: QuizCompositionProps = {
   intro_audio_duration: 7.0,
   outro_audio_duration: 8.0,
   jess_intro_video_duration: 3.0,
+  jess_intro_muted: false,
   jess_outro_video_duration: 2.5,
   topic_announce_duration: 2.5,
   outro_announce_duration: 3.5,

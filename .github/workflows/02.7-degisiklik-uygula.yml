@@ -1,4 +1,4 @@
-# REV 004/09SEP26 - JESS_INTRO / JESS_OUTRO inputlari eklendi
+# REV 005/15SEP26 - JESS_KONU_DUYURU inputu eklendi (segment 2)
 name: 02.7 - Değişiklik Uygula
 
 on:
@@ -54,5 +54,6 @@ jobs:
           VIDEO_BASLIK: ${{ github.event.client_payload.video_baslik }}
           EKRAN_BASLIGI: ${{ github.event.client_payload.ekran_basligi }}
           JESS_INTRO: ${{ github.event.client_payload.intro_audio_text }}
+          JESS_KONU_DUYURU: ${{ github.event.client_payload.konu_duyuru_audio_text }}
           JESS_OUTRO: ${{ github.event.client_payload.outro_audio_text }}
         run: node scripts/02.7-degisiklik-uygula.js

@@ -1,4 +1,4 @@
-// REV 016/09SEP26 - Jess giris-kapanis metni + ekran basligi kaydi, degisiklik tespiti, ses_yeniden_uret isareti, Telegram raporu
+// REV 017/15SEP26 - DORDUNCU alan konu_duyuru_audio_text kaydi + degisiklik tespiti + 4 alanli Telegram raporu
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -46,6 +46,7 @@ const {
   VIDEO_BASLIK,
   EKRAN_BASLIGI,
   JESS_INTRO,
+  JESS_KONU_DUYURU,
   JESS_OUTRO,
 } = process.env;
 
@@ -585,6 +586,7 @@ async function main() {
     // questions.json'a işaret bırakılır, 03-seslendirme bunu okur.
     let ekranBasligiDegisti = false;
     let jessIntroDegisti = false;
+    let konuDuyuruDegisti = false;
     let jessOutroDegisti = false;
 
     if (EKRAN_BASLIGI && EKRAN_BASLIGI.trim()) {
@@ -603,13 +605,15 @@ async function main() {
       console.log(`${etiket} (stage2, ${yeni.split(" ").filter(Boolean).length} kelime): "${yeni.substring(0, 90)}" [${degisti ? "DEĞİŞTİ" : "aynı"}]`);
       return degisti;
     };
-    jessIntroDegisti = jessMetniUygula(JESS_INTRO, "intro_audio_text", "Jess giriş metni");
-    jessOutroDegisti = jessMetniUygula(JESS_OUTRO, "outro_audio_text", "Jess kapanış metni");
+    jessIntroDegisti = jessMetniUygula(JESS_INTRO, "intro_audio_text", "SEGMENT 1 Jess selamlama");
+    konuDuyuruDegisti = jessMetniUygula(JESS_KONU_DUYURU, "konu_duyuru_audio_text", "SEGMENT 2 Konu duyurusu");
+    jessOutroDegisti = jessMetniUygula(JESS_OUTRO, "outro_audio_text", "SEGMENT 3 Jess kapanış");
 
     // 03-seslendirme'nin okuyacağı yeniden-üretim işareti
-    if (jessIntroDegisti || jessOutroDegisti) {
+    if (jessIntroDegisti || konuDuyuruDegisti || jessOutroDegisti) {
       const yenidenUret = [];
-      if (jessIntroDegisti) yenidenUret.push("topic-announce");
+      if (jessIntroDegisti) yenidenUret.push("intro-announce");
+      if (konuDuyuruDegisti) yenidenUret.push("topic-announce");
       if (jessOutroDegisti) yenidenUret.push("outro-announce");
       questionsData.ses_yeniden_uret = yenidenUret;
       console.log(`🔁 Ses yeniden üretilecek segmentler: ${yenidenUret.join(", ")}`);
@@ -688,17 +692,17 @@ async function main() {
       await telegram(
         job.chat_id,
         `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
-Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess intro: ${jessIntroDegisti ? "degisti" : "ayni"} / Jess outro: ${jessOutroDegisti ? "degisti" : "ayni"}\n\nYeni onay sayfasi hazirlaniyor...`
+Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: ${jessIntroDegisti ? "degisti" : "ayni"} / Konu duyurusu: ${konuDuyuruDegisti ? "degisti" : "ayni"} / Jess kapanis: ${jessOutroDegisti ? "degisti" : "ayni"}\n\nYeni onay sayfasi hazirlaniyor...`
       );
       // 02.5'i tetikle (yeni link gönderecek)
       await tetikle("onay_tetikle", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("02.5-onay-tetikle yeniden cagrildi");
-    } else if (APPROVAL === "render_only" && !jessIntroDegisti && !jessOutroDegisti) {
+    } else if (APPROVAL === "render_only" && !jessIntroDegisti && !konuDuyuruDegisti && !jessOutroDegisti) {
       // TTS atla, doğrudan 07-video-montaj
       await telegram(
         job.chat_id,
         `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
-Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess intro: ${jessIntroDegisti ? "degisti" : "ayni"} / Jess outro: ${jessOutroDegisti ? "degisti" : "ayni"}\n\nVideo render basliyor (ses korunuyor)...`
+Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: ${jessIntroDegisti ? "degisti" : "ayni"} / Konu duyurusu: ${konuDuyuruDegisti ? "degisti" : "ayni"} / Jess kapanis: ${jessOutroDegisti ? "degisti" : "ayni"}\n\nVideo render basliyor (ses korunuyor)...`
       );
       await tetikle("video_montaj", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("07-video-montaj tetiklendi");
@@ -714,7 +718,7 @@ Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess intro: ${jessI
       await telegram(
         job.chat_id,
         `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
-Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess intro: ${jessIntroDegisti ? "degisti" : "ayni"} / Jess outro: ${jessOutroDegisti ? "degisti" : "ayni"}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
+Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: ${jessIntroDegisti ? "degisti" : "ayni"} / Konu duyurusu: ${konuDuyuruDegisti ? "degisti" : "ayni"} / Jess kapanis: ${jessOutroDegisti ? "degisti" : "ayni"}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
       );
       await tetikle("seslendirme_uret", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("03-seslendirme tetiklendi");

@@ -1,4 +1,4 @@
-// REV 008/09SEP26 - Jess giris/kapanis metni artik intro_audio_text/outro_audio_text tan geliyor (konu paragrafi okunmuyor)
+// REV 009/15SEP26 - BESINCI SEGMENT: intro-announce.mp3 (Jess selamlama) eklendi; baslik ekrani konu_duyuru_audio_text ten; formul 2N+3
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -226,19 +226,41 @@ async function main() {
     // Artık 01-icerik-uret'in ürettiği (ve onay sayfasından düzenlenebilen)
     // intro_audio_text / outro_audio_text kullanılıyor.
     const kisaBaslik = String(questionsData.ekran_basligi || "").replace(/[*]{2}/g, "").trim();
-    const VARSAYILAN_INTRO = kisaBaslik
-      ? `Hi friends! I am Jess the Fox! Today we are playing ${kisaBaslik}! Are you ready?`
-      : "Hi friends! I am Jess the Fox! Are you ready for today's quiz?";
+
+    // İKİ AYRI SEGMENT — bilgi tekrarı olmasın:
+    //   SEGMENT 1 (intro, Jess selamlar)  → jess/intro.webm videosunun KENDİ sesi (TTS yok)
+    //   SEGMENT 2 (başlık ekranı, konu)   → topic-announce.mp3  ← burada üretiliyor
+    // Bu yüzden topic-announce metni ASLA selamlamamalı; selamlarsa Jess iki kez
+    // "Hi, I'm Jess the Fox" demiş oluyordu.
+    const VARSAYILAN_DUYURU = kisaBaslik
+      ? `In this video we are playing ${kisaBaslik}! Can you get them all right? This is going to be so much fun!`
+      : "In this video we have a fun quiz for you! Can you get them all right?";
+    const VARSAYILAN_SELAMLAMA = "Hi friends! I am Jess the Fox! Are you ready to play?";
     const VARSAYILAN_OUTRO = format === "shorts"
       ? "Don't forget to subscribe! See you next time!"
       : "If you enjoyed this quiz, please subscribe and hit the bell! See you next time, friends!";
+
+    // Selamlama tespiti/temizliği (01 ile aynı kurallar) — eski job'lardan gelen
+    // veya onay sayfasından elle girilen selamlamalı metinler burada da kesilir.
+    const SELAMLAMA_KALIPLARI = [
+      /\bhi\b/i, /\bhello\b/i, /\bhey\b/i, /\bwelcome\b/i,
+      /\bhiya\b/i, /\bgreetings\b/i,
+      /\bjess\b/i, /\bi['’]?m jess\b/i, /\bi am jess\b/i, /\bjess the fox\b/i, /\bjess here\b/i,
+    ];
+    const selamlamaVarMi = (t) => SELAMLAMA_KALIPLARI.some(re => re.test(String(t || "")));
+    const selamlamaTemizle = (t) => {
+      const metin = String(t || "").replace(/\s+/g, " ").trim();
+      if (!metin) return "";
+      const cumleler = metin.match(/[^.!?]+[.!?]*/g) || [metin];
+      return cumleler.map(c => c.trim()).filter(c => c && !selamlamaVarMi(c)).join(" ").replace(/\s+/g, " ").trim();
+    };
 
     // Emniyet: metin çok uzunsa (Jess dakikalarca konuşmasın) varsayılana düş
     const JESS_MAX_KELIME = 50;
     const jessMetniSec = (alan, varsayilan) => {
       const metin = String(questionsData[alan] || "").replace(/\s+/g, " ").trim();
       if (!metin) {
-        console.log(`  ${alan} yok → varsayılan metin kullanılıyor`);
+        if (varsayilan) console.log(`  ${alan} yok → varsayılan metin kullanılıyor`);
         return varsayilan;
       }
       const kelime = metin.split(" ").filter(Boolean).length;
@@ -250,8 +272,40 @@ async function main() {
       return metin;
     };
 
-    const topicAnnounceText = jessMetniSec("intro_audio_text", VARSAYILAN_INTRO);
+    // SEGMENT 2 metni: yeni alan > (geriye uyum) eski intro_audio_text > varsayılan
+    let topicAnnounceText = jessMetniSec("konu_duyuru_audio_text", "");
+    if (!topicAnnounceText) {
+      const eski = jessMetniSec("intro_audio_text", "");
+      if (eski) {
+        console.log("  konu_duyuru_audio_text yok → eski intro_audio_text kullanılıyor (geriye uyum)");
+        topicAnnounceText = eski;
+      }
+    }
+    if (!topicAnnounceText) topicAnnounceText = VARSAYILAN_DUYURU;
+
+    // ÇİFT SELAMLAMA KORUMASI: başlık ekranı metni selamlamamalı
+    if (selamlamaVarMi(topicAnnounceText)) {
+      const temiz = selamlamaTemizle(topicAnnounceText);
+      if (temiz && !selamlamaVarMi(temiz) && temiz.split(/\s+/).filter(Boolean).length >= 5) {
+        console.warn(`  ⚠ Başlık ekranı metni SELAMLAMA içeriyordu (Jess ikinci kez selamlıyordu) → temizlendi.\n     Önce: "${topicAnnounceText}"\n     Sonra: "${temiz}"`);
+        topicAnnounceText = temiz;
+      } else {
+        console.warn(`  ⚠ Başlık ekranı metni SELAMLAMA içeriyordu, temizlenemedi → varsayılana düşüldü. Reddedilen: "${topicAnnounceText}"`);
+        topicAnnounceText = VARSAYILAN_DUYURU;
+      }
+    }
+
+    // SEGMENT 1 metni: Jess selamlaması (intro sahnesinde çalar)
+    const introAnnounceText = jessMetniSec("intro_audio_text", VARSAYILAN_SELAMLAMA);
+
     const outroAnnounceText = jessMetniSec("outro_audio_text", VARSAYILAN_OUTRO);
+
+    console.log("🎙 SES SEGMENT DAĞILIMI (formül: soru × 2 + 3):");
+    console.log(`   SEGMENT 1 (intro sahnesi)  → intro-announce.mp3 : "${introAnnounceText}"`);
+    console.log(`   SEGMENT 2 (başlık ekranı)  → topic-announce.mp3 : "${topicAnnounceText}"`);
+    console.log(`   SEGMENT 3 (outro sahnesi)  → outro-announce.mp3 : "${outroAnnounceText}"`);
+    console.log(`   + ${soruSayisi} soru × 2 (question + answer) = ${soruSayisi * 2}`);
+    console.log(`   TOPLAM beklenen segment: ${soruSayisi * 2 + 3}`);
 
     // 02.7 onay sayfasından gelen metin değişikliğini işaretlemiş olabilir.
     // Bu script zaten HER çalışmada tüm segmentleri baştan üretiyor, yani işaretli
@@ -261,6 +315,15 @@ async function main() {
       console.log("   (03 zaten tüm segmentleri baştan üretiyor — yeni metinler seslendirilecek)");
     }
     
+    // SEGMENT 1 — intro sahnesinde çalar (Jess selamlaması).
+    // Bu segment eskiden ÜRETİLMİYORDU; selamlama jess/intro.webm videosunun
+    // içine gömülüydü ve konu duyurusu da selamlıyordu → Jess iki kez tanıtıyordu.
+    segmentTasks.push({
+      key: "intro-announce",
+      filename: "intro-announce.mp3",
+      text: introAnnounceText,
+      type: "announce",
+    });
     segmentTasks.push({
       key: "topic-announce",
       filename: "topic-announce.mp3",

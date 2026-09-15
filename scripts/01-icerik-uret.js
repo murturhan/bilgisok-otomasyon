@@ -1,4 +1,4 @@
-// REV 028/09SEP26 - ekran_basligi 25kr kelime-sinirinda validation; intro/outro_audio_text alanlari + konu-kopyasi tespiti (Jess talimati okumasin)
+// REV 029/15SEP26 - iki ses segmenti ayrildi: intro_audio_text (selamlama max15, ikinci Jess filtresi) + YENI konu_duyuru_audio_text (max30, yasak kelime filtresi)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -82,7 +82,8 @@ OUTPUT (valid JSON, no markdown):
   "format": "${FORMAT}",
   "intro_title": "**Would** You Rather?",
   "ekran_basligi": "Would You Rather",
-  "intro_audio_text": "Hi friends! I am Jess the Fox! Today we are playing Would You Rather! Can you pick the best one?",
+  "intro_audio_text": "Hi friends! I am Jess the Fox! Are you ready to play?",
+  "konu_duyuru_audio_text": "In this video we are playing Would You Rather! Can you pick the best one? This is going to be so much fun!",
   "outro_audio_text": "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!",
   "topic_emojis": ["🤔","🎁","✨","🎯","🎉"],
   "baslik": "Would You Rather? Kids Edition with Jess the Fox! 🤔",
@@ -321,7 +322,8 @@ JSON OUTPUT (must be valid JSON, no markdown):
   "intro_title": "Topic as intro big title — wrap the most important 1-2 words with **double stars** (e.g. '**Wild** Animals' or 'Amazing **Oceans**')",
   "format": "${FORMAT}",
   "ekran_basligi": "WORLD FAMOUS FOODS",
-  "intro_audio_text": "Hi friends! I am Jess the Fox! Today we are tasting foods from around the world! Can you guess where they come from?",
+  "intro_audio_text": "Hi friends! I am Jess the Fox! Are you ready to play?",
+  "konu_duyuru_audio_text": "In this video we are tasting famous foods from around the world! Can you guess where each one comes from? This is going to be so much fun!",
   "outro_audio_text": "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!",
   "topic_emojis": ["🎯", "📚", "💡", "🔍", "🌟"],
   "video_baslik": "SEO-friendly suggested video title (50-70 chars, question format, kid-friendly)",
@@ -421,21 +423,35 @@ CRITICAL:
   * "World famous foods and which country they come from. Each question..."  (topic paragraph copied)
   * "Where Do Famous Foods Come From? Fun World Food Quiz!"                  (that is the YouTube title)
   * "WORLD FAMOUS FOODS!"                                                    (punctuation not allowed)
-- **intro_audio_text — Jess THE FOX SPEAKS THIS OUT LOUD at the start of the video.**
-  It is a SPOKEN GREETING, not a description and NOT a read-back of the topic.
-  HARD RULES:
-  * NEVER repeat, read out, quote or paraphrase the topic instruction "${konu}". Not one sentence of it.
-  * NEVER list the examples mentioned in the topic (do NOT say "pizza, sushi, tacos, ...").
+### TWO SEPARATE SPOKEN SEGMENTS — DO NOT MERGE THEM, DO NOT REPEAT INFORMATION
+The video greets the viewer ONCE (segment 1) and announces the subject ONCE (segment 2).
+If segment 2 greets again, the viewer hears the same thing twice. That is a BUG.
+
+- **intro_audio_text — SEGMENT 1: JESS GREETS THE VIEWER.** Plays over the intro.
+  * Greeting + her name + excitement. NOTHING ELSE.
+  * MUST NOT mention the subject/topic AT ALL.
+  * MAX 15 WORDS. Hard limit.
+  * NEVER repeat, quote or paraphrase the topic instruction "${konu}".
+  * NEVER list the examples mentioned in the topic (no "pizza, sushi, tacos, ...").
+  RIGHT: "Hi friends! I am Jess the Fox! Are you ready to play?"
+  WRONG: "Hi friends! I am Jess the Fox! Today we are tasting foods from around the world!" (mentions the subject — that belongs to segment 2)
+
+- **konu_duyuru_audio_text — SEGMENT 2: THE SUBJECT ANNOUNCEMENT.** Plays on the TITLE SCREEN.
+  * Announces the subject and builds excitement.
   * MAX 30 WORDS. 2-3 short sentences.
-  * Structure ONLY: greeting + 3-4 word summary of the subject + one line of excitement.
-  * Natural spoken English for kids aged 4-12. No emoji, no markdown, no stage directions.
-  RIGHT: "Hi friends! I am Jess the Fox! Today we are tasting foods from around the world! Can you guess where they come from?"
-  WRONG: reading the topic paragraph sentence by sentence.
-  WRONG: "Today we look at pizza, sushi, tacos, croissants, paella, kebab and more..." (listing examples)
-- **outro_audio_text — Jess speaks this at the END of the video.** Same rules as intro_audio_text:
-  * NEVER repeat the topic instruction, NEVER list examples.
+  * ABSOLUTELY FORBIDDEN WORDS/PHRASES — the viewer was already greeted in segment 1:
+      "hi", "hello", "hey", "welcome", "ready", "I am Jess", "I'm Jess", "Jess the Fox", "Jess here"
+    Do NOT greet. Do NOT say your name. Start straight with the subject.
+  * NEVER repeat, quote or paraphrase the topic instruction "${konu}".
+  * NEVER list the examples mentioned in the topic (no "pizza, sushi, tacos, ...").
+  RIGHT: "In this video we are tasting famous foods from around the world! Can you guess where each one comes from? This is going to be so much fun!"
+  WRONG: "Hi friends! I am Jess the Fox! Today we are tasting foods..." (greets again — FORBIDDEN)
+  WRONG: "Welcome back! Today we look at pizza, sushi, tacos, croissants..." (greets + lists examples)
+
+- **outro_audio_text — Jess speaks this at the END of the video.**
   * MAX 30 WORDS, 2-3 short sentences.
   * Structure ONLY: short congratulation + subscribe call + goodbye.
+  * NEVER repeat the topic instruction, NEVER list examples.
   RIGHT: "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!"
 - **show_image** (boolean, per question): Decide if showing the image during question helps or spoils.
   * TRUE — image is a visual *clue* (blurred during guess, revealed with confetti). Examples: cross-sections, silhouettes, partial views, mood scenes.
@@ -683,7 +699,8 @@ TOPIC EMOJIS (for intro screen emoji band)
       // yasak — eskiden 03-seslendirme metni koddan `Today's topic: ${konu}` diye
       // üretiyordu ve Jess uzun talimatı baştan sona okuyordu.
       {
-        const MAX_KELIME = 50;
+        const MAX_KELIME_SELAMLAMA = 15;  // SEGMENT 1
+        const MAX_KELIME_DUYURU = 30;     // SEGMENT 2 ve kapanış
         const kelimeSay = (t) => String(t || "").trim().split(/\s+/).filter(Boolean).length;
 
         // Konu metninden 10+ kelimelik bir bloğu birebir içeriyor mu?
@@ -698,18 +715,65 @@ TOPIC EMOJIS (for intro screen emoji band)
           return false;
         };
 
-        const GUVENLI_INTRO = `Hi friends! I am Jess the Fox! Today we are playing ${json.ekran_basligi || "a fun quiz"}! Are you ready?`;
+        // SEGMENT 2'de yasak: selamlama kalıpları ve Jess'in kendini tanıtması.
+        // (Jess intro'da zaten selamlıyor — ikinci kez selamlamak çift bilgi demek.)
+        const SELAMLAMA_KALIPLARI = [
+          /\bhi\b/i, /\bhello\b/i, /\bhey\b/i, /\bwelcome\b/i, /\bready\b/i,
+          /\bhiya\b/i, /\bgreetings\b/i, /\bwelcome back\b/i,
+          /\bjess\b/i, /\bi['’]?m jess\b/i, /\bi am jess\b/i, /\bjess the fox\b/i, /\bjess here\b/i,
+        ];
+        const selamlamaVarMi = (t) => SELAMLAMA_KALIPLARI.some(re => re.test(String(t || "")));
+
+        /**
+         * SEGMENT 1 filtresi: Jess kendini SADECE BİR KEZ tanıtsın.
+         * "Jess" ikinci kez geçen cümleleri atar (cümle bazında, kelime kırpmadan).
+         */
+        const ikinciJessiAt = (t) => {
+          const metin = String(t || "").replace(/\s+/g, " ").trim();
+          if (!metin) return "";
+          const cumleler = metin.match(/[^.!?]+[.!?]*/g) || [metin];
+          let jessGorüldü = false;
+          const kalan = [];
+          for (const c of cumleler) {
+            const cum = c.trim();
+            if (!cum) continue;
+            if (/\bjess\b/i.test(cum)) {
+              if (jessGorüldü) continue; // ikinci ve sonraki tanıtımlar ATILIR
+              jessGorüldü = true;
+            }
+            kalan.push(cum);
+          }
+          return kalan.join(" ").replace(/\s+/g, " ").trim();
+        };
+
+        /**
+         * Selamlama içeren cümleleri metinden ATAR (cümle bazında, kelime kırpmadan).
+         * "Hi friends! I am Jess the Fox! In this video we taste foods!" → "In this video we taste foods!"
+         */
+        const selamlamaTemizle = (t) => {
+          const metin = String(t || "").replace(/\s+/g, " ").trim();
+          if (!metin) return "";
+          // Cümlelere böl (noktalama korunur)
+          const cumleler = metin.match(/[^.!?]+[.!?]*/g) || [metin];
+          const kalan = cumleler
+            .map(c => c.trim())
+            .filter(c => c && !selamlamaVarMi(c));
+          return kalan.join(" ").replace(/\s+/g, " ").trim();
+        };
+
+        const GUVENLI_INTRO = "Hi friends! I am Jess the Fox! Are you ready to play?";
+        const GUVENLI_DUYURU = `In this video we are playing ${json.ekran_basligi || "a fun quiz"}! Can you get them all right? This is going to be so much fun!`;
         const GUVENLI_OUTRO = "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!";
 
-        const dogrula = (alan, guvenli) => {
+        const dogrula = (alan, guvenli, maxKelime) => {
           const metin = String(json[alan] || "").replace(/\s+/g, " ").trim();
           if (!metin) {
             console.warn(`⚠ ${alan} boş geldi → güvenli varsayılan metne düşüldü.`);
             return guvenli;
           }
           const kelime = kelimeSay(metin);
-          if (kelime > MAX_KELIME) {
-            console.warn(`⚠ ${alan} ÇOK UZUN (${kelime} kelime > ${MAX_KELIME}) → güvenli varsayılan metne düşüldü. Reddedilen: "${metin.substring(0, 120)}..."`);
+          if (kelime > maxKelime) {
+            console.warn(`⚠ ${alan} ÇOK UZUN (${kelime} kelime > ${maxKelime}) → güvenli varsayılan metne düşüldü. Reddedilen: "${metin.substring(0, 120)}..."`);
             return guvenli;
           }
           if (konuKopyasiMi(metin)) {
@@ -719,10 +783,52 @@ TOPIC EMOJIS (for intro screen emoji band)
           return metin;
         };
 
-        json.intro_audio_text = dogrula("intro_audio_text", GUVENLI_INTRO);
-        json.outro_audio_text = dogrula("outro_audio_text", GUVENLI_OUTRO);
-        console.log(`🦊 Jess giriş (${kelimeSay(json.intro_audio_text)} kelime): "${json.intro_audio_text}"`);
-        console.log(`🦊 Jess kapanış (${kelimeSay(json.outro_audio_text)} kelime): "${json.outro_audio_text}"`);
+        // SEGMENT 1: Jess selamlaması — max 15 kelime, konudan bahsetmez,
+        // kendini SADECE BİR KEZ tanıtır (ikinci "Jess" cümlesi atılır).
+        {
+          let selam = dogrula("intro_audio_text", GUVENLI_INTRO, MAX_KELIME_SELAMLAMA);
+          const jessAdedi = (selam.match(/\bjess\b/gi) || []).length;
+          if (jessAdedi > 1) {
+            const temiz = ikinciJessiAt(selam);
+            if (temiz && kelimeSay(temiz) >= 3) {
+              console.warn(`⚠ intro_audio_text içinde "Jess" ${jessAdedi} kez geçiyordu (ikinci tanıtım) → fazlası atıldı.\n   Önce: "${selam}"\n   Sonra: "${temiz}"`);
+              selam = temiz;
+            } else {
+              console.warn(`⚠ intro_audio_text içinde "Jess" ${jessAdedi} kez geçiyordu, temizlenemedi → güvenli varsayılana düşüldü.`);
+              selam = GUVENLI_INTRO;
+            }
+          }
+          json.intro_audio_text = selam;
+        }
+
+        // SEGMENT 2: konu duyurusu — max 30 kelime, SELAMLAMA YASAK.
+        // Gemini yine de selamlarsa önce TEMİZLENİR, temizlenemezse varsayılana düşülür.
+        {
+          const ham = String(json.konu_duyuru_audio_text || "").replace(/\s+/g, " ").trim();
+          let duyuru = dogrula("konu_duyuru_audio_text", GUVENLI_DUYURU, MAX_KELIME_DUYURU);
+          if (selamlamaVarMi(duyuru)) {
+            const temiz = selamlamaTemizle(duyuru);
+            if (temiz && !selamlamaVarMi(temiz) && kelimeSay(temiz) >= 5) {
+              console.warn(`⚠ konu_duyuru_audio_text SELAMLAMA içeriyordu (Jess ikinci kez selamlıyordu) → temizlendi.\n   Önce: "${duyuru}"\n   Sonra: "${temiz}"`);
+              duyuru = temiz;
+            } else {
+              console.warn(`⚠ konu_duyuru_audio_text SELAMLAMA içeriyordu ve temizlenemedi → güvenli varsayılana düşüldü. Reddedilen: "${duyuru}"`);
+              duyuru = GUVENLI_DUYURU;
+            }
+          }
+          // Geriye dönük uyum: alan hiç gelmediyse eski intro_audio_text'ten türet
+          if (!ham && json.intro_audio_text && duyuru === GUVENLI_DUYURU) {
+            console.log("   (konu_duyuru_audio_text Gemini'den gelmedi, güvenli varsayılan kullanıldı)");
+          }
+          json.konu_duyuru_audio_text = duyuru;
+        }
+
+        // SEGMENT 3: kapanış
+        json.outro_audio_text = dogrula("outro_audio_text", GUVENLI_OUTRO, MAX_KELIME_DUYURU);
+
+        console.log(`🦊 SEGMENT 1 — Jess selamlama (${kelimeSay(json.intro_audio_text)}/${MAX_KELIME_SELAMLAMA} kelime): "${json.intro_audio_text}"`);
+        console.log(`🎬 SEGMENT 2 — Konu duyurusu (${kelimeSay(json.konu_duyuru_audio_text)}/${MAX_KELIME_DUYURU} kelime): "${json.konu_duyuru_audio_text}"`);
+        console.log(`🦊 SEGMENT 3 — Jess kapanış (${kelimeSay(json.outro_audio_text)}/${MAX_KELIME_DUYURU} kelime): "${json.outro_audio_text}"`);
       }
 
       // SEO başlık önerisi: Gemini video_baslik verdiyse THE final başlık o olur.

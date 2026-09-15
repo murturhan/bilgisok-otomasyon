@@ -1,4 +1,4 @@
-// REV 008/09SEP26 - baslik kirpilmasi giderildi: sert karakter kesimi yok, kademeli font kucultme, golge payi, overflow kaldirildi
+// REV 009/15SEP26 - muteJessVoice: selamlama TTS ten gelince Jess videosunun kendi sesi kisilir (cift selamlama)
 import React from "react";
 import {
   AbsoluteFill,
@@ -32,6 +32,8 @@ interface Props {
   jessVideoDurationFrames: number;
   sfx_pop_single?: string;
   sfx_pop_double?: string;
+  /** true ise Jess intro videosunun kendi sesi kisilir (selamlama ayri TTS segmentinden geliyor) */
+  muteJessVoice?: boolean;
 }
 
 /**
@@ -46,6 +48,7 @@ export const IntroSceneShorts: React.FC<Props> = ({
   jessVideoDurationFrames,
   sfx_pop_single,
   sfx_pop_double,
+  muteJessVoice = false,
 }) => {
   const frame = useCurrentFrame();
   const theme = THEME_COLORS[0];
@@ -80,7 +83,7 @@ export const IntroSceneShorts: React.FC<Props> = ({
           transform: `scale(${scene1Scale})`,
           filter: scene1Blur > 0 ? `blur(${scene1Blur}px)` : undefined,
         }}>
-          <Scene1Shorts />
+          <Scene1Shorts muteJessVoice={muteJessVoice} />
         </div>
       )}
       
@@ -107,7 +110,7 @@ export const IntroSceneShorts: React.FC<Props> = ({
 };
 
 // ═══ SAHNE 1 ═══ Logo+balon üstte, Jess altta (DİKEY)
-const Scene1Shorts: React.FC = () => {
+const Scene1Shorts: React.FC<{ muteJessVoice?: boolean }> = ({ muteJessVoice = false }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   
@@ -154,10 +157,11 @@ const Scene1Shorts: React.FC = () => {
         position: "absolute", left: 0, right: 0, bottom: 0,
         display: "flex", justifyContent: "center",
       }}>
+        {/* muteJessVoice: selamlama ayri TTS segmentinden geliyorsa video sesi KISILIR */}
         <Video
           src={staticFile("jess/intro.webm")}
           style={{ width: 900, height: 900, objectFit: "contain" }}
-          volume={1}
+          volume={muteJessVoice ? 0 : 1}
         />
       </div>
     </>
