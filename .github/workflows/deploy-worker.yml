@@ -1,4 +1,4 @@
-# REV 001/16SEP26 - --no-bundle kaldirildi (shared/ importu cozulsun)
+# REV 002/16SEP26 - --no-bundle kaldirildi + path filtresine shared/ ve bu dosya eklendi
 name: Deploy Cloudflare Worker
 
 on:

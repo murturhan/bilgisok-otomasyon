@@ -1,4 +1,4 @@
-// REV 078/16SEP26 - JESS SELAMLAMA salt okunur (sabit metin shared/jess-intro.js ten), kaydetme mantigindan cikarildi
+// REV 078/16SEP26 - JESS SELAMLAMA salt okunur (sabit metin shared/jess-intro.js ten), kaydetme mantigindan cikarildi (deploy tetigi)
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
