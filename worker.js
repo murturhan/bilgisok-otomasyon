@@ -1,4 +1,4 @@
-// REV 076/15SEP26 - konuDuyuruTemiz tanimi eksikti (ReferenceError) duzeltildi; 3 Jess kutusu placeholder yerine GERCEK metinle doluyor
+// REV 077/15SEP26 - ekran basligi worker tarafinda da 25kr/4kelime kurala getiriliyor; konu ozeti ondan turuyor
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -467,14 +467,36 @@ async function handleApprovalPage(request, env, url) {
 
   const job = mevcut.data.job;
   const { topic = "", format = "", baslik = "", questions = [], chat_id = "", topic_emojis = [] } = job;
-  // Ekran basligi: videoda gorunen KISA baslik. Ham konu paragrafi ASLA kullanilmaz.
-  const ekranBasligi = String(job.ekran_basligi || job.intro_title || "").replace(/[*]{2}/g, "").trim();
-  // Jess'in sesli okudugu giris/kapanis metinleri (03-seslendirme bunlari kullanir)
+  // EKRAN BAŞLIĞI — 25 karakter / 4 kelime kuralı. Eski job'larda kayıtlı değer
+  // YouTube başlığının soru cümlesi olabiliyor ("Where Did Famous Foods Originate?");
+  // kutuya basmadan önce 01-icerik-uret ile AYNI mantıkla kısaltılır.
+  const EB_MAX = 25, EB_MAX_KELIME = 4;
+  const EB_BAS_DOLGU = new Set(["where","what","which","who","whom","whose","when","why","how","did","do","does","is","are","was","were","can","could","will","would","the","a","an","of","in","on","at","for","from","to","and","or","your","our","my","this","that","these","those","it","its","lets","let"]);
+  const EB_SON_DOLGU = new Set(["originate","originated","originates","come","comes","came","quiz","quizzes","test","tests","facts","fact","kids","kid","fun","video","videos","guess","know","name","names","from","edition","challenge","game","games","trivia","for"]);
+  const ebKisalt = (t) => {
+    const ilkCumle = String(t || "").replace(/[*]{2}/g, "").replace(/\s+/g, " ").trim().split(/[?!.]/)[0] || "";
+    let k = ilkCumle.replace(/[,;:]+/g, " ").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+    while (k.length > 1 && EB_BAS_DOLGU.has(k[0].toLowerCase())) k.shift();
+    while (k.length > 1 && EB_SON_DOLGU.has(k[k.length - 1].toLowerCase())) k.pop();
+    k = k.slice(0, EB_MAX_KELIME);
+    const sec = [];
+    for (const w of k) {
+      const aday = sec.length === 0 ? w : `${sec.join(" ")} ${w}`;
+      if (aday.length > EB_MAX) break;
+      sec.push(w);
+    }
+    if (sec.length === 0 && k.length > 0) return k[0];
+    return sec.join(" ");
+  };
+  const ekranBasligiHam = String(job.ekran_basligi || job.intro_title || "").replace(/[*]{2}/g, "").trim();
+  const ekranBasligi = (ekranBasligiHam.length > EB_MAX || ekranBasligiHam.split(/\s+/).filter(Boolean).length > EB_MAX_KELIME)
+    ? ebKisalt(ekranBasligiHam)
+    : ekranBasligiHam;
+
   // JESS METİNLERİ — kutular ASLA boş kalmasın. Kayıtlı değer varsa o, yoksa
   // konuya uygun GERÇEK bir metin üretilir (placeholder DEĞİL; kullanıcı okur,
   // beğenirse dokunmaz, beğenmezse üstüne yazar).
-  const konuOzeti = (ekranBasligi || String(baslik || "").split(/[?!.]/)[0] || "this quiz")
-    .replace(/[*]{2}/g, "").trim().toLowerCase() || "this quiz";
+  const konuOzeti = (ekranBasligi || ebKisalt(baslik) || "this quiz").trim().toLowerCase() || "this quiz";
   const VARSAYILAN_SELAMLAMA = "Hi friends! I'm Jess the Fox! Are you ready to play?";
   const VARSAYILAN_DUYURU = `In this video we're exploring ${konuOzeti}! Can you guess them all? This is going to be so much fun!`;
   const VARSAYILAN_KAPANIS = "That was so much fun! Don't forget to subscribe and join me for more quizzes! See you next time!";
