@@ -1,4 +1,4 @@
-// REV 017/15SEP26 - DORDUNCU alan konu_duyuru_audio_text kaydi + degisiklik tespiti + 4 alanli Telegram raporu
+// REV 018/15SEP26 - GUVENLIK KILIDI: bos gelen Jess metni mevcut degeri EZMIYOR (sessiz sahne riski)
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -596,10 +596,18 @@ async function main() {
       console.log(`Ekran başlığı (stage2): "${eb}" [${ekranBasligiDegisti ? "DEĞİŞTİ" : "aynı"}]`);
     }
 
+    // GÜVENLİK KİLİDİ: alan BOŞ geldiyse questions.json'daki mevcut değer KORUNUR,
+    // üzerine yazılmaz. Boş metnin sesi üretilemez, sahne sessiz kalırdı.
     const jessMetniUygula = (envDeger, alan, etiket) => {
       const yeni = String(envDeger || "").replace(/\s+/g, " ").trim();
-      if (!yeni) return false;
       const eski = String(questionsData[alan] || "").replace(/\s+/g, " ").trim();
+      if (!yeni) {
+        console.log(
+          `${etiket} (stage2): form BOŞ geldi → mevcut değer KORUNDU` +
+          (eski ? ` (${eski.split(" ").filter(Boolean).length} kelime): "${eski.substring(0, 90)}"` : " (mevcut da boş)")
+        );
+        return false;
+      }
       const degisti = yeni !== eski;
       questionsData[alan] = yeni;
       console.log(`${etiket} (stage2, ${yeni.split(" ").filter(Boolean).length} kelime): "${yeni.substring(0, 90)}" [${degisti ? "DEĞİŞTİ" : "aynı"}]`);

@@ -1,4 +1,4 @@
-// REV 075/15SEP26 - DORDUNCU alan KONU DUYURUSU eklendi (segment 2); 4 alan da dolu geliyor; kelime limitleri 15/30/30
+// REV 076/15SEP26 - konuDuyuruTemiz tanimi eksikti (ReferenceError) duzeltildi; 3 Jess kutusu placeholder yerine GERCEK metinle doluyor
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -406,6 +406,7 @@ async function handleSubmit(request, env, url, ctx) {
   const ekranBasligiTemiz = String(ekran_basligi || "").replace(/[*]{2}/g, "").trim().substring(0, 40);
   // Jess'in sesli okudugu metinler (03-seslendirme bunlari kullanir)
   const jessIntroTemiz = String(intro_audio_text || "").replace(/\s+/g, " ").trim().substring(0, 600);
+  const konuDuyuruTemiz = String(konu_duyuru_audio_text || "").replace(/\s+/g, " ").trim().substring(0, 600);
   const jessOutroTemiz = String(outro_audio_text || "").replace(/\s+/g, " ").trim().substring(0, 600);
   const isSave = approval_level === "save_only";
 
@@ -469,9 +470,18 @@ async function handleApprovalPage(request, env, url) {
   // Ekran basligi: videoda gorunen KISA baslik. Ham konu paragrafi ASLA kullanilmaz.
   const ekranBasligi = String(job.ekran_basligi || job.intro_title || "").replace(/[*]{2}/g, "").trim();
   // Jess'in sesli okudugu giris/kapanis metinleri (03-seslendirme bunlari kullanir)
-  const jessIntro = String(job.intro_audio_text || "").replace(/\s+/g, " ").trim();
-  const konuDuyuru = String(job.konu_duyuru_audio_text || "").replace(/\s+/g, " ").trim();
-  const jessOutro = String(job.outro_audio_text || "").replace(/\s+/g, " ").trim();
+  // JESS METİNLERİ — kutular ASLA boş kalmasın. Kayıtlı değer varsa o, yoksa
+  // konuya uygun GERÇEK bir metin üretilir (placeholder DEĞİL; kullanıcı okur,
+  // beğenirse dokunmaz, beğenmezse üstüne yazar).
+  const konuOzeti = (ekranBasligi || String(baslik || "").split(/[?!.]/)[0] || "this quiz")
+    .replace(/[*]{2}/g, "").trim().toLowerCase() || "this quiz";
+  const VARSAYILAN_SELAMLAMA = "Hi friends! I'm Jess the Fox! Are you ready to play?";
+  const VARSAYILAN_DUYURU = `In this video we're exploring ${konuOzeti}! Can you guess them all? This is going to be so much fun!`;
+  const VARSAYILAN_KAPANIS = "That was so much fun! Don't forget to subscribe and join me for more quizzes! See you next time!";
+
+  const jessIntro = String(job.intro_audio_text || "").replace(/\s+/g, " ").trim() || VARSAYILAN_SELAMLAMA;
+  const konuDuyuru = String(job.konu_duyuru_audio_text || "").replace(/\s+/g, " ").trim() || VARSAYILAN_DUYURU;
+  const jessOutro = String(job.outro_audio_text || "").replace(/\s+/g, " ").trim() || VARSAYILAN_KAPANIS;
   const qCards = questions.map((q, i) =>
     q.question_type === "would_you_rather" ? buildWyrCard(q, i) : buildQuestionCard(q, i)
   ).join("\n");
@@ -581,7 +591,7 @@ textarea{min-height:56px}
       <label for="jess_intro_s2" style="font-size:.74em;color:#9ca3af">JESS SELAMLAMA <span style="opacity:.7">— SEGMENT 1, intro sahnesi. Sadece selamlama + isim, konudan bahsetme.</span></label>
       <span id="ji_sayac" style="font-size:.72em;color:#9ca3af">0 kelime</span>
     </div>
-    <textarea id="jess_intro_s2" rows="3" oninput="jiSayac()" placeholder="Hi friends! I am Jess the Fox! Are you ready to play?" style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical">${esc(jessIntro)}</textarea>
+    <textarea id="jess_intro_s2" rows="3" oninput="jiSayac()" style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical">${esc(jessIntro)}</textarea>
   </div>
 
   <div style="margin-bottom:10px">
@@ -589,7 +599,7 @@ textarea{min-height:56px}
       <label for="konu_duyuru_s2" style="font-size:.74em;color:#9ca3af">KONU DUYURUSU <span style="opacity:.7">— SEGMENT 2, başlık ekranı. SELAMLAMA YOK, isim YOK.</span></label>
       <span id="kd_sayac" style="font-size:.72em;color:#9ca3af">0 kelime</span>
     </div>
-    <textarea id="konu_duyuru_s2" rows="3" oninput="kdSayac()" placeholder="In this video we're tasting famous foods from around the world! ..." style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical">${esc(konuDuyuru)}</textarea>
+    <textarea id="konu_duyuru_s2" rows="3" oninput="kdSayac()" style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical">${esc(konuDuyuru)}</textarea>
   </div>
 
   <div>
@@ -597,7 +607,7 @@ textarea{min-height:56px}
       <label for="jess_outro_s2" style="font-size:.74em;color:#9ca3af">JESS KAPANIŞ <span style="opacity:.7">— SEGMENT 3, outro sahnesi</span></label>
       <span id="jo_sayac" style="font-size:.72em;color:#9ca3af">0 kelime</span>
     </div>
-    <textarea id="jess_outro_s2" rows="3" oninput="joSayac()" placeholder="That was so much fun! Subscribe ..." style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical">${esc(jessOutro)}</textarea>
+    <textarea id="jess_outro_s2" rows="3" oninput="joSayac()" style="width:100%;box-sizing:border-box;margin-top:4px;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:7px 10px;font-size:.84em;resize:vertical">${esc(jessOutro)}</textarea>
   </div>
 
   <div style="font-size:.7em;color:#6b7280;margin-top:8px">

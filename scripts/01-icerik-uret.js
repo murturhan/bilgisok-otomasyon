@@ -1,4 +1,4 @@
-// REV 029/15SEP26 - iki ses segmenti ayrildi: intro_audio_text (selamlama max15, ikinci Jess filtresi) + YENI konu_duyuru_audio_text (max30, yasak kelime filtresi)
+// REV 030/15SEP26 - ekran_basligi KOD ICI anlamli kisaltma (soru kelimeleri + dolgu fiil atilir); yedek Jess metinleri asla bos kalmiyor
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -419,9 +419,15 @@ CRITICAL:
   * topic "planets of the solar system for kids"  -> ekran_basligi: "PLANETS"
   * topic "wild animals of africa"                -> ekran_basligi: "WILD ANIMALS"
   * topic "ocean creatures deep sea quiz"         -> ekran_basligi: "DEEP SEA ANIMALS"
+  * NEVER write a QUESTION. No "?" ever. "Where Did Famous Foods Originate?" is FORBIDDEN.
+  * NEVER copy the first sentence of baslik / video_baslik.
+  * Write ONLY the 2-3 word ESSENCE, like a poster headline:
+      "FAMOUS FOODS", "WILD ANIMALS", "SPACE FACTS", "DEEP SEA ANIMALS"
   FORBIDDEN OUTPUT (these are the exact mistakes to avoid):
   * "World famous foods and which country they come from. Each question..."  (topic paragraph copied)
   * "Where Do Famous Foods Come From? Fun World Food Quiz!"                  (that is the YouTube title)
+  * "Where Did Famous Foods Originate?"                                      (question sentence — write "FAMOUS FOODS" instead)
+  * "Fun Food Quiz for Kids"                                                 (filler words, no subject)
   * "WORLD FAMOUS FOODS!"                                                    (punctuation not allowed)
 ### TWO SEPARATE SPOKEN SEGMENTS — DO NOT MERGE THEM, DO NOT REPEAT INFORMATION
 The video greets the viewer ONCE (segment 1) and announces the subject ONCE (segment 2).
@@ -674,20 +680,52 @@ TOPIC EMOJIS (for intro screen emoji band)
           return secilen.join(" ");
         };
 
+        // Gemini soru cümlesi / YouTube başlığı kopyalıyor. Kelimeyi anlamlı hale
+        // getirmek için önce baştaki soru+bağlaç kelimeleri, sonra sondaki dolgu
+        // fiil/kelimeler atılır:
+        //   "Where Did Famous Foods Originate?" → "FAMOUS FOODS"
+        const BAS_DOLGU = new Set([
+          "where","what","which","who","whom","whose","when","why","how",
+          "did","do","does","is","are","was","were","can","could","will","would",
+          "the","a","an","of","in","on","at","for","from","to","and","or","your","our","my",
+          "this","that","these","those","it","its","lets","let",
+        ]);
+        const SON_DOLGU = new Set([
+          "originate","originated","originates","come","comes","came","quiz","quizzes",
+          "test","tests","facts","fact","kids","kid","fun","video","videos","guess",
+          "know","name","names","from","edition","challenge","game","games","trivia","for",
+        ]);
+        const anlamliKisalt = (t) => {
+          // 1) SADECE İLK CÜMLE (YouTube başlıkları "Soru? Fun Quiz for Kids!" şeklinde)
+          const ilkCumle = String(t || "")
+            .replace(/[*]{2}/g, "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .split(/[?!.]/)[0] || "";
+          let kelimeler = ilkCumle.replace(/[,;:]+/g, " ").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+          // 2) Baştaki soru/bağlaç kelimelerini at
+          while (kelimeler.length > 1 && BAS_DOLGU.has(kelimeler[0].toLowerCase())) kelimeler.shift();
+          // 3) Sondaki dolgu fiil/kelimeleri at
+          while (kelimeler.length > 1 && SON_DOLGU.has(kelimeler[kelimeler.length - 1].toLowerCase())) kelimeler.pop();
+          return kelimeSinirindaKisalt(kelimeler.join(" "), EKRAN_BASLIGI_MAX, EKRAN_BASLIGI_MAX_KELIME);
+        };
+
         const ham = String(json.ekran_basligi || "").trim();
         let eb = kelimeSinirindaKisalt(ham, EKRAN_BASLIGI_MAX, EKRAN_BASLIGI_MAX_KELIME);
 
-        // Gemini boş bıraktı VEYA 25 karakteri aştı → Gemini'ye tekrar sorma,
-        // baslik'ten ilk 3 kelimeyi al (talimat b).
-        if (!ham || ham.length > EKRAN_BASLIGI_MAX) {
-          const kaynak = json.baslik || json.video_baslik || json.intro_title || konu;
-          const yedek = kelimeSinirindaKisalt(kaynak, EKRAN_BASLIGI_MAX, 3);
+        // 25 karakteri aşıyor VEYA 4 kelimeyi geçiyor VEYA boş → KOD İÇİ KISALTMA.
+        // Gemini'ye tekrar sorulmaz.
+        const hamKelime = ham ? ham.split(/\s+/).filter(Boolean).length : 0;
+        if (!ham || ham.length > EKRAN_BASLIGI_MAX || hamKelime > EKRAN_BASLIGI_MAX_KELIME) {
+          const kaynak = ham || json.baslik || json.video_baslik || json.intro_title || konu;
+          const yedek = anlamliKisalt(kaynak);
           console.warn(
-            `⚠ ekran_basligi ${!ham ? "BOŞ geldi" : `çok uzun (${ham.length} karakter)`} → ` +
-            `baslik'ten ilk 3 kelime alındı: "${yedek}"`
+            `⚠ ekran_basligi ${!ham ? "BOŞ geldi" : `kural dışı (${ham.length} karakter, ${hamKelime} kelime)`} → ` +
+            `kod içi kısaltma: "${ham || kaynak}" → "${yedek}"`
           );
           eb = yedek || eb;
         }
+        if (!eb) eb = anlamliKisalt(json.baslik || konu);
         if (!eb) eb = kelimeSinirindaKisalt(konu, EKRAN_BASLIGI_MAX, 3);
 
         json.ekran_basligi = eb;
@@ -761,9 +799,12 @@ TOPIC EMOJIS (for intro screen emoji band)
           return kalan.join(" ").replace(/\s+/g, " ").trim();
         };
 
+        // YEDEK METİNLER — hiçbir alan BOŞ kalmaz. Konu ÖZETİ kullanılır,
+        // ham konu paragrafı ASLA kullanılmaz.
+        const konuOzeti = String(json.ekran_basligi || "").trim().toLowerCase() || "this quiz";
         const GUVENLI_INTRO = "Hi friends! I am Jess the Fox! Are you ready to play?";
-        const GUVENLI_DUYURU = `In this video we are playing ${json.ekran_basligi || "a fun quiz"}! Can you get them all right? This is going to be so much fun!`;
-        const GUVENLI_OUTRO = "That was so much fun! Subscribe and hit the bell so you never miss a quiz. See you next time, friends!";
+        const GUVENLI_DUYURU = `In this video we are exploring ${konuOzeti}! Can you guess them all? This is going to be so much fun!`;
+        const GUVENLI_OUTRO = "That was so much fun! Do not forget to subscribe and join me for more quizzes! See you next time!";
 
         const dogrula = (alan, guvenli, maxKelime) => {
           const metin = String(json[alan] || "").replace(/\s+/g, " ").trim();
