@@ -1,4 +1,4 @@
-// REV 009/15SEP26 - video metinleri (ekran_basligi, intro/konu_duyuru/outro_audio_text) payloada eklendi - onay sayfasi alanlari bos geliyordu
+// REV 010/17SEP26 - mp3 ler public yapiliyor, ses_urls + ses_segments payloada eklendi (son onay formu DINLE butonu)
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -82,6 +82,65 @@ async function driveGorselUrlleri(klasorId, pattern) {
   return sonuc;
 }
 
+/**
+ * 02-ses klasöründeki mp3'leri public yapıp URL'lerini döndür + audio-segments.json'u oku.
+ * Son onay formundaki DİNLE butonu ve metin kutuları bunlardan besleniyor.
+ * @returns {Promise<{urls: Object, segments: Array}>} urls: key -> mp3 url
+ */
+async function sesSegmentBilgisi(sesFolderId) {
+  const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
+  const sonuc = { urls: {}, segments: [] };
+  if (!sesFolderId) return sonuc;
+
+  // audio-segments.json → key/filename/duration/text
+  try {
+    const mRes = await drive.files.list({
+      q: `'${sesFolderId}' in parents and name='audio-segments.json' and trashed=false`,
+      fields: "files(id)", pageSize: 1,
+    });
+    if (mRes.data.files?.length) {
+      const r = await drive.files.get({ fileId: mRes.data.files[0].id, alt: "media" }, { responseType: "text" });
+      const manifest = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
+      sonuc.segments = Array.isArray(manifest?.segments) ? manifest.segments : [];
+    }
+  } catch (e) {
+    console.warn(`  ⚠ audio-segments.json okunamadı: ${e.message}`);
+  }
+
+  // mp3'leri listele + public yap (DİNLE butonu tarayıcıdan çalacak)
+  const dosyalar = [];
+  let pageToken = undefined;
+  do {
+    const res = await drive.files.list({
+      q: `'${sesFolderId}' in parents and trashed=false`,
+      fields: "nextPageToken, files(id, name, createdTime)",
+      pageSize: 1000, orderBy: "createdTime", pageToken,
+    });
+    for (const f of res.data.files || []) {
+      if (/\.mp3$/i.test(f.name)) dosyalar.push(f); // aynı adlı varsa sonraki (yeni) kazanır
+    }
+    pageToken = res.data.nextPageToken;
+  } while (pageToken);
+
+  const adToId = new Map();
+  for (const f of dosyalar) adToId.set(f.name, f.id);
+
+  for (const [ad, id] of adToId) {
+    try {
+      await drive.permissions.create({ fileId: id, requestBody: { role: "reader", type: "anyone" }, fields: "id" });
+    } catch (e) {
+      if (!String(e.message || "").includes("already exists")) {
+        console.warn(`  ⚠ mp3 permission hata (${ad}): ${e.message}`);
+      }
+    }
+    // Segment key'i manifest'ten bul; yoksa dosya adından türet
+    const seg = sonuc.segments.find(s => s.filename === ad);
+    const key = seg?.key || ad.replace(/\.mp3$/i, "");
+    sonuc.urls[key] = `https://drive.google.com/uc?export=download&id=${id}`;
+  }
+  return sonuc;
+}
+
 async function getSurpriseBoxUrls() {
   if (!GDRIVE_SURPRISE_BOX_FOLDER_ID) return [];
   const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
@@ -130,6 +189,7 @@ async function main() {
     const drive = google.drive({ version: "v3", auth: getServiceAccountAuth() });
     
     let questionsData = null;
+    let sesFolderId = null;   // ses segmentleri/mp3 URL'leri icin disarida da lazim
     
     // 1. 02-ses içinde ara
     const sesSearchRes = await drive.files.list({
@@ -138,7 +198,7 @@ async function main() {
       pageSize: 1,
     });
     if (sesSearchRes.data.files && sesSearchRes.data.files.length > 0) {
-      const sesFolderId = sesSearchRes.data.files[0].id;
+      sesFolderId = sesSearchRes.data.files[0].id;
       const jsonSearchRes = await drive.files.list({
         q: `'${sesFolderId}' in parents and name='questions.json' and trashed=false`,
         fields: "files(id, name)",
@@ -205,6 +265,15 @@ async function main() {
       } catch (e) {}
     }
 
+    // SON ONAY FORMU (stage=3): ses segmentlerinin mp3 URL'leri + metin/süre bilgisi
+    let sesBilgi = { urls: {}, segments: [] };
+    try {
+      sesBilgi = await sesSegmentBilgisi(sesFolderId);
+      console.log(`🔊 Ses segmentleri: ${sesBilgi.segments.length} kayıt, ${Object.keys(sesBilgi.urls).length} mp3 public yapıldı`);
+    } catch (e) {
+      console.warn(`⚠ Ses segment bilgisi alınamadı (devam): ${e.message}`);
+    }
+
     // Sürpriz kutu URL'leri (WYR sorular için)
     const isAnyWyr = questionsData.questions.some(q => q.question_type === "would_you_rather");
     let surpriseBoxUrls = [];
@@ -234,6 +303,9 @@ async function main() {
       konu_duyuru_audio_text: String(questionsData.konu_duyuru_audio_text || "").trim(),
       outro_audio_text: String(questionsData.outro_audio_text || "").trim(),
       topic_emojis: questionsData.topic_emojis || [],
+      // SON ONAY FORMU (stage=3) icin: her segmentin mp3 URL'i + metni + suresi
+      ses_urls: sesBilgi.urls,
+      ses_segments: sesBilgi.segments,
       questions: questionsData.questions.map((q, i) => {
         // Soru i (0-indexed) için:
         // Question/visible image = gorsel-(2i+1) (1-indexed)

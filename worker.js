@@ -1,4 +1,4 @@
-// REV 078/16SEP26 - JESS SELAMLAMA salt okunur (sabit metin shared/jess-intro.js ten), kaydetme mantigindan cikarildi (deploy tetigi)
+// REV 079/17SEP26 - SON ONAY FORMU stage=3 (ses segmenti listesi, DINLE, aynen birak-yeniden uret, islem ozeti) + /api/son-onay
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -96,6 +96,9 @@ function go(inp){
 }
 </script></body></html>`, {headers:{'Content-Type':'text/html;charset=utf-8'}});
     }
+    if (method === "POST" && path.startsWith("/api/son-onay/")) {
+      return handleSonOnay(request, env, url, ctx);
+    }
     if (method === "POST" && path.startsWith("/api/icerik-onay/")) {
       return handleIcerikOnay(request, env, url, ctx);
     }
@@ -111,6 +114,9 @@ function go(inp){
     if (method === "GET" && url.searchParams.has("job")) {
       const stage = url.searchParams.get("stage");
       if (stage === "1") return handleContentApprovalPage(request, env, url);
+      // stage=3 → SON ONAY FORMU (render sonrası ses yönetimi). Ayrı sayfa;
+      // render öncesi form (stage parametresiz) DEĞİŞMEDİ.
+      if (stage === "3") return handleFinalApprovalPage(request, env, url);
       return handleApprovalPage(request, env, url);
     }
     if (method === "POST") {
@@ -2509,4 +2515,280 @@ async function handleUretFormSubmit(request, env, ctx) {
       `HATA: Workflow dispatch basarisiz!\nStatus: ${dispatchStatus}\n${dispatchErrBody}\n\nJob ID: ${jobId}`, env));
     return json({ ok: false, job_id: jobId, dispatch_status: dispatchStatus, error: dispatchErrBody });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SON ONAY FORMU (stage=3) — render SONRASI ses yönetimi
+// Render ÖNCESİ formlar (stage=1 ve stage parametresiz) BU KODDAN ETKİLENMEZ.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Segment listesini soru sayısına göre kur: giriş + duyuru + (soru×2) + kapanış */
+function sonFormSegmentleri(job) {
+  const questions = job.questions || [];
+  const sesUrls = job.ses_urls || {};
+  const manifest = job.ses_segments || [];
+  const kayitli = job.son_onay_metinleri || {};
+  const metinBul = (key, yedek) => {
+    if (kayitli[key]) return String(kayitli[key]).replace(/\s+/g, " ").trim();
+    const s = manifest.find(m => m.key === key);
+    return String(s?.text || yedek || "").replace(/\s+/g, " ").trim();
+  };
+  const sureBul = (key) => {
+    const s = manifest.find(m => m.key === key);
+    return typeof s?.duration === "number" ? s.duration : null;
+  };
+
+  const satirlar = [];
+  satirlar.push({
+    key: "intro-announce",
+    baslik: "Giriş",
+    aciklama: "sabit — sadece dinlenir",
+    sabit: true,
+    metin: metinBul("intro-announce", ""),
+    url: sesUrls["intro-announce"] || "",
+    sure: sureBul("intro-announce"),
+  });
+  satirlar.push({
+    key: "topic-announce",
+    baslik: "Konu duyurusu",
+    aciklama: "başlık ekranında çalar",
+    sabit: false,
+    metin: metinBul("topic-announce", job.konu_duyuru_audio_text),
+    url: sesUrls["topic-announce"] || "",
+    sure: sureBul("topic-announce"),
+  });
+
+  questions.forEach((q, i) => {
+    const idx = String(i + 1).padStart(2, "0");
+    const wyr = q.question_type === "would_you_rather";
+    const soruBaslik = String(q.question_text || `Soru ${i + 1}`).replace(/\*\*/g, "").substring(0, 70);
+    satirlar.push({
+      key: `q${idx}-question`,
+      baslik: `Soru ${i + 1} — soru sesi`,
+      aciklama: soruBaslik,
+      sabit: false,
+      metin: metinBul(`q${idx}-question`, q.question_audio_text),
+      url: sesUrls[`q${idx}-question`] || "",
+      sure: sureBul(`q${idx}-question`),
+    });
+    const cevapKey = wyr ? `q${idx}-reveal` : `q${idx}-answer`;
+    satirlar.push({
+      key: cevapKey,
+      baslik: `Soru ${i + 1} — ${wyr ? "sürpriz açılış" : "cevap sesi"}`,
+      aciklama: soruBaslik,
+      sabit: false,
+      metin: metinBul(cevapKey, wyr ? (q.reveal_audio_text || q.jess_reaction) : q.answer_audio_text),
+      url: sesUrls[cevapKey] || "",
+      sure: sureBul(cevapKey),
+    });
+  });
+
+  satirlar.push({
+    key: "outro-announce",
+    baslik: "Kapanış",
+    aciklama: "outro sahnesinde çalar",
+    sabit: false,
+    metin: metinBul("outro-announce", job.outro_audio_text),
+    url: sesUrls["outro-announce"] || "",
+    sure: sureBul("outro-announce"),
+  });
+  return satirlar;
+}
+
+async function handleFinalApprovalPage(request, env, url) {
+  const jobId = url.searchParams.get("job") || "";
+  const mevcut = await issueVeriOku(jobId, env);
+  if (!mevcut?.data?.job) {
+    return new Response(`<!DOCTYPE html><html><head><meta charset=UTF-8><title>Job yok</title></head>
+<body style="background:#111827;color:#f3f4f6;font-family:system-ui;padding:40px">
+<h2>Job bulunamadı: ${esc(jobId)}</h2><p>02.5-onay-tetikle çalıştı mı?</p></body></html>`,
+      { status: 404, headers: { "Content-Type": "text/html;charset=utf-8" } });
+  }
+  const job = mevcut.data.job;
+  const satirlar = sonFormSegmentleri(job);
+  const chatId = String(job.chat_id || "");
+  const soruSayisi = (job.questions || []).length;
+  const mp3Yok = satirlar.filter(s => !s.url).length;
+
+  const satirHtml = satirlar.map((s, i) => {
+    const dinle = s.url
+      ? `<audio id="au_${i}" src="${esc(s.url)}" preload="none"></audio>
+         <button type="button" class="btn-dinle" onclick="dinle(${i})" id="db_${i}">▶ Dinle</button>`
+      : `<span class="yok">mp3 yok</span>`;
+    const sure = s.sure ? `<span class="sure">${s.sure.toFixed(1)}s</span>` : "";
+    const metinKutu = s.sabit
+      ? `<textarea id="sg_${i}_t" rows="2" disabled readonly class="ta sabit">${esc(s.metin)}</textarea>
+         <div class="not">🔒 sabit — shared/jess-intro.js</div>`
+      : `<textarea id="sg_${i}_t" rows="2" class="ta" oninput="ozetGuncelle()">${esc(s.metin)}</textarea>`;
+    const secim = s.sabit
+      ? `<span class="not">yeniden üretilemez</span>`
+      : `<label class="rad"><input type="radio" name="sg_${i}" value="birak" checked onchange="ozetGuncelle()"> Aynen bırak</label>
+         <label class="rad"><input type="radio" name="sg_${i}" value="uret" onchange="ozetGuncelle()"> Yeniden üret</label>`;
+    return `<div class="seg" data-key="${esc(s.key)}" data-idx="${i}" data-sabit="${s.sabit ? "1" : "0"}">
+      <div class="seg-bas"><b>${esc(s.baslik)}</b> <span class="acik">${esc(s.aciklama)}</span> ${sure}</div>
+      <div class="seg-govde">
+        <div class="seg-sol">${dinle}</div>
+        <div class="seg-orta">${metinKutu}</div>
+        <div class="seg-sag">${secim}</div>
+      </div></div>`;
+  }).join("\n");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GeniMini — Son Onay</title>
+<style>
+*{box-sizing:border-box}
+body{background:#0b1220;color:#f3f4f6;font-family:system-ui,-apple-system,sans-serif;margin:0;padding:0 0 120px}
+.top{position:sticky;top:0;z-index:20;background:#111827;border-bottom:1px solid #374151;padding:10px 14px}
+.h1{font-size:1.05em;font-weight:700}
+.meta{font-size:.75em;color:#9ca3af;margin-top:2px}
+.ozet{margin:10px 14px;padding:10px 12px;background:#1f2937;border:1px solid #b45309;border-radius:8px;font-size:.85em;line-height:1.5}
+.ozet b{color:#fcd34d}
+.wrap{padding:0 14px}
+.seg{background:#111827;border:1px solid #374151;border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.seg-bas{font-size:.82em;margin-bottom:6px}
+.acik{color:#6b7280;font-weight:400}
+.sure{color:#6ee7b7;font-size:.9em;margin-left:6px}
+.seg-govde{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.seg-sol{flex:0 0 96px}
+.seg-orta{flex:1 1 320px;min-width:240px}
+.seg-sag{flex:0 0 150px;display:flex;flex-direction:column;gap:4px}
+.ta{width:100%;background:#0b1220;color:#f3f4f6;border:1px solid #374151;border-radius:6px;padding:6px 8px;font-size:.82em;resize:vertical;font-family:inherit}
+.ta.sabit{background:#0b1220;color:#9ca3af;border:1px dashed #4b5563;cursor:not-allowed}
+.not{font-size:.68em;color:#6b7280;margin-top:3px}
+.rad{font-size:.76em;color:#d1d5db;cursor:pointer;display:flex;gap:5px;align-items:center}
+.btn-dinle{width:100%;background:#1f2937;color:#93c5fd;border:1px solid #3b82f6;border-radius:6px;padding:6px 8px;font-size:.78em;cursor:pointer}
+.btn-dinle:hover{background:#1e3a5f}
+.yok{font-size:.72em;color:#ef4444}
+.alt{position:fixed;bottom:0;left:0;right:0;background:#111827;border-top:1px solid #374151;padding:10px 14px;display:flex;gap:8px;flex-wrap:wrap}
+.alt button{flex:1;min-width:150px;padding:10px;border:none;border-radius:6px;font-weight:700;font-size:.85em;cursor:pointer}
+.b-kaydet{background:#059669;color:#fff}
+.b-iptal{background:#374151;color:#d1d5db}
+#durum{margin:10px 14px;padding:10px;border-radius:6px;display:none;font-size:.85em}
+#durum.ok{background:#064e3b;color:#a7f3d0}
+#durum.err{background:#7f1d1d;color:#fecaca}
+</style></head><body>
+<div class="top">
+  <div class="h1">🦊 GeniMini — Son Onay (render sonrası)</div>
+  <div class="meta">${esc(jobId)} · ${soruSayisi} soru · ${satirlar.length} ses segmenti${mp3Yok ? ` · ⚠ ${mp3Yok} segmentin mp3'ü yok` : ""}</div>
+</div>
+<div class="ozet" id="ozet">Hesaplanıyor…</div>
+<div id="durum"></div>
+<div class="wrap">${satirHtml}</div>
+<div class="alt">
+  <button type="button" class="b-kaydet" onclick="gonder()">💾 Uygula ve yeniden render et</button>
+  <button type="button" class="b-iptal" onclick="location.reload()">↺ Değişiklikleri at</button>
+</div>
+<script>
+var JOB_ID=${JSON.stringify(jobId)}, CHAT_ID=${JSON.stringify(chatId)};
+var BASLANGIC={};
+document.querySelectorAll('.seg').forEach(function(el){
+  var i=el.dataset.idx, t=document.getElementById('sg_'+i+'_t');
+  BASLANGIC[i]= t ? t.value : '';
+});
+function dinle(i){
+  var a=document.getElementById('au_'+i), b=document.getElementById('db_'+i);
+  if(!a) return;
+  document.querySelectorAll('audio').forEach(function(x){ if(x!==a){x.pause();x.currentTime=0;} });
+  document.querySelectorAll('.btn-dinle').forEach(function(x){ if(x!==b) x.textContent='▶ Dinle'; });
+  if(a.paused){ a.play(); b.textContent='⏸ Durdur'; a.onended=function(){b.textContent='▶ Dinle';}; }
+  else { a.pause(); b.textContent='▶ Dinle'; }
+}
+function topla(){
+  var segler=[], uret=0, metinDegisti=0;
+  document.querySelectorAll('.seg').forEach(function(el){
+    var i=el.dataset.idx, sabit=el.dataset.sabit==='1';
+    var t=document.getElementById('sg_'+i+'_t');
+    var metin=t?t.value.trim():'';
+    var r=document.querySelector('input[name="sg_'+i+'"]:checked');
+    var secim=sabit?'sabit':(r?r.value:'birak');
+    var degisti=!sabit && metin!==String(BASLANGIC[i]||'').trim();
+    if(degisti) metinDegisti++;
+    // Metin degistiyse ses ZORUNLU yeniden uretilir (eski ses yeni metni soylemez)
+    var yenidenUret = !sabit && (secim==='uret' || degisti);
+    if(yenidenUret) uret++;
+    segler.push({key:el.dataset.key, metin:metin, yeniden_uret:yenidenUret, sabit:sabit});
+  });
+  return {segler:segler, uret:uret, metinDegisti:metinDegisti};
+}
+function ozetGuncelle(){
+  var d=topla(), o=document.getElementById('ozet');
+  if(d.uret===0){
+    o.innerHTML='<b>Hicbir ses yeniden uretilmeyecek.</b><br>Uygula dersen sadece <b>video yeniden render</b> edilir.';
+  } else {
+    o.innerHTML='<b>'+d.uret+' ses</b> yeniden uretilecek'+(d.metinDegisti?' ('+d.metinDegisti+' metin degisti — sesi zorunlu yenilenir)':'')+'.<br>Dokunulmayan '+(d.segler.length-d.uret)+' ses <b>aynen kalacak</b> (TTS cagrisi yapilmayacak).<br>Video yeniden render edilecek.';
+  }
+}
+async function gonder(){
+  var d=topla(), st=document.getElementById('durum');
+  st.style.display='block'; st.className=''; st.textContent='⏳ Gonderiliyor...';
+  var btns=document.querySelectorAll('.alt button'); btns.forEach(function(b){b.disabled=true;});
+  try{
+    var r=await fetch('/api/son-onay/'+JOB_ID,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:CHAT_ID, segmentler:d.segler})});
+    var j=await r.json();
+    if(j.ok){
+      st.className='ok';
+      st.textContent='✅ '+(j.mesaj||'Gonderildi')+' — '+(j.yeniden_uret_sayisi||0)+' ses yeniden uretilecek.';
+    } else {
+      st.className='err'; st.textContent='❌ '+(j.error||'Bilinmeyen hata');
+      btns.forEach(function(b){b.disabled=false;});
+    }
+  }catch(e){
+    st.className='err'; st.textContent='❌ Istek hatasi: '+e.message;
+    btns.forEach(function(b){b.disabled=false;});
+  }
+}
+ozetGuncelle();
+</script></body></html>`;
+  return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8", "Cache-Control": "no-store" } });
+}
+
+// ─── POST /api/son-onay/:id ────────────────────────────────────
+async function handleSonOnay(request, env, url, ctx) {
+  const jobId = url.pathname.split("/").pop();
+  let body;
+  try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
+  const { chat_id = "", segmentler = [] } = body;
+  if (!Array.isArray(segmentler) || !segmentler.length) {
+    return json({ ok: false, error: "Segment listesi bos" }, 400);
+  }
+
+  const mevcut = await issueVeriOku(jobId, env);
+  if (!mevcut?.data?.job) return json({ ok: false, error: "Job bulunamadi" }, 404);
+  const eskiJob = mevcut.data.job;
+
+  // Yeniden üretilecek segmentler + metin güncellemeleri
+  const yenidenUret = [];
+  const metinler = {};
+  for (const s of segmentler) {
+    const key = String(s?.key || "");
+    if (!key || s?.sabit) continue;                 // giriş sabit — hiç işlenmez
+    const metin = String(s?.metin || "").replace(/\s+/g, " ").trim();
+    if (metin) metinler[key] = metin;               // BOŞ gelirse mevcut değeri KORU
+    if (s?.yeniden_uret) yenidenUret.push(key);
+  }
+
+  // KV'ye yaz (sayfa yenilenince düzenlenen metinler görünsün)
+  const yeniJob = { ...eskiJob, son_onay_metinleri: { ...(eskiJob.son_onay_metinleri || {}), ...metinler } };
+  const yazildi = await issueGuncelle(mevcut.number, { job: yeniJob, edits: mevcut.data.edits || {} }, env);
+  if (!yazildi) return json({ ok: false, error: "Kaydedilemedi (GitHub issue PATCH basarisiz)" }, 500);
+
+  const dispatched = await githubDispatch("degisiklik_uygula", {
+    job_id: jobId,
+    chat_id: String(chat_id),
+    approval_level: yenidenUret.length ? "full" : "render_only",
+    stage: "3",
+    son_onay_metinleri: JSON.stringify(metinler),
+    ses_yeniden_uret: JSON.stringify(yenidenUret),
+  }, env);
+  if (!dispatched) return json({ ok: false, error: "GitHub dispatch basarisiz - GITHUB_TOKEN kontrol et" }, 500);
+
+  return json({
+    ok: true,
+    yeniden_uret_sayisi: yenidenUret.length,
+    mesaj: yenidenUret.length
+      ? `${yenidenUret.length} ses yeniden uretilip video render edilecek`
+      : "Ses degismedi, sadece video render edilecek",
+  });
 }

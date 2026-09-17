@@ -1,4 +1,4 @@
-// REV 021/15SEP26 - intro-announce.mp3 intro sahnesine baglandi (jess sesi kisiliyor), baslik ekrani topic-announce, sahne1 selamlama bitene kadar uzatiliyor
+// REV 022/17SEP26 - render sonrasi onay linki stage=3 (son form); render oncesi form degismedi
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -895,7 +895,9 @@ async function main() {
 
     // Onay sayfası linki (render sonrası değişiklik için)
     const workerUrl = (process.env.WORKER_URL || "").replace(/\/+$/, "");
-    const onayLink = workerUrl ? `${workerUrl}/?job=${JOB_ID}` : "";
+    // SON ONAY FORMU: stage=3 (render sonrasi ses/soru yonetimi).
+    // Render ONCESI form stage parametresizdir ve DEGISMEDI.
+    const onayLink = workerUrl ? `${workerUrl}/?job=${JOB_ID}&stage=3` : "";
 
     // Markdown link syntax — bare URL with underscores (JOB_ID) causes Telegram parse errors
     const msg = onayLink

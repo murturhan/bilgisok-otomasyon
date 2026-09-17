@@ -1,4 +1,4 @@
-// REV 019/16SEP26 - SEGMENT 1 sabit: intro_audio_text kaydedilmiyor, questions.json dan temizleniyor
+// REV 020/17SEP26 - STAGE=3 son onay blogu: ses metinleri questions.json a, ses_yeniden_uret isareti, degisiklik yoksa hicbir sey calismaz
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -47,11 +47,14 @@ const {
   EKRAN_BASLIGI,
   JESS_KONU_DUYURU,
   JESS_OUTRO,
+  SON_ONAY_METINLERI,
+  SES_YENIDEN_URET,
 } = process.env;
 
 const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
 const APPROVAL = APPROVAL_LEVEL || "full"; // default (stage=2)
 const IS_STAGE1 = STAGE === "1";
+const IS_STAGE3 = STAGE === "3";   // SON ONAY FORMU (render sonrasi ses yonetimi)
 
 /**
  * Drive klasöründen belirli pattern'e uyan dosyaları sil.
@@ -291,11 +294,92 @@ async function main() {
 
     // 4. 01-gorseller klasör id — stage=1'de görsel henüz yok, klasör bulunmayabilir
     let gorselKlasorId = null;
-    if (!IS_STAGE1) {
+    if (!IS_STAGE1 && !IS_STAGE3) {
       const altKlasorler = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
       if (altKlasorler.length === 0) throw new Error("01-gorseller klasoru yok");
       gorselKlasorId = altKlasorler[0].id;
     }
+
+    // ── STAGE=3 BLOCK (son onay: ses segmenti yonetimi) ─────────────────────
+    // SADECE ses metinleri + hangi segmentin yeniden uretilecegi. Gorsel/soru
+    // duzenleme YOK (o isler stage=1 ve stage-2 formlarinda).
+    if (IS_STAGE3) {
+      const metinler = (() => {
+        try { return JSON.parse(SON_ONAY_METINLERI || "{}") || {}; } catch (e) { return {}; }
+      })();
+      const yenidenUret = (() => {
+        try { const a = JSON.parse(SES_YENIDEN_URET || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+      })();
+
+      console.log(`Stage=3 (son onay): ${Object.keys(metinler).length} metin, ${yenidenUret.length} segment yeniden uretilecek`);
+
+      // Segment key -> questions.json alani
+      const questions = questionsData.questions || [];
+      let yazilan = 0;
+      for (const [key, ham] of Object.entries(metinler)) {
+        // BOS gelirse mevcut degeri KORU (guvenlik kilidi)
+        const metin = String(ham || "").replace(/\s+/g, " ").trim();
+        if (!metin) { console.log(`  ${key}: BOS geldi -> mevcut deger KORUNDU`); continue; }
+
+        if (key === "topic-announce") {
+          if (questionsData.konu_duyuru_audio_text !== metin) yazilan++;
+          questionsData.konu_duyuru_audio_text = metin;
+        } else if (key === "outro-announce") {
+          if (questionsData.outro_audio_text !== metin) yazilan++;
+          questionsData.outro_audio_text = metin;
+        } else if (key === "intro-announce") {
+          console.log("  intro-announce: SABIT segment -> yok sayildi");
+        } else {
+          const m = key.match(/^q(\d+)-(question|answer|reveal)$/);
+          if (!m) { console.warn(`  ? Bilinmeyen segment key: ${key}`); continue; }
+          const qi = parseInt(m[1], 10) - 1;
+          const q = questions[qi];
+          if (!q) { console.warn(`  ? Soru ${qi + 1} yok, ${key} atlandi`); continue; }
+          const alan = m[2] === "question" ? "question_audio_text"
+                     : m[2] === "reveal" ? "reveal_audio_text"
+                     : "answer_audio_text";
+          if (q[alan] !== metin) yazilan++;
+          q[alan] = metin;
+        }
+      }
+      questionsData.questions = questions;
+
+      // 03-seslendirme bu listeyi okuyup SADECE bunlari TTS e gonderecek
+      questionsData.ses_yeniden_uret = yenidenUret;
+      console.log(`questions.json guncellendi: ${yazilan} metin degisti, ses_yeniden_uret=[${yenidenUret.join(", ")}]`);
+
+      await driveWrite.files.update({
+        fileId: questionsFileId,
+        media: { mimeType: "application/json", body: Readable.from(JSON.stringify(questionsData, null, 2)) },
+      });
+      console.log("questions.json Drive'a yazildi (stage=3)");
+
+      await jobGuncelle(JOB_ID, { onay_status: "completed:stage3" });
+
+      if (yenidenUret.length === 0 && yazilan === 0) {
+        // HIC DEGISIKLIK YOK -> hicbir sey calistirma, uyari ver
+        await telegram(job.chat_id,
+          `Son onay: HIC DEGISIKLIK YOK.\n\nJob: ${JOB_ID}\nNe ses yeniden uretildi ne metin degisti - hicbir islem calistirilmadi.`);
+        console.log("Degisiklik yok -> workflow tetiklenmedi");
+        process.exit(0);
+      }
+
+      if (yenidenUret.length === 0) {
+        // Metin degismis ama kullanici yeniden uretim istememis -> sadece render
+        await telegram(job.chat_id,
+          `Son onay uygulandi\n\nJob: ${JOB_ID}\nYeniden uretilen ses: 0\nDegisen metin: ${yazilan}\n\nSadece video render ediliyor...`);
+        await tetikle("video_montaj", { job_id: JOB_ID, chat_id: job.chat_id });
+        console.log("07-video-montaj tetiklendi (ses yeniden uretilmiyor)");
+        process.exit(0);
+      }
+
+      await telegram(job.chat_id,
+        `Son onay uygulandi\n\nJob: ${JOB_ID}\nYeniden uretilecek ses: ${yenidenUret.length} (${yenidenUret.join(", ")})\nAynen birakilan: ${(questions.length * 2 + 3) - yenidenUret.length}\nDegisen metin: ${yazilan}\n\nSeslendirme basliyor...`);
+      await tetikle("seslendirme_uret", { job_id: JOB_ID, chat_id: job.chat_id });
+      console.log("03-seslendirme tetiklendi (secici uretim)");
+      process.exit(0);
+    }
+    // ── END STAGE=3 BLOCK ───────────────────────────────────────────────────
 
     // ── STAGE=1 BLOCK (içerik onayı) ────────────────────────────────────────
     if (IS_STAGE1) {

@@ -1,4 +1,4 @@
-// REV 010/16SEP26 - SEGMENT 1 SABIT: metin shared/jess-intro.js ten, ses Drive da kalici (TTS bir kez), ekran ile ses ayni
+// REV 011/17SEP26 - SECICI URETIM: sadece ses_yeniden_uret listesindekiler TTS e gider, digerleri Drive dan alinir; duplicate mp3 temizligi
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -62,6 +62,67 @@ async function kaliciJessSesiIndir(dosyaAdi, hedefYol, auth) {
     stream.data.on("end", resolve).on("error", reject).pipe(ws);
   });
   return hedefYol;
+}
+
+/**
+ * İşin 02-ses klasöründeki mevcut mp3'leri listele.
+ * SEÇİCİ ÜRETİM için: dokunulmayan segment yeniden TTS'e gitmez, bu dosya kullanılır.
+ * @returns {Promise<Map<string, string>>} filename -> fileId (aynı adlı birden fazla varsa EN YENİSİ)
+ */
+async function mevcutSesDosyalari(sesKlasorId, auth) {
+  const drive = google.drive({ version: "v3", auth });
+  const harita = new Map();
+  let pageToken = undefined;
+  do {
+    const res = await drive.files.list({
+      q: `'${sesKlasorId}' in parents and trashed=false`,
+      fields: "nextPageToken, files(id, name, createdTime)",
+      pageSize: 1000,
+      orderBy: "createdTime",
+      pageToken,
+    });
+    for (const f of res.data.files || []) {
+      if (/\.mp3$/i.test(f.name)) harita.set(f.name, f.id); // sonraki (daha yeni) öncekini ezer
+    }
+    pageToken = res.data.nextPageToken;
+  } while (pageToken);
+  return harita;
+}
+
+/** Drive'daki bir mp3'ü indir. */
+async function sesDosyasiIndir(fileId, hedefYol, auth) {
+  const drive = google.drive({ version: "v3", auth });
+  const stream = await drive.files.get({ fileId, alt: "media" }, { responseType: "stream" });
+  await new Promise((resolve, reject) => {
+    const ws = fs.createWriteStream(hedefYol);
+    stream.data.on("end", resolve).on("error", reject).pipe(ws);
+  });
+  return hedefYol;
+}
+
+/**
+ * Aynı adlı eski mp3'leri sil (yükleme öncesi).
+ * driveDosyaYukle her seferinde YENİ dosya yaratıyor; silinmezse aynı isimden
+ * birden fazla kalıyor ve 07 `find(name === ...)` ile ESKİSİNİ seçebiliyor.
+ */
+async function eskiSesDosyasiniSil(sesKlasorId, filename) {
+  const drive = google.drive({ version: "v3", auth: getOAuthClient() });
+  let silinen = 0;
+  try {
+    const res = await drive.files.list({
+      q: `'${sesKlasorId}' in parents and name='${filename}' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 50,
+    });
+    for (const f of res.data.files || []) {
+      try { await drive.files.delete({ fileId: f.id }); silinen++; } catch (e) {
+        console.warn(`  ⚠ eski ${filename} silinemedi: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    console.warn(`  ⚠ eski ${filename} aranamadı: ${e.message}`);
+  }
+  return silinen;
 }
 
 /** Üretilen kalıcı giriş sesini Drive'a BİR KEZ yükle. */
@@ -430,18 +491,53 @@ async function main() {
       }
     }
 
-    console.log(`📊 Toplam ${segmentTasks.length} ses parçası üretilecek`);
-    console.log(`   (2 announce + question/answer or question/reveal audio - Jess greeting video kendi sesini taşıyor)`);
-    
+    // ─── SEÇİCİ ÜRETİM ────────────────────────────────────────────────────
+    // ses_yeniden_uret DİZİ ise: SADECE listedeki segmentler TTS'e gider,
+    // diğerleri Drive'daki mevcut mp3'ten alınır (kota + süre israfı yok).
+    // Alan YOKSA (ilk çalıştırma / eski job): eskisi gibi HEPSİ üretilir.
+    const seciciMod = Array.isArray(questionsData.ses_yeniden_uret);
+    const yenidenUretSet = new Set(seciciMod ? questionsData.ses_yeniden_uret : []);
+    const sesKlasorList = await driveAltKlasorBul("02-ses", job.drive_folder_id);
+    if (sesKlasorList.length === 0) throw new Error("02-ses klasörü yok");
+    const sesKlasorId = sesKlasorList[0].id;
+    const mevcutSesler = seciciMod ? await mevcutSesDosyalari(sesKlasorId, oauthAuth) : new Map();
+
+    if (seciciMod) {
+      console.log(`🎯 SEÇİCİ ÜRETİM: sadece şunlar yeniden seslendirilecek → ${yenidenUretSet.size ? [...yenidenUretSet].join(", ") : "(hiçbiri)"}`);
+      console.log(`   Drive'da mevcut mp3: ${mevcutSesler.size} dosya`);
+    } else {
+      console.log("🎙 TAM ÜRETİM: ses_yeniden_uret alanı yok → tüm segmentler üretilecek (ilk çalıştırma)");
+    }
+
+    console.log(`📊 Toplam ${segmentTasks.length} ses parçası (formül: soru × 2 + 3)`);
+
     const segments = [];
+    let ttsSayisi = 0, yenidenKullanilan = 0;
     for (let i = 0; i < segmentTasks.length; i++) {
       const task = segmentTasks[i];
       console.log(`Parça ${i+1}/${segmentTasks.length}: ${task.filename}`);
-      
-      let sonuc = null;
 
-      // SABİT SEGMENT (Jess girişi): kalıcı dosya varsa TTS ÇAĞRISI YAPILMAZ
-      if (task.sabit && task.kaliciDosya) {
+      let sonuc = null;
+      let yeniUretildi = false;
+      const istendi = !seciciMod || yenidenUretSet.has(task.key);
+
+      // 1) YENİDEN ÜRETİLMESİ İSTENMEDİ + Drive'da mevcut → TTS YOK, mevcut dosya
+      if (!istendi && mevcutSesler.has(task.filename)) {
+        const hedef = path.join(tmpDir, task.filename);
+        try {
+          await sesDosyasiIndir(mevcutSesler.get(task.filename), hedef, oauthAuth);
+          const sure = await mp3Suresi(hedef);
+          const st = fs.statSync(hedef);
+          console.log(`  ♻ AYNEN BIRAKILDI — mevcut mp3 kullanıldı (TTS çağrısı YAPILMADI): ${sure.toFixed(2)}s`);
+          sonuc = { filename: task.filename, filepath: hedef, duration: sure, text: task.text, size: st.size };
+          yenidenKullanilan++;
+        } catch (e) {
+          console.warn(`  ⚠ Mevcut mp3 alınamadı (${e.message}) → yeniden üretilecek`);
+        }
+      }
+
+      // 2) SABİT SEGMENT (Jess girişi): kalıcı dosya varsa TTS ÇAĞRISI YAPILMAZ
+      if (!sonuc && task.sabit && task.kaliciDosya) {
         const hedef = path.join(tmpDir, task.filename);
         try {
           const indirilen = await kaliciJessSesiIndir(task.kaliciDosya, hedef, oauthAuth);
@@ -450,6 +546,7 @@ async function main() {
             const st = fs.statSync(hedef);
             console.log(`  ♻ ${task.kaliciDosya} Drive'dan alindi (TTS cagrisi YAPILMADI): ${sure.toFixed(2)}s, ${(st.size / 1024).toFixed(0)}KB`);
             sonuc = { filename: task.filename, filepath: hedef, duration: sure, text: task.text, size: st.size };
+            yeniUretildi = true; // 02-ses'e yüklenmeli (kalıcı dosya jess klasöründe)
           }
         } catch (e) {
           console.warn(`  ⚠ Kalici giris sesi alinamadi (${e.message}) -> bir kez uretilecek`);
@@ -457,15 +554,23 @@ async function main() {
         if (!sonuc) {
           console.log(`  🆕 ${task.kaliciDosya} Drive'da YOK -> BIR KEZ uretiliyor...`);
           sonuc = await sesParcasiUret(task.text, task.filename, accessToken, tmpDir);
-          if (sonuc) await kaliciJessSesiYukle(task.kaliciDosya, sonuc.filepath);
+          if (sonuc) { ttsSayisi++; yeniUretildi = true; await kaliciJessSesiYukle(task.kaliciDosya, sonuc.filepath); }
         }
-      } else {
+      }
+
+      // 3) TTS ile üret
+      if (!sonuc) {
+        if (seciciMod && !istendi) {
+          console.log(`  ⚠ "AYNEN BIRAK" seçiliydi ama Drive'da mp3 yok → mecburen üretiliyor`);
+        }
         sonuc = await sesParcasiUret(task.text, task.filename, accessToken, tmpDir);
+        if (sonuc) { ttsSayisi++; yeniUretildi = true; }
       }
 
       if (sonuc) {
         segments.push({
           key: task.key,
+          yeniUretildi,
           ...sonuc,
           question_index: task.question_index,
           type: task.type,
@@ -477,25 +582,39 @@ async function main() {
       }
     }
     
-    console.log(`✓ ${segments.length} parça üretildi`);
-    
-    const sesKlasor = await driveAltKlasorBul("02-ses", job.drive_folder_id);
-    if (sesKlasor.length === 0) throw new Error("02-ses klasörü yok");
-    
-    console.log(`⬆️ Drive'a yükleniyor (${segments.length} dosya)...`);
-    
+    console.log(`✓ ${segments.length} parça hazır — TTS ile üretilen: ${ttsSayisi}, mevcuttan alınan: ${yenidenKullanilan}`);
+
+    // SADECE yeni üretilenler yüklenir. Aynen bırakılanlar zaten Drive'da.
+    const yuklenecek = segments.filter(s => s.yeniUretildi);
+    console.log(`⬆️ Drive'a yüklenecek: ${yuklenecek.length} dosya (${segments.length - yuklenecek.length} tanesi zaten Drive'da)`);
+
     const PARALLEL = 4;
-    for (let i = 0; i < segments.length; i += PARALLEL) {
-      const batch = segments.slice(i, i + PARALLEL);
+    for (let i = 0; i < yuklenecek.length; i += PARALLEL) {
+      const batch = yuklenecek.slice(i, i + PARALLEL);
       await Promise.all(
-        batch.map(s => driveDosyaYukle(
-          { filename: s.filename, filepath: s.filepath },
-          sesKlasor[0].id,
-          "audio/mpeg"
-        ))
+        batch.map(async (s) => {
+          // Aynı adlı eskiyi SİL, sonra yükle — yoksa Drive'da iki kopya kalıyor
+          // ve 07 `find(name === ...)` ile ESKİSİNİ seçebiliyor.
+          await eskiSesDosyasiniSil(sesKlasorId, s.filename);
+          await driveDosyaYukle({ filename: s.filename, filepath: s.filepath }, sesKlasorId, "audio/mpeg");
+        })
       );
     }
-    console.log(`✓ Tüm ses parçaları Drive'a yüklendi`);
+    console.log(`✓ ${yuklenecek.length} ses parçası Drive'a yüklendi`);
+
+    // Seçici üretim işareti TÜKETİLDİ — bir sonraki koşuda tekrar üretilmesin
+    if (seciciMod) {
+      questionsData.ses_yeniden_uret = [];
+      try {
+        const qYol = path.join(tmpDir, "questions-guncel.json");
+        fs.writeFileSync(qYol, JSON.stringify(questionsData, null, 2));
+        await eskiSesDosyasiniSil(sesKlasorId, "questions.json"); // mp3 değil ama aynı mantık: duplicate olmasın
+        await driveDosyaYukle({ filename: "questions.json", filepath: qYol }, sesKlasorId, "application/json");
+        console.log("✓ ses_yeniden_uret temizlendi (questions.json güncellendi)");
+      } catch (e) {
+        console.warn(`⚠ ses_yeniden_uret temizlenemedi (devam): ${e.message}`);
+      }
+    }
     
     const segmentsManifest = {
       voice: VOICE_NAME,
@@ -508,6 +627,7 @@ async function main() {
         duration: s.duration,
         question_index: s.question_index,
         type: s.type,
+        text: s.text,            // onay formundaki metin kutusu bunu gosterir
       })),
     };
     
