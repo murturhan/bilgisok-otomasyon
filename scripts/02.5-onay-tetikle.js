@@ -1,4 +1,4 @@
-// REV 011/17SEP26 - mp3 public + ses_urls/ses_segments + soru ses metinleri (question/answer/reveal_audio_text) payloada
+// REV 012/17SEP26 - ses_segments sadece key+duration (issue govdesi 65KB limiti); soru ses metinleri payloada
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -305,7 +305,9 @@ async function main() {
       topic_emojis: questionsData.topic_emojis || [],
       // SON ONAY FORMU (stage=3) icin: her segmentin mp3 URL'i + metni + suresi
       ses_urls: sesBilgi.urls,
-      ses_segments: sesBilgi.segments,
+      // SADECE key+duration — text/filename/type gonderilmiyor; metinler zaten
+      // questions.json alanlarindan geliyor. Issue govdesi 65KB limitine dayaniyor.
+      ses_segments: (sesBilgi.segments || []).map(x => ({ key: x.key, duration: x.duration })),
       questions: questionsData.questions.map((q, i) => {
         // Soru i (0-indexed) için:
         // Question/visible image = gorsel-(2i+1) (1-indexed)

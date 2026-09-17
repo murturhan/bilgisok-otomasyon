@@ -1,4 +1,4 @@
-// REV 079/17SEP26 - SON ONAY FORMU stage=3 (ses segmenti listesi, DINLE, aynen birak-yeniden uret, islem ozeti) + /api/son-onay
+// REV 080/17SEP26 - stage=3: giris metni sabitten (bos geliyordu), manifest text bagimliligi kaldirildi (issue 65KB limiti)
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -2528,10 +2528,11 @@ function sonFormSegmentleri(job) {
   const sesUrls = job.ses_urls || {};
   const manifest = job.ses_segments || [];
   const kayitli = job.son_onay_metinleri || {};
+  // NOT: manifest artık `text` taşımıyor (issue gövdesi 65KB limitine dayanıyordu).
+  // Metinler questions.json alanlarından gelir; sadece `duration` manifest'ten.
   const metinBul = (key, yedek) => {
     if (kayitli[key]) return String(kayitli[key]).replace(/\s+/g, " ").trim();
-    const s = manifest.find(m => m.key === key);
-    return String(s?.text || yedek || "").replace(/\s+/g, " ").trim();
+    return String(yedek || "").replace(/\s+/g, " ").trim();
   };
   const sureBul = (key) => {
     const s = manifest.find(m => m.key === key);
@@ -2539,12 +2540,14 @@ function sonFormSegmentleri(job) {
   };
 
   const satirlar = [];
+  // Giriş metni TEK KAYNAK'tan (shared/jess-intro.js) — Remotion ekran yazısı ve
+  // 03-seslendirme ile birebir aynı. questions.json'da tutulmuyor, manifest'te de yok.
   satirlar.push({
     key: "intro-announce",
     baslik: "Giriş",
     aciklama: "sabit — sadece dinlenir",
     sabit: true,
-    metin: metinBul("intro-announce", ""),
+    metin: jessIntroMetni(String(job.format) === "shorts" ? "shorts" : "long", "en"),
     url: sesUrls["intro-announce"] || "",
     sure: sureBul("intro-announce"),
   });

@@ -602,19 +602,15 @@ async function main() {
     }
     console.log(`✓ ${yuklenecek.length} ses parçası Drive'a yüklendi`);
 
-    // Seçici üretim işareti TÜKETİLDİ — bir sonraki koşuda tekrar üretilmesin
-    if (seciciMod) {
-      questionsData.ses_yeniden_uret = [];
-      try {
-        const qYol = path.join(tmpDir, "questions-guncel.json");
-        fs.writeFileSync(qYol, JSON.stringify(questionsData, null, 2));
-        await eskiSesDosyasiniSil(sesKlasorId, "questions.json"); // mp3 değil ama aynı mantık: duplicate olmasın
-        await driveDosyaYukle({ filename: "questions.json", filepath: qYol }, sesKlasorId, "application/json");
-        console.log("✓ ses_yeniden_uret temizlendi (questions.json güncellendi)");
-      } catch (e) {
-        console.warn(`⚠ ses_yeniden_uret temizlenemedi (devam): ${e.message}`);
-      }
-    }
+    // NOT: ses_yeniden_uret işaretini BURADA TEMİZLEMİYORUZ.
+    // Sebep 1 (veri kaybı): questions.json'ı silip yeniden yüklemek gerekiyordu;
+    //   yükleme adımı patlarsa dosya tamamen kaybolurdu.
+    // Sebep 2 (çift kaynak): 03 questions.json'ın hangi klasörden geldiğini takip
+    //   etmiyor (02-ses mi kök mü). Yanlış klasöre yazmak ikinci bir questions.json
+    //   yaratır ve tek-gerçek-kaynak kuralını bozar.
+    // İşareti HER ZAMAN 02.7 yazar (her son-onay gönderiminde yeniden set edilir),
+    // yani bayat kalma riski yok. 03 tek başına elle tetiklenirse aynı segmentleri
+    // bir kez daha üretir — zararsız.
     
     const segmentsManifest = {
       voice: VOICE_NAME,
@@ -633,9 +629,12 @@ async function main() {
     
     const manifestYol = path.join(tmpDir, "audio-segments.json");
     fs.writeFileSync(manifestYol, JSON.stringify(segmentsManifest, null, 2));
+    // Eski manifest'i sil, sonra yükle — yoksa aynı adlı iki dosya kalıyor ve
+    // 02.5/07 eskisini okuyabiliyor.
+    await eskiSesDosyasiniSil(sesKlasorId, "audio-segments.json");
     await driveDosyaYukle(
       { filename: "audio-segments.json", filepath: manifestYol },
-      sesKlasor[0].id,
+      sesKlasorId,
       "application/json"
     );
     console.log(`✓ audio-segments.json yüklendi`);
