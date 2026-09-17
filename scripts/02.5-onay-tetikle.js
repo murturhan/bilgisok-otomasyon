@@ -1,4 +1,4 @@
-// REV 010/17SEP26 - mp3 ler public yapiliyor, ses_urls + ses_segments payloada eklendi (son onay formu DINLE butonu)
+// REV 011/17SEP26 - mp3 public + ses_urls/ses_segments + soru ses metinleri (question/answer/reveal_audio_text) payloada
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -332,6 +332,9 @@ async function main() {
             surprise_box_image_url: randBoxUrl,
             surprise_box_urls: surpriseBoxUrls,
             jess_reaction: q.jess_reaction || "",
+            // Son onay formu (stage=3) ses metin kutularini bunlardan doldurur
+            question_audio_text: q.question_audio_text || "",
+            reveal_audio_text: q.reveal_audio_text || "",
           };
         }
         return {
@@ -350,6 +353,9 @@ async function main() {
           fun_fact_image_url: tumGorseller[factImageIdx] || null,
           question_image_stili: q.question_image_stili || "pixar_3d",
           fact_image_stili: q.fact_image_stili || "pixar_3d",
+          // Son onay formu (stage=3) ses metin kutularini bunlardan doldurur
+          question_audio_text: q.question_audio_text || "",
+          answer_audio_text: q.answer_audio_text || "",
         };
       }),
       created_at: new Date().toISOString(),
