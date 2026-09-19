@@ -1,4 +1,4 @@
-// REV 011/17SEP26 - SECICI URETIM: sadece ses_yeniden_uret listesindekiler TTS e gider, digerleri Drive dan alinir; duplicate mp3 temizligi
+// REV 012/19SEP26 - hata bildirimi: Telegram ILK + duz metin, sessiz yutma kaldirildi
 /**
  * 03 - Seslendirme v8 (topic-announce + outro-announce eklendi)
  *
@@ -30,7 +30,7 @@ import {
   driveDosyaYukle,
   getOAuthClient,
 } from "./lib/google.js";
-import { telegram } from "./lib/telegram.js";
+import { telegram, telegramHata } from "./lib/telegram.js";
 // TEK KAYNAK: giriş metni Remotion bileşeniyle AYNI dosyadan okunur
 import { jessIntroMetni, jessIntroSesDosyaAdi, jessIntroDil } from "../shared/jess-intro.js";
 
@@ -696,11 +696,24 @@ async function main() {
   } catch (error) {
     console.error("HATA:", error.message);
     console.error(error.stack);
+    // HATA BILDIRIMI: Telegram ILK sirada ve DUZ METIN (hata metinleri `_ * [`
+    // icerdigi icin Markdown 400 doner). Her adim AYRI try — biri patlarsa
+    // digeri yine calisir. Eskiden tek try + `catch (e) {}` vardi ve
+    // jobOku/jobGuncelle patlayinca bildirim HIC gitmiyordu.
+    let chatId = process.env.TELEGRAM_CHAT_ID || "";
     try {
       const job = await jobOku(JOB_ID);
+      if (job?.chat_id) chatId = job.chat_id;
+    } catch (e) {
+      console.error(`jobOku basarisiz (chat_id icin env yedegi): ${e.message}`);
+    }
+    const gonderildi = await telegramHata(chatId, `03-Seslendirme hatasi (job ${JOB_ID})`, `${error.message}\n\n${String(error.stack || "").split("\n").slice(1, 4).join("\n")}`);
+    if (!gonderildi) console.error("Hata bildirimi Telegram'a ULASTIRILAMADI — tek kayit yukaridaki log.");
+    try {
       await jobGuncelle(JOB_ID, { ses_status: `error: ${error.message.substring(0, 100)}` });
-      await telegram(job.chat_id, `❌ *03-Seslendirme error:* ${error.message.substring(0, 300)}`);
-    } catch (e) {}
+    } catch (e) {
+      console.error(`ses_status yazilamadi: ${e.message}`);
+    }
     process.exit(1);
   }
 }

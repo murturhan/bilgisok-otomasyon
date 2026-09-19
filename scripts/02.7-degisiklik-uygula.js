@@ -1,4 +1,4 @@
-// REV 020/17SEP26 - STAGE=3 son onay blogu: ses metinleri questions.json a, ses_yeniden_uret isareti, degisiklik yoksa hicbir sey calismaz
+// REV 021/19SEP26 - hata bildirimi: Telegram ILK + duz metin, sessiz yutma kaldirildi
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -22,7 +22,7 @@ import {
   getOAuthClient,
 } from "./lib/google.js";
 import { fluxRotationCagri } from "./lib/cloudflare.js";
-import { telegram } from "./lib/telegram.js";
+import { telegram, telegramHata } from "./lib/telegram.js";
 import { GORSEL_STILLERI, DEFAULT_STIL } from "./lib/gorsel-stilleri.js";
 
 function cleanGorselPrompt(p) {
@@ -824,11 +824,24 @@ Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sab
   } catch (error) {
     console.error("HATA:", error.message);
     console.error(error.stack);
+    // HATA BILDIRIMI: Telegram ILK sirada ve DUZ METIN (hata metinleri `_ * [`
+    // icerdigi icin Markdown 400 doner). Her adim AYRI try — biri patlarsa
+    // digeri yine calisir. Eskiden tek try + `catch (e) {}` vardi ve
+    // jobOku/jobGuncelle patlayinca bildirim HIC gitmiyordu.
+    let chatId = process.env.TELEGRAM_CHAT_ID || "";
     try {
       const job = await jobOku(JOB_ID);
+      if (job?.chat_id) chatId = job.chat_id;
+    } catch (e) {
+      console.error(`jobOku basarisiz (chat_id icin env yedegi): ${e.message}`);
+    }
+    const gonderildi = await telegramHata(chatId, `02.7-Degisiklik hatasi (job ${JOB_ID})`, `${error.message}\n\n${String(error.stack || "").split("\n").slice(1, 4).join("\n")}`);
+    if (!gonderildi) console.error("Hata bildirimi Telegram'a ULASTIRILAMADI — tek kayit yukaridaki log.");
+    try {
       await jobGuncelle(JOB_ID, { onay_status: `error: ${error.message.substring(0, 100)}` });
-      await telegram(job.chat_id, `02.7-Degisiklik hatasi: ${error.message.substring(0, 300)}`);
-    } catch (e) {}
+    } catch (e) {
+      console.error(`onay_status yazilamadi: ${e.message}`);
+    }
     process.exit(1);
   }
 }

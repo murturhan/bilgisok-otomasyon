@@ -1,4 +1,4 @@
-// REV 022/05SEP26 - fluxCagri width/height kaldirildi (model desteklemiyor, boyut sharp ile ayarlaniyor)
+// REV 023/19SEP26 - hata bildirimi: Telegram ILK + duz metin, sessiz yutma kaldirildi
 /**
  * 05 - Thumbnail Üretimi v14 (Soru Kapağı Layout)
  *
@@ -31,7 +31,7 @@ import {
   driveDosyaYukle,
   getServiceAccountAuth,
 } from "./lib/google.js";
-import { telegram } from "./lib/telegram.js";
+import { telegram, telegramHata } from "./lib/telegram.js";
 
 const { JOB_ID } = process.env;
 const TMP_DIR = "/tmp/thumbnail";
@@ -607,11 +607,24 @@ async function main() {
   } catch (error) {
     console.error("HATA:", error.message);
     console.error(error.stack);
+    // HATA BILDIRIMI: Telegram ILK sirada ve DUZ METIN (hata metinleri `_ * [`
+    // icerdigi icin Markdown 400 doner). Her adim AYRI try — biri patlarsa
+    // digeri yine calisir. Eskiden tek try + `catch (e) {}` vardi ve
+    // jobOku/jobGuncelle patlayinca bildirim HIC gitmiyordu.
+    let chatId = process.env.TELEGRAM_CHAT_ID || "";
     try {
       const job = await jobOku(JOB_ID);
+      if (job?.chat_id) chatId = job.chat_id;
+    } catch (e) {
+      console.error(`jobOku basarisiz (chat_id icin env yedegi): ${e.message}`);
+    }
+    const gonderildi = await telegramHata(chatId, `05-Thumbnail hatasi (job ${JOB_ID})`, `${error.message}\n\n${String(error.stack || "").split("\n").slice(1, 4).join("\n")}`);
+    if (!gonderildi) console.error("Hata bildirimi Telegram'a ULASTIRILAMADI — tek kayit yukaridaki log.");
+    try {
       await jobGuncelle(JOB_ID, { thumb_status: `error: ${error.message.substring(0, 100)}` });
-      await telegram(job.chat_id, `❌ *05-Thumbnail error:* ${error.message.substring(0, 300)}`);
-    } catch (_) {}
+    } catch (e) {
+      console.error(`thumb_status yazilamadi: ${e.message}`);
+    }
     process.exit(1);
   }
 }

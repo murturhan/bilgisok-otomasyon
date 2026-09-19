@@ -1,4 +1,4 @@
-// REV 022/17SEP26 - render sonrasi onay linki stage=3 (son form); render oncesi form degismedi
+// REV 023/19SEP26 - hata bildirimi: Telegram ILK + duz metin, sessiz yutma kaldirildi (18EYL job sessizce dustu)
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -31,7 +31,7 @@ import {
   getOAuthClient,
   getServiceAccountAuth,
 } from "./lib/google.js";
-import { telegram } from "./lib/telegram.js";
+import { telegram, telegramHata } from "./lib/telegram.js";
 
 const execAsync = promisify(exec);
 
@@ -952,16 +952,35 @@ async function main() {
   } catch (error) {
     console.error("HATA:", error.message);
     console.error(error.stack);
+
+    // ── HATA BİLDİRİMİ ──────────────────────────────────────────────────────
+    // ESKİ HALİ BOZUKTU (18EYL26 U2609180754L): tek bir try içinde önce
+    // jobOku → jobGuncelle → telegram sırası vardı ve sonunda `catch (e) {}`
+    // ile SESSİZ yutuluyordu. jobOku/jobGuncelle patlarsa Telegram HİÇ
+    // çalışmıyordu; ayrıca mesaj Markdown ile gidiyordu ve hata metinleri
+    // `_ * [` içerdiği için Telegram 400 dönüyordu. Sonuç: exit 1 + tam sessizlik.
+    // ARTIK: her adım AYRI try, Telegram İLK sırada ve düz metin.
+    const hataMetni = `${error.message}\n\n${String(error.stack || "").split("\n").slice(1, 4).join("\n")}`;
+
+    let chatId = process.env.TELEGRAM_CHAT_ID || "";
     try {
       const job = await jobOku(JOB_ID);
-      await jobGuncelle(JOB_ID, {
-        video_status: `error: ${error.message.substring(0, 100)}`,
-      });
-      await telegram(
-        job.chat_id,
-        `❌ *07-Video error:* ${error.message.substring(0, 400)}`
-      );
-    } catch (e) {}
+      if (job?.chat_id) chatId = job.chat_id;
+    } catch (e) {
+      console.error(`⚠ jobOku başarısız (chat_id için env yedeği kullanılacak): ${e.message}`);
+    }
+
+    // 1) ÖNCE Telegram — en kritik kanal, başka hiçbir şeye bağlı değil
+    const gonderildi = await telegramHata(chatId, `❌ 07-Video hatası (job ${JOB_ID})`, hataMetni);
+    if (!gonderildi) console.error("⛔ Hata bildirimi Telegram'a ULAŞTIRILAMADI — yukarıdaki log tek kayıt.");
+
+    // 2) SONRA Sheet durumu (başarısız olsa bile Telegram gitmiş olur)
+    try {
+      await jobGuncelle(JOB_ID, { video_status: `error: ${error.message.substring(0, 100)}` });
+    } catch (e) {
+      console.error(`⚠ video_status yazılamadı: ${e.message}`);
+    }
+
     process.exit(1);
   }
 }

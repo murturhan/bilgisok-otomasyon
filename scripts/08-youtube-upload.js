@@ -1,3 +1,4 @@
+// REV 006/19SEP26 - hata bildirimi: Telegram ILK + duz metin, sessiz yutma kaldirildi
 /**
  * 08 - YouTube Upload
  * - Drive'dan final video + thumbnail indirir
@@ -14,7 +15,7 @@ import {
   driveAltKlasorBul,
   getOAuthClient,
 } from "./lib/google.js";
-import { telegram } from "./lib/telegram.js";
+import { telegram, telegramHata } from "./lib/telegram.js";
 
 const {
   JOB_ID,
@@ -225,11 +226,22 @@ async function main() {
   } catch (error) {
     console.error("HATA:", error.message);
     console.error(error.stack);
+    // Telegram ILK sirada + DUZ METIN (hata metinleri Markdown'i bozuyor),
+    // her adim AYRI try — sessiz yutma yok.
+    let chatId = process.env.TELEGRAM_CHAT_ID || "";
     try {
       const job = await jobOku(JOB_ID);
+      if (job?.chat_id) chatId = job.chat_id;
+    } catch (e) {
+      console.error(`jobOku basarisiz (chat_id icin env yedegi): ${e.message}`);
+    }
+    const gonderildi = await telegramHata(chatId, `08-YouTube Upload hatasi (job ${JOB_ID})`, `${error.message}\n\n${String(error.stack || "").split("\n").slice(1, 4).join("\n")}`);
+    if (!gonderildi) console.error("Hata bildirimi Telegram'a ULASTIRILAMADI — tek kayit yukaridaki log.");
+    try {
       await jobGuncelle(JOB_ID, { video_status: `upload-error: ${error.message.substring(0, 100)}` });
-      await telegram(job.chat_id, `❌ *08-YouTube Upload hatası:*\n\n${error.message.substring(0, 500)}`);
-    } catch (e) {}
+    } catch (e) {
+      console.error(`video_status yazilamadi: ${e.message}`);
+    }
     process.exit(1);
   }
 }
