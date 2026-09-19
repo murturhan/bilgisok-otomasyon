@@ -1,4 +1,4 @@
-// REV 032/16SEP26 - IS2: ekran_basligi KIRPILMIYOR konudan yeniden turer; konu_duyuru 20-40 kelime + spesifik terim + tutarlilik dogrulamasi
+// REV 033/19SEP26 - ekran_basligi/intro_title/konu_duyuru_audio_text/outro_audio_text questions.json a YAZILIYOR (uretiliyordu ama dusuruluyordu)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
  * v13'ten farkı:
@@ -1201,6 +1201,14 @@ async function main() {
       thumbnail_highlights: icerik.thumbnail_highlights || [],
       thumbnail_options_visual: icerik.thumbnail_options_visual || [],
       thumbnail_optionlar: icerik.thumbnail_optionlar || [],
+      // Bu 4 alan Gemini tarafindan uretilip yukarida DOGRULANIYOR ama questions.json'a
+      // yazilmiyordu -> 02.5 payload'i bos kaliyor, onay formlari bos gorunuyor ve
+      // SEGMENT 2 (konu duyurusu) + kapanis duyurusu metinsiz kaldigi icin
+      // 03-seslendirme o segmentleri hic uretmiyordu.
+      ekran_basligi: icerik.ekran_basligi || "",
+      intro_title: icerik.intro_title || "",
+      konu_duyuru_audio_text: icerik.konu_duyuru_audio_text || "",
+      outro_audio_text: icerik.outro_audio_text || "",
       background_prompt: icerik.background_prompt || "",
       topic_emojis: icerik.topic_emojis || [],
       is_test_mode: IS_TEST_MODE,
