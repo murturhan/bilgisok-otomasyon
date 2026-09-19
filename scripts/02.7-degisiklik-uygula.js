@@ -1,4 +1,4 @@
-// REV 021/19SEP26 - hata bildirimi: Telegram ILK + duz metin, sessiz yutma kaldirildi
+// REV 022/19SEP26 - ORTAK sesYenidenUretListesiKur(): onay2 soru metni degisiklikleri yeniden seslendiriliyor + WYR ses metni yeniden kuruluyor
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -105,6 +105,78 @@ async function regenSlotYaz(gorselKlasorId, slot, buffer, sira, toplamSira, tip)
   } finally {
     try { fs.unlinkSync(filepath); } catch (e) {}
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SES SEGMENTİ YENİDEN-ÜRETİM LİSTESİ — TEK KOD YOLU
+// Onay 2 (stage-2) ve Onay 3 (stage-3) AYNI fonksiyonları kullanır.
+//
+// 19EYL26 HATA: stage-2 listeyi SADECE Jess metinlerine bakarak kuruyordu
+// (konuDuyuruDegisti || jessOutroDegisti). Soru metni değiştiğinde o segment
+// listeye GİRMİYORDU; 03-seslendirme seçici modda çalışıp soru seslerini
+// Drive'daki ESKİ mp3'ten alıyordu → kullanıcının düzenlemesi yok sayılıyordu.
+// Onay 3 doğru çalışıyordu çünkü listeyi key bazında kuruyordu.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Metni karşılaştırma için normalize et (boşluk farkı değişiklik sayılmasın). */
+function sesMetniNormalize(t) {
+  return String(t || "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * questions.json'dan "segment key -> seslendirilecek metin" haritası çıkarır.
+ * Segment anahtarları 03-seslendirme-uret.js ile BİREBİR aynı olmalı:
+ *   topic-announce / outro-announce / qNN-question / qNN-answer / qNN-reveal
+ * NOT: intro-announce SABİTTİR (shared/jess-intro.js), haritaya girmez.
+ */
+function sesMetinHaritasi(questionsData) {
+  const harita = {};
+  harita["topic-announce"] = sesMetniNormalize(questionsData.konu_duyuru_audio_text);
+  harita["outro-announce"] = sesMetniNormalize(questionsData.outro_audio_text);
+  (questionsData.questions || []).forEach((q, i) => {
+    const idx = String(i + 1).padStart(2, "0");
+    harita[`q${idx}-question`] = sesMetniNormalize(q.question_audio_text);
+    if (q.question_type === "would_you_rather") {
+      harita[`q${idx}-reveal`] = sesMetniNormalize(q.reveal_audio_text || q.jess_reaction);
+    } else {
+      harita[`q${idx}-answer`] = sesMetniNormalize(q.answer_audio_text);
+    }
+  });
+  return harita;
+}
+
+/**
+ * Eski/yeni metin haritalarını karşılaştırıp yeniden seslendirilecek
+ * segment listesini döndürür.
+ *
+ * @param {Object} eskiHarita  değişiklik ÖNCESİ sesMetinHaritasi()
+ * @param {Object} yeniHarita  değişiklik SONRASI sesMetinHaritasi()
+ * @param {string[]} zorunlu   kullanıcının elle "yeniden üret" işaretlediği key'ler
+ * @returns {string[]} segment key listesi (soru sırasına göre)
+ */
+function sesYenidenUretListesiKur(eskiHarita, yeniHarita, zorunlu = []) {
+  const set = new Set();
+  for (const key of Object.keys(yeniHarita)) {
+    if (key === "intro-announce") continue;                 // SABİT
+    if (sesMetniNormalize(eskiHarita[key]) !== sesMetniNormalize(yeniHarita[key])) set.add(key);
+  }
+  for (const key of zorunlu || []) {
+    if (key && key !== "intro-announce") set.add(key);       // elle işaretlenen
+  }
+  // Okunabilir sıra: konu duyurusu → sorular → kapanış
+  const sira = (k) => (k === "topic-announce" ? 0 : k === "outro-announce" ? 2 : 1);
+  return [...set].sort((a, b) => sira(a) - sira(b) || a.localeCompare(b));
+}
+
+/** Segment key'i insan okunur ada çevir: "q03-answer" -> "soru 3 cevap" */
+function segmentAdi(key) {
+  if (key === "topic-announce") return "konu duyurusu";
+  if (key === "outro-announce") return "kapanis";
+  if (key === "intro-announce") return "giris";
+  const m = String(key).match(/^q(\d+)-(question|answer|reveal)$/);
+  if (!m) return key;
+  const tip = m[2] === "question" ? "soru" : m[2] === "reveal" ? "surpriz acilis" : "cevap";
+  return `soru ${parseInt(m[1], 10)} ${tip}`;
 }
 
 /**
@@ -292,6 +364,10 @@ async function main() {
     
     if (!questionsData) throw new Error("questions.json bulunamadi");
 
+    // DEĞİŞİKLİK ÖNCESİ ses metinleri — stage-2 ve stage-3 bunu referans alır.
+    // Hangi segmentin yeniden seslendirileceği bununla karşılaştırılarak bulunur.
+    const sesMetinleriOnce = sesMetinHaritasi(questionsData);
+
     // 4. 01-gorseller klasör id — stage=1'de görsel henüz yok, klasör bulunmayabilir
     let gorselKlasorId = null;
     if (!IS_STAGE1 && !IS_STAGE3) {
@@ -307,11 +383,12 @@ async function main() {
       const metinler = (() => {
         try { return JSON.parse(SON_ONAY_METINLERI || "{}") || {}; } catch (e) { return {}; }
       })();
-      const yenidenUret = (() => {
+      // Kullanıcının formda elle "YENİDEN ÜRET" işaretlediği segmentler
+      const elleIsaretli = (() => {
         try { const a = JSON.parse(SES_YENIDEN_URET || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; }
       })();
 
-      console.log(`Stage=3 (son onay): ${Object.keys(metinler).length} metin, ${yenidenUret.length} segment yeniden uretilecek`);
+      console.log(`Stage=3 (son onay): ${Object.keys(metinler).length} metin, ${elleIsaretli.length} segment elle isaretlendi`);
 
       // Segment key -> questions.json alani
       const questions = questionsData.questions || [];
@@ -344,9 +421,18 @@ async function main() {
       }
       questionsData.questions = questions;
 
+      // ORTAK YARDIMCI: metni değişen segmentler + elle işaretlenenler
+      // (stage-2 ile AYNI fonksiyon — tek kod yolu)
+      const yenidenUret = sesYenidenUretListesiKur(
+        sesMetinleriOnce,
+        sesMetinHaritasi(questionsData),
+        elleIsaretli
+      );
+
       // 03-seslendirme bu listeyi okuyup SADECE bunlari TTS e gonderecek
       questionsData.ses_yeniden_uret = yenidenUret;
-      console.log(`questions.json guncellendi: ${yazilan} metin degisti, ses_yeniden_uret=[${yenidenUret.join(", ")}]`);
+      console.log(`questions.json guncellendi: ${yazilan} metin degisti`);
+      console.log(`Ses yenilenecek (${yenidenUret.length}): ${yenidenUret.map(segmentAdi).join(", ") || "(hicbiri)"}`);
 
       await driveWrite.files.update({
         fileId: questionsFileId,
@@ -486,6 +572,31 @@ async function main() {
         }
         if (typeof edit.jess_reaction === "string") q.jess_reaction = edit.jess_reaction;
         if (typeof edit.surprise_box_image_url === "string") q.surprise_box_image_url = edit.surprise_box_image_url;
+
+        // ── WYR SES METİNLERİNİ YENİDEN KUR ───────────────────────────────
+        // 19EYL26 HATA: bu dal aşağıda `continue` ile çıkıyor ve MC için olan
+        // "Audio text yeniden hesapla" bloğuna HİÇ uğramıyordu. Sonuç: onay 2'de
+        // WYR sorusunun metni düzenlendiğinde question_audio_text ESKİ kalıyor,
+        // Jess eski metni okuyordu. (U2609180754L'de 21. soru WYR'di — kullanıcının
+        // "özellikle son soru" gözlemi buradan geliyor.)
+        // 01-icerik-uret'teki WYR şablonuyla AYNI biçim kullanılır.
+        {
+          const gorunen = q.visible_option?.label || "this option";
+          q.question_audio_text =
+            `Question ${idx + 1}. Would you rather have ${gorunen}, or open this mystery surprise box? ` +
+            `You have 10 seconds to decide!`;
+          // reveal metni jess_reaction'dan gelir; boşsa surprise_outcome'dan üretilir
+          const tepki = sesMetniNormalize(q.jess_reaction);
+          if (tepki) {
+            q.reveal_audio_text = tepki;
+          } else {
+            const outcome = q.surprise_option?.surprise_outcome || "a surprise";
+            q.reveal_audio_text = q.surprise_option?.surprise_is_good
+              ? `And the mystery box reveals... ${outcome}! What a lucky pick!`
+              : `Oh no! The mystery box was... ${outcome}! Better luck next time!`;
+          }
+          console.log(`  WYR soru ${idx + 1}: ses metinleri yeniden kuruldu`);
+        }
 
         // WYR custom VIDEO upload (görsel yerine video)
         if (edit.custom_visible_video) {
@@ -698,16 +809,28 @@ async function main() {
     konuDuyuruDegisti = jessMetniUygula(JESS_KONU_DUYURU, "konu_duyuru_audio_text", "SEGMENT 2 Konu duyurusu");
     jessOutroDegisti = jessMetniUygula(JESS_OUTRO, "outro_audio_text", "SEGMENT 3 Jess kapanış");
 
-    // 03-seslendirme'nin okuyacağı yeniden-üretim işareti
-    if (konuDuyuruDegisti || jessOutroDegisti) {
-      const yenidenUret = [];
-      if (konuDuyuruDegisti) yenidenUret.push("topic-announce");
-      if (jessOutroDegisti) yenidenUret.push("outro-announce");
-      questionsData.ses_yeniden_uret = yenidenUret;
-      console.log(`🔁 Ses yeniden üretilecek segmentler: ${yenidenUret.join(", ")}`);
+    // ── 03-seslendirme'nin okuyacağı yeniden-üretim işareti ────────────────
+    // ESKİ HALİ BOZUKTU: liste SADECE Jess metinlerine bakılarak kuruluyordu
+    // (konuDuyuruDegisti || jessOutroDegisti). Onay 2'de bir SORUNUN metni
+    // değiştiğinde o segment listeye girmiyordu; 03 seçici modda çalışıp
+    // soru sesini Drive'daki ESKİ mp3'ten alıyordu → düzenleme yok sayılıyordu.
+    // ARTIK: onay 3 ile AYNI ortak yardımcı kullanılıyor — metni değişen HER
+    // segment (soru sesi, cevap sesi, konu duyurusu, kapanış) listeye girer.
+    const sesYenidenUret = sesYenidenUretListesiKur(
+      sesMetinleriOnce,
+      sesMetinHaritasi(questionsData)
+    );
+    // İşaret HER ZAMAN yazılır — hiçbir metin değişmediyse BOŞ DİZİ olarak.
+    // Alanı SİLMEK 03'ü "tam üretim" moduna sokuyordu: hiçbir şey değişmemişken
+    // 44 segmentin tamamı yeniden seslendiriliyordu (kota israfı, doğrulama D).
+    // Boş dizi = seçici mod + liste boş → mevcut mp3'ler aynen kullanılır.
+    // İLK ÇALIŞTIRMADA Drive'da mp3 olmadığı için 03 zaten hepsini üretir
+    // ("AYNEN BIRAK seçiliydi ama Drive'da mp3 yok → mecburen üretiliyor").
+    questionsData.ses_yeniden_uret = sesYenidenUret;
+    if (sesYenidenUret.length) {
+      console.log(`🔁 Ses yenilenecek (${sesYenidenUret.length}): ${sesYenidenUret.map(segmentAdi).join(", ")}`);
     } else {
-      // Eski bir işaret kaldıysa temizle (yanlışlıkla tekrar üretim olmasın)
-      if (questionsData.ses_yeniden_uret) delete questionsData.ses_yeniden_uret;
+      console.log("🔁 Hiçbir ses metni değişmedi — mevcut sesler AYNEN kalacak (TTS çağrısı yok)");
     }
 
     // SEGMENT 1 SABİT: questions.json'da intro_audio_text TUTULMAZ
@@ -787,7 +910,8 @@ async function main() {
       await telegram(
         job.chat_id,
         `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
-Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sabit / Konu duyurusu: ${konuDuyuruDegisti ? "degisti" : "ayni"} / Jess kapanis: ${jessOutroDegisti ? "degisti" : "ayni"}\n\nYeni onay sayfasi hazirlaniyor...`
+Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sabit
+Ses yenilendi: ${sesYenidenUret.length ? sesYenidenUret.map(segmentAdi).join(", ") : "hicbiri"}\n\nYeni onay sayfasi hazirlaniyor...`
       );
       // 02.5'i tetikle (yeni link gönderecek)
       await tetikle("onay_tetikle", { job_id: JOB_ID, chat_id: job.chat_id });
@@ -797,7 +921,8 @@ Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sab
       await telegram(
         job.chat_id,
         `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
-Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sabit / Konu duyurusu: ${konuDuyuruDegisti ? "degisti" : "ayni"} / Jess kapanis: ${jessOutroDegisti ? "degisti" : "ayni"}\n\nVideo render basliyor (ses korunuyor)...`
+Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sabit
+Ses yenilendi: ${sesYenidenUret.length ? sesYenidenUret.map(segmentAdi).join(", ") : "hicbiri"}\n\nVideo render basliyor (ses korunuyor)...`
       );
       await tetikle("video_montaj", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("07-video-montaj tetiklendi");
@@ -813,7 +938,8 @@ Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sab
       await telegram(
         job.chat_id,
         `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
-Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sabit / Konu duyurusu: ${konuDuyuruDegisti ? "degisti" : "ayni"} / Jess kapanis: ${jessOutroDegisti ? "degisti" : "ayni"}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
+Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sabit
+Ses yenilendi: ${sesYenidenUret.length ? sesYenidenUret.map(segmentAdi).join(", ") : "hicbiri"}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
       );
       await tetikle("seslendirme_uret", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("03-seslendirme tetiklendi");
