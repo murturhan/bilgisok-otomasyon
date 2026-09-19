@@ -1,4 +1,4 @@
-// REV 019/15SEP26 - muteJessVoice prop IntroScene e gecirildi (intro-announce TTS varken video sesi kisilsin)
+// REV 020/19SEP26 - YEREL gorsel onceligi: uploaded_image_url Drive URL i her karede agdan cekiliyordu -> Drive 429 -> render coktu
 import React from "react";
 import {
   AbsoluteFill,
@@ -245,18 +245,20 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
         }
 
         const phases = computeQuestionPhases(q as any);
-        // uploaded_image_url (user-uploaded) takes priority over Drive-downloaded image_path
-        const imageSrc = (q as any).uploaded_image_url
-          ? (q as any).uploaded_image_url
-          : (q as any).image_path
-            ? staticFile((q as any).image_path)
-            : (q as any).image_url || "";
+        // ÖNCELİK: YEREL DOSYA (image_path) > uzak URL.
+        // 19EYL26: eskiden uploaded_image_url (Drive URL) öndeydi. Chromium bu
+        // URL'leri render sırasında AĞDAN çekiyordu; 21 soruluk bir videoda 42
+        // istek Drive'ı 429'a soktu ve render çöktü (ERR_BLOCKED_BY_ORB).
+        // 07-video-montaj zaten TÜM görselleri (kullanıcı yüklemeleri dahil —
+        // worker onları da gorsel-NN olarak 01-gorseller'e yazıyor) yerele indirip
+        // image_path atıyor. Uzak URL sadece yerel dosya yoksa kullanılır.
+        const imageSrc = (q as any).image_path
+          ? staticFile((q as any).image_path)
+          : (q as any).uploaded_image_url || (q as any).image_url || "";
         // prob7: funFact imageSrc'e fallback yapmasin - ayri slot ayri gorsel
-        const funFactImageSrc = (q as any).uploaded_fact_image_url
-          ? (q as any).uploaded_fact_image_url
-          : (q as any).fun_fact_image_path
-            ? staticFile((q as any).fun_fact_image_path)
-            : (q as any).fun_fact_image_url || "";
+        const funFactImageSrc = (q as any).fun_fact_image_path
+          ? staticFile((q as any).fun_fact_image_path)
+          : (q as any).uploaded_fact_image_url || (q as any).fun_fact_image_url || "";
         // prob6: uploaded_video_url stage=1 video upload fallback
         const videoSrc: string = (q as any).question_video_url || (q as any).uploaded_video_url || "";
         const funFactVideoSrc: string = (q as any).fun_fact_video_url || (q as any).uploaded_fact_video_url || "";
