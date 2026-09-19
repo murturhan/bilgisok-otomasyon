@@ -1,4 +1,4 @@
-// REV 001/19SEP26 - ses seviyeleri TEK KAYNAK (Remotion mix + ffmpeg loudnorm)
+// REV 002/19SEP26 - ORNEKLEME_HZ eklendi (loudnorm ciktiyi 96 kHz e tasiyordu)
 /**
  * SES SEVİYELERİ — TEK KAYNAK
  *
@@ -66,6 +66,13 @@ export const LOUDNESS = {
   ARALIK_LRA: 11,
   /** Normalize sonrası AAC bit hızı */
   AAC_BITRATE: "192k",
+  /**
+   * Normalize sonrası örnekleme hızı (Hz).
+   * ZORUNLU: loudnorm filtresi içeride 192 kHz calisir. -ar verilmezse ffmpeg
+   * cikisi AAC in destekledigi en yakin hiza (96 kHz) tasir — kaynak 48 kHz iken
+   * dosya buyur, YouTube zaten 48 kHz e geri indirir. 48 kHz e sabitliyoruz.
+   */
+  ORNEKLEME_HZ: 48000,
 };
 
 /** 07-video-montaj'ın kullandığı ffmpeg ses filtresi dizesi. */

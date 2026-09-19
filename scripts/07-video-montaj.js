@@ -1,4 +1,4 @@
-// REV 024/19SEP26 - render sonrasi loudnorm: ses yuksekligi normalize, true-peak sinirli (clipping yok)
+// REV 025/19SEP26 - loudnorm ciktisina -ar 48000: AAC 96 kHz e tasiniyordu
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -862,7 +862,7 @@ async function main() {
       const normYol = path.join(TMP_DIR, "final-norm.mp4");
       const normCmd =
         `ffmpeg -y -hide_banner -loglevel error -i "${finalVideoYol}" ` +
-        `-c:v copy -af "${loudnormFiltresi()}" -c:a aac -b:a ${LOUDNESS.AAC_BITRATE} "${normYol}"`;
+        `-c:v copy -af "${loudnormFiltresi()}" -c:a aac -b:a ${LOUDNESS.AAC_BITRATE} -ar ${LOUDNESS.ORNEKLEME_HZ} "${normYol}"`;
       console.log(`🔊 Ses normalize ediliyor: ${loudnormFiltresi()}`);
       const normBaslangic = Date.now();
       await execAsync(normCmd, { maxBuffer: 10 * 1024 * 1024 });
