@@ -1,4 +1,4 @@
-# REV 007/17SEP26 - SON_ONAY_METINLERI / SES_YENIDEN_URET inputlari (stage=3 son onay formu)
+# REV 008/19SEP26 - GORSEL_YENIDEN_URET / GORSEL_YUKLENEN inputlari (stage=3 gorsel yonetimi)
 name: 02.7 - Değişiklik Uygula
 
 on:
@@ -57,4 +57,6 @@ jobs:
           JESS_OUTRO: ${{ github.event.client_payload.outro_audio_text }}
           SON_ONAY_METINLERI: ${{ github.event.client_payload.son_onay_metinleri }}
           SES_YENIDEN_URET: ${{ github.event.client_payload.ses_yeniden_uret }}
+          GORSEL_YENIDEN_URET: ${{ github.event.client_payload.gorsel_yeniden_uret }}
+          GORSEL_YUKLENEN: ${{ github.event.client_payload.gorsel_yuklenen }}
         run: node scripts/02.7-degisiklik-uygula.js

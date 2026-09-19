@@ -1,4 +1,4 @@
-// REV 080/17SEP26 - stage=3: giris metni sabitten (bos geliyordu), manifest text bagimliligi kaldirildi (issue 65KB limiti)
+// REV 081/19SEP26 - son onay (stage=3) formuna gorsel yonetimi: birak/FLUX/yukle + secici liste
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -2598,6 +2598,47 @@ function sonFormSegmentleri(job) {
   return satirlar;
 }
 
+/**
+ * Son formdaki GÖRSEL satırları: her soru için 2 slot + 1 arka plan.
+ * Slot şeması pipeline'ın geri kalanıyla AYNI (02.7 slotForQuestion / 07):
+ *   soru i (0-indexed) → soru görseli 2i+1, fact görseli 2i+2
+ *   arka plan          → 2N+1
+ * Yükleme mevcut /api/upload-medya/:job/:soruIdx/:slotKey ile yapılır
+ * (arka plan için soruIdx=N, slotKey=image → 2N+1). Yeni endpoint YOK.
+ */
+function sonFormGorselleri(job) {
+  const questions = job.questions || [];
+  const N = questions.length;
+  const satirlar = [];
+  questions.forEach((q, i) => {
+    const wyr = q.question_type === "would_you_rather";
+    const baslik = String(q.question_text || `Soru ${i + 1}`).replace(/\*\*/g, "").substring(0, 60);
+    satirlar.push({
+      slot: 2 * i + 1, soruIdx: i, slotKey: wyr ? "visible_image" : "image",
+      baslik: `Soru ${i + 1} — ${wyr ? "görünür seçenek" : "soru görseli"}`,
+      aciklama: baslik,
+      url: (wyr ? q.visible_option?.image_url : q.question_image_url) || "",
+      prompt: (wyr ? q.visible_option?.image_prompt : q.image_prompt) || "",
+    });
+    satirlar.push({
+      slot: 2 * i + 2, soruIdx: i, slotKey: wyr ? "surprise_image" : "fact_image",
+      baslik: `Soru ${i + 1} — ${wyr ? "sürpriz görseli" : "fun fact görseli"}`,
+      aciklama: baslik,
+      url: (wyr ? q.surprise_option?.surprise_image_url : q.fun_fact_image_url) || "",
+      prompt: (wyr ? q.surprise_option?.surprise_image_prompt : q.fun_fact_image_prompt) || "",
+    });
+  });
+  satirlar.push({
+    slot: 2 * N + 1, soruIdx: N, slotKey: "image",
+    baslik: "Arka plan görseli",
+    aciklama: "tüm videoda fon",
+    url: job.arka_plan_url || "",
+    prompt: job.arka_plan_prompt || "",
+    arkaPlan: true,
+  });
+  return satirlar;
+}
+
 async function handleFinalApprovalPage(request, env, url) {
   const jobId = url.searchParams.get("job") || "";
   const mevcut = await issueVeriOku(jobId, env);
@@ -2612,6 +2653,8 @@ async function handleFinalApprovalPage(request, env, url) {
   const chatId = String(job.chat_id || "");
   const soruSayisi = (job.questions || []).length;
   const mp3Yok = satirlar.filter(s => !s.url).length;
+  const gorselSatirlar = sonFormGorselleri(job);
+  const gorselYok = gorselSatirlar.filter(g => !g.url).length;
 
   const satirHtml = satirlar.map((s, i) => {
     const dinle = s.url
@@ -2633,6 +2676,33 @@ async function handleFinalApprovalPage(request, env, url) {
         <div class="seg-sol">${dinle}</div>
         <div class="seg-orta">${metinKutu}</div>
         <div class="seg-sag">${secim}</div>
+      </div></div>`;
+  }).join("\n");
+
+  const gorselHtml = gorselSatirlar.map((g, i) => {
+    const onizleme = g.url
+      ? `<img class="gonz" src="${esc(g.url)}" loading="lazy" alt="">`
+      : `<span class="yok">görsel yok</span>`;
+    return `<div class="gor${g.arkaPlan ? " gor-bg" : ""}" data-idx="${i}" data-slot="${g.slot}" data-soru="${g.soruIdx}" data-slotkey="${esc(g.slotKey)}">
+      <div class="seg-bas"><b>${esc(g.baslik)}</b> <span class="acik">${esc(g.aciklama)}</span> <span class="slotno">slot ${g.slot}</span></div>
+      <div class="seg-govde">
+        <div class="gor-sol">${onizleme}</div>
+        <div class="seg-orta">
+          <div id="gx_${i}" style="display:none">
+            <textarea id="gp_${i}" rows="2" class="ta" oninput="ozetGuncelle()">${esc(g.prompt)}</textarea>
+            <div class="not">FLUX prompt — boş bırakırsan mevcut prompt kullanılır</div>
+          </div>
+          <div id="gy_${i}" style="display:none">
+            <input type="file" class="dosya" id="gf_${i}" accept="image/*" onchange="gorselYukle(${i})">
+            <div class="not">⚠ Dosyayı seçer seçmez Drive'a yazılır, eski görselin yerini alır.</div>
+          </div>
+          <div class="not durum-y" id="gs_${i}"></div>
+        </div>
+        <div class="seg-sag">
+          <label class="rad"><input type="radio" name="gor_${i}" value="birak" checked onchange="gorselMod(${i})"> Aynen bırak</label>
+          <label class="rad"><input type="radio" name="gor_${i}" value="flux" onchange="gorselMod(${i})"> FLUX yeniden üret</label>
+          <label class="rad"><input type="radio" name="gor_${i}" value="yukle" onchange="gorselMod(${i})"> Kendim yüklerim</label>
+        </div>
       </div></div>`;
   }).join("\n");
 
@@ -2670,6 +2740,15 @@ body{background:#0b1220;color:#f3f4f6;font-family:system-ui,-apple-system,sans-s
 #durum{margin:10px 14px;padding:10px;border-radius:6px;display:none;font-size:.85em}
 #durum.ok{background:#064e3b;color:#a7f3d0}
 #durum.err{background:#7f1d1d;color:#fecaca}
+.bolum{margin:18px 14px 8px;font-size:.9em;font-weight:700;color:#fcd34d;border-bottom:1px solid #374151;padding-bottom:5px}
+.bolum span{font-weight:400;color:#6b7280;font-size:.85em}
+.gor{background:#111827;border:1px solid #374151;border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.gor-bg{border-color:#7c3aed}
+.gor-sol{flex:0 0 96px}
+.gonz{width:96px;height:96px;object-fit:cover;border-radius:6px;border:1px solid #374151;background:#0b1220;display:block}
+.slotno{color:#6b7280;font-size:.85em;margin-left:6px}
+.dosya{width:100%;font-size:.75em;color:#d1d5db}
+.durum-y{font-size:.75em}
 </style></head><body>
 <div class="top">
   <div class="h1">🦊 GeniMini — Son Onay (render sonrası)</div>
@@ -2677,7 +2756,10 @@ body{background:#0b1220;color:#f3f4f6;font-family:system-ui,-apple-system,sans-s
 </div>
 <div class="ozet" id="ozet">Hesaplanıyor…</div>
 <div id="durum"></div>
+<div class="bolum">🔊 SESLER <span>— metni düzenle ya da yeniden üret</span></div>
 <div class="wrap">${satirHtml}</div>
+<div class="bolum">🖼 GÖRSELLER <span>— ${gorselSatirlar.length} slot${gorselYok ? ` · ⚠ ${gorselYok} slotun önizlemesi yok` : ""}</span></div>
+<div class="wrap">${gorselHtml}</div>
 <div class="alt">
   <button type="button" class="b-kaydet" onclick="gonder()">💾 Uygula ve yeniden render et</button>
   <button type="button" class="b-iptal" onclick="location.reload()">↺ Değişiklikleri at</button>
@@ -2714,25 +2796,67 @@ function topla(){
   });
   return {segler:segler, uret:uret, metinDegisti:metinDegisti};
 }
+var YUKLENDI={};
+function gorselMod(i){
+  var r=document.querySelector('input[name="gor_'+i+'"]:checked');
+  var v=r?r.value:'birak';
+  document.getElementById('gx_'+i).style.display=(v==='flux')?'block':'none';
+  document.getElementById('gy_'+i).style.display=(v==='yukle')?'block':'none';
+  ozetGuncelle();
+}
+async function gorselYukle(i){
+  var el=document.querySelector('.gor[data-idx="'+i+'"]');
+  var f=document.getElementById('gf_'+i), s=document.getElementById('gs_'+i);
+  if(!f || !f.files || !f.files[0]) return;
+  s.style.color='#9ca3af'; s.textContent='⏳ Yukleniyor...';
+  var fd=new FormData(); fd.append('file', f.files[0]);
+  try{
+    var r=await fetch('/api/upload-medya/'+JOB_ID+'/'+el.dataset.soru+'/'+el.dataset.slotkey,{method:'POST',body:fd});
+    var j=await r.json();
+    if(j.ok){ YUKLENDI[i]=true; s.style.color='#6ee7b7'; s.textContent='✅ Drive'a yazildi (slot '+el.dataset.slot+')'; }
+    else { YUKLENDI[i]=false; s.style.color='#fca5a5'; s.textContent='❌ '+(j.error||'Yukleme hatasi'); }
+  }catch(e){ YUKLENDI[i]=false; s.style.color='#fca5a5'; s.textContent='❌ '+e.message; }
+  ozetGuncelle();
+}
+function gorselTopla(){
+  var list=[], flux=0, yuk=0, bekleyen=0;
+  document.querySelectorAll('.gor').forEach(function(el){
+    var i=el.dataset.idx;
+    var r=document.querySelector('input[name="gor_'+i+'"]:checked');
+    var v=r?r.value:'birak';
+    var pr=document.getElementById('gp_'+i);
+    if(v==='flux') flux++;
+    else if(v==='yukle'){ if(YUKLENDI[i]) yuk++; else bekleyen++; }
+    list.push({slot:parseInt(el.dataset.slot,10), soru_idx:parseInt(el.dataset.soru,10),
+      slot_key:el.dataset.slotkey, secim:v, prompt:pr?pr.value.trim():'', yuklendi:!!YUKLENDI[i]});
+  });
+  return {gorseller:list, flux:flux, yuklendi:yuk, bekleyen:bekleyen};
+}
 function ozetGuncelle(){
-  var d=topla(), o=document.getElementById('ozet');
-  if(d.uret===0){
-    o.innerHTML='<b>Hicbir ses yeniden uretilmeyecek.</b><br>Uygula dersen sadece <b>video yeniden render</b> edilir.';
-  } else {
-    o.innerHTML='<b>'+d.uret+' ses</b> yeniden uretilecek'+(d.metinDegisti?' ('+d.metinDegisti+' metin degisti — sesi zorunlu yenilenir)':'')+'.<br>Dokunulmayan '+(d.segler.length-d.uret)+' ses <b>aynen kalacak</b> (TTS cagrisi yapilmayacak).<br>Video yeniden render edilecek.';
-  }
+  var d=topla(), g=gorselTopla(), o=document.getElementById('ozet'), sat=[];
+  // SES
+  if(d.uret===0) sat.push('🔊 <b>Ses: 0 TTS cagrisi.</b> '+d.segler.length+' segmentin hepsi aynen kalacak.');
+  else sat.push('🔊 <b>Ses: '+d.uret+' TTS cagrisi</b>'+(d.metinDegisti?' ('+d.metinDegisti+' metin degisti — sesi zorunlu yenilenir)':'')+'. Dokunulmayan '+(d.segler.length-d.uret)+' segment aynen kalacak.');
+  // GORSEL
+  if(g.flux===0) sat.push('🖼 <b>Gorsel: 0 FLUX cagrisi.</b>'+(g.yuklendi?' '+g.yuklendi+' gorsel elle yuklendi (FLUX kullanilmaz).':' Dokunulan gorsel yok.'));
+  else sat.push('🖼 <b>Gorsel: '+g.flux+' FLUX cagrisi.</b>'+(g.yuklendi?' Ayrica '+g.yuklendi+' gorsel elle yuklendi.':'')+' Dokunulmayan '+(g.gorseller.length-g.flux-g.yuklendi)+' slot aynen kalacak.');
+  if(g.bekleyen) sat.push('⚠ <b>'+g.bekleyen+' slotta "kendim yuklerim" secili ama dosya yuklenmedi</b> — o slot aynen birakilacak.');
+  // TOPLAM
+  if(d.uret===0 && g.flux===0 && g.yuklendi===0) sat.push('➡ <b>Hicbir sey degismedi.</b> Uygula dersen sadece <b>video yeniden render</b> edilir.');
+  else sat.push('➡ Video yeniden render edilecek.');
+  o.innerHTML=sat.join('<br>');
 }
 async function gonder(){
-  var d=topla(), st=document.getElementById('durum');
+  var d=topla(), g=gorselTopla(), st=document.getElementById('durum');
   st.style.display='block'; st.className=''; st.textContent='⏳ Gonderiliyor...';
   var btns=document.querySelectorAll('.alt button'); btns.forEach(function(b){b.disabled=true;});
   try{
     var r=await fetch('/api/son-onay/'+JOB_ID,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:CHAT_ID, segmentler:d.segler})});
+      body:JSON.stringify({chat_id:CHAT_ID, segmentler:d.segler, gorseller:g.gorseller})});
     var j=await r.json();
     if(j.ok){
       st.className='ok';
-      st.textContent='✅ '+(j.mesaj||'Gonderildi')+' — '+(j.yeniden_uret_sayisi||0)+' ses yeniden uretilecek.';
+      st.textContent='✅ '+(j.mesaj||'Gonderildi')+' — '+(j.yeniden_uret_sayisi||0)+' ses, '+(j.gorsel_uret_sayisi||0)+' gorsel yeniden uretilecek.';
     } else {
       st.className='err'; st.textContent='❌ '+(j.error||'Bilinmeyen hata');
       btns.forEach(function(b){b.disabled=false;});
@@ -2752,7 +2876,7 @@ async function handleSonOnay(request, env, url, ctx) {
   const jobId = url.pathname.split("/").pop();
   let body;
   try { body = await request.json(); } catch { return json({ ok: false, error: "Invalid JSON" }, 400); }
-  const { chat_id = "", segmentler = [] } = body;
+  const { chat_id = "", segmentler = [], gorseller = [] } = body;
   if (!Array.isArray(segmentler) || !segmentler.length) {
     return json({ ok: false, error: "Segment listesi bos" }, 400);
   }
@@ -2772,6 +2896,28 @@ async function handleSonOnay(request, env, url, ctx) {
     if (s?.yeniden_uret) yenidenUret.push(key);
   }
 
+  // GÖRSEL: sadece açıkça "flux" işaretlenen slotlar üretilir.
+  // Dokunulmayan slot listeye GİRMEZ → 0 işaret = 0 FLUX çağrısı.
+  // Liste boş da olsa dispatch'e HER ZAMAN yazılır (ses tarafındaki
+  // "bazen hiç yazılmıyor" tuzağının görsel karşılığı — bkz. ses_yeniden_uret).
+  const gorselYenidenUret = [];
+  const gorselYuklenen = [];
+  for (const g of Array.isArray(gorseller) ? gorseller : []) {
+    const slot = parseInt(g?.slot, 10);
+    if (!Number.isInteger(slot) || slot < 1) continue;
+    if (g?.secim === "flux") {
+      const sIdx = parseInt(g?.soru_idx, 10);
+      gorselYenidenUret.push({
+        slot,
+        soru_idx: Number.isInteger(sIdx) ? sIdx : null,
+        slot_key: String(g?.slot_key || ""),
+        prompt: String(g?.prompt || "").replace(/\s+/g, " ").trim(),
+      });
+    } else if (g?.secim === "yukle" && g?.yuklendi) {
+      gorselYuklenen.push(slot);   // zaten /api/upload-medya ile Drive'a yazıldı, iş kalmadı
+    }
+  }
+
   // KV'ye yaz (sayfa yenilenince düzenlenen metinler görünsün)
   const yeniJob = { ...eskiJob, son_onay_metinleri: { ...(eskiJob.son_onay_metinleri || {}), ...metinler } };
   const yazildi = await issueGuncelle(mevcut.number, { job: yeniJob, edits: mevcut.data.edits || {} }, env);
@@ -2780,18 +2926,26 @@ async function handleSonOnay(request, env, url, ctx) {
   const dispatched = await githubDispatch("degisiklik_uygula", {
     job_id: jobId,
     chat_id: String(chat_id),
-    approval_level: yenidenUret.length ? "full" : "render_only",
+    approval_level: (yenidenUret.length || gorselYenidenUret.length) ? "full" : "render_only",
     stage: "3",
     son_onay_metinleri: JSON.stringify(metinler),
     ses_yeniden_uret: JSON.stringify(yenidenUret),
+    gorsel_yeniden_uret: JSON.stringify(gorselYenidenUret),
+    gorsel_yuklenen: JSON.stringify(gorselYuklenen),
   }, env);
   if (!dispatched) return json({ ok: false, error: "GitHub dispatch basarisiz - GITHUB_TOKEN kontrol et" }, 500);
 
+  const parcalar = [];
+  if (yenidenUret.length) parcalar.push(`${yenidenUret.length} ses`);
+  if (gorselYenidenUret.length) parcalar.push(`${gorselYenidenUret.length} gorsel (FLUX)`);
+  if (gorselYuklenen.length) parcalar.push(`${gorselYuklenen.length} gorsel elle yuklendi`);
   return json({
     ok: true,
     yeniden_uret_sayisi: yenidenUret.length,
-    mesaj: yenidenUret.length
-      ? `${yenidenUret.length} ses yeniden uretilip video render edilecek`
-      : "Ses degismedi, sadece video render edilecek",
+    gorsel_uret_sayisi: gorselYenidenUret.length,
+    gorsel_yuklenen_sayisi: gorselYuklenen.length,
+    mesaj: parcalar.length
+      ? `${parcalar.join(" + ")} -> video render edilecek`
+      : "Hicbir sey degismedi, sadece video render edilecek",
   });
 }

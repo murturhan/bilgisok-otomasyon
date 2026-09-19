@@ -1,4 +1,4 @@
-// REV 013/19SEP26 - hata bildirimi: Telegram ILK + duz metin, sessiz yutma kaldirildi
+// REV 013/19SEP26 - arka plan gorseli (url + prompt) payloada: son onay formu gorsel yonetimi
 /**
  * 02.5-onay-tetikle.js
  * 
@@ -304,6 +304,9 @@ async function main() {
       outro_audio_text: String(questionsData.outro_audio_text || "").trim(),
       topic_emojis: questionsData.topic_emojis || [],
       // SON ONAY FORMU (stage=3) icin: her segmentin mp3 URL'i + metni + suresi
+      // SON ONAY FORMU (stage=3) gorsel yonetimi: arka plan slotu 2N+1
+      arka_plan_url: tumGorseller[questionsData.questions.length * 2 + 1] || null,
+      arka_plan_prompt: String(questionsData.background_prompt || ""),
       ses_urls: sesBilgi.urls,
       // SADECE key+duration — text/filename/type gonderilmiyor; metinler zaten
       // questions.json alanlarindan geliyor. Issue govdesi 65KB limitine dayaniyor.

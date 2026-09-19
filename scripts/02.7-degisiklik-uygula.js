@@ -1,4 +1,4 @@
-// REV 022/19SEP26 - ORTAK sesYenidenUretListesiKur(): onay2 soru metni degisiklikleri yeniden seslendiriliyor + WYR ses metni yeniden kuruluyor
+// REV 023/19SEP26 - stage=3 gorsel yonetimi: secici FLUX regen (slot bazli) + ortak ses/gorsel ozeti
 /**
  * 02.7-degisiklik-uygula.js
  * 
@@ -54,7 +54,9 @@ const {
 const WORKER_URL = (WORKER_URL_RAW || "").replace(/\/+$/, "");
 const APPROVAL = APPROVAL_LEVEL || "full"; // default (stage=2)
 const IS_STAGE1 = STAGE === "1";
-const IS_STAGE3 = STAGE === "3";   // SON ONAY FORMU (render sonrasi ses yonetimi)
+const IS_STAGE3 = STAGE === "3";   // SON ONAY FORMU (render sonrasi ses + gorsel yonetimi)
+const GORSEL_YENIDEN_URET = process.env.GORSEL_YENIDEN_URET || "[]";  // stage=3: [{slot,soru_idx,slot_key,prompt}]
+const GORSEL_YUKLENEN = process.env.GORSEL_YUKLENEN || "[]";          // stage=3: elle yuklenen slotlar (bilgi amacli)
 
 /**
  * Drive klasöründen belirli pattern'e uyan dosyaları sil.
@@ -88,6 +90,50 @@ async function driveDosyaSil(klasorId, pattern) {
  * korunur (önceden önden siliniyordu ve başarısız regen slot'u boş bırakıyordu).
  * Her görsel için tek satır log basar. Drive hatasında false döner (sayaç artmaz).
  */
+/**
+ * Slot numarasindan questions.json'daki prompt alanini bulur.
+ * Slot semasi (02-gorsel-uret ile AYNI): soru i -> 2i+1 / 2i+2, arka plan -> 2N+1.
+ * Donen: { oku(), yaz(v), etiket } veya null (bilinmeyen slot).
+ */
+function slotPromptCoz(questionsData, slot) {
+  const questions = questionsData.questions || [];
+  const N = questions.length;
+  if (slot === 2 * N + 1) {
+    return {
+      etiket: "arka plan",
+      oku: () => questionsData.background_prompt || "",
+      yaz: (v) => { questionsData.background_prompt = v; },
+    };
+  }
+  const tekil = slot % 2 === 1;                     // tek slot = soru gorseli
+  const qi = tekil ? (slot - 1) / 2 : slot / 2 - 1;
+  const q = questions[qi];
+  if (!q) return null;
+  const wyr = q.question_type === "would_you_rather";
+  if (tekil) {
+    if (wyr) return {
+      etiket: `soru ${qi + 1} gorunur secenek`,
+      oku: () => q.visible_option?.image_prompt || "",
+      yaz: (v) => { q.visible_option = { ...(q.visible_option || {}), image_prompt: v }; },
+    };
+    return {
+      etiket: `soru ${qi + 1} gorseli`,
+      oku: () => q.image_prompt || "",
+      yaz: (v) => { q.image_prompt = v; },
+    };
+  }
+  if (wyr) return {
+    etiket: `soru ${qi + 1} surpriz`,
+    oku: () => q.surprise_option?.surprise_image_prompt || "",
+    yaz: (v) => { q.surprise_option = { ...(q.surprise_option || {}), surprise_image_prompt: v }; },
+  };
+  return {
+    etiket: `soru ${qi + 1} fun fact`,
+    oku: () => q.fun_fact_image_prompt || "",
+    yaz: (v) => { q.fun_fact_image_prompt = v; },
+  };
+}
+
 async function regenSlotYaz(gorselKlasorId, slot, buffer, sira, toplamSira, tip) {
   const slotStr = String(slot).padStart(2, "0");
   const filename = `gorsel-${slotStr}.jpg`;
@@ -434,6 +480,64 @@ async function main() {
       console.log(`questions.json guncellendi: ${yazilan} metin degisti`);
       console.log(`Ses yenilenecek (${yenidenUret.length}): ${yenidenUret.map(segmentAdi).join(", ") || "(hicbiri)"}`);
 
+      // ── GORSEL YONETIMI (stage=3) ──────────────────────────────────────
+      // Kural: SADECE formda "FLUX yeniden uret" isaretlenen slotlar uretilir.
+      // Dokunulmayan slot listeye girmez -> liste bos ise 0 FLUX cagrisi.
+      // "Kendim yuklerim" secilenler zaten /api/upload-medya ile Drive'a
+      // yazildi; burada yapilacak is YOK, sadece raporlanir.
+      const gorselIstek = (() => {
+        try { const a = JSON.parse(GORSEL_YENIDEN_URET || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+      })();
+      const gorselYuklenen = (() => {
+        try { const a = JSON.parse(GORSEL_YUKLENEN || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+      })();
+
+      let gorselOk = 0, gorselDriveHata = 0, gorselFluxHata = 0;
+      if (gorselIstek.length === 0) {
+        console.log(`Gorsel: 0 FLUX cagrisi (isaretlenen slot yok)${gorselYuklenen.length ? `, ${gorselYuklenen.length} slot elle yuklendi` : ""}`);
+      } else {
+        // 01-gorseller klasorunu SADECE gercekten is varsa coz
+        const gKlasor = await driveAltKlasorBul("01-gorseller", job.drive_folder_id);
+        if (gKlasor.length === 0) throw new Error("01-gorseller klasoru yok (stage=3 gorsel regen)");
+        const gorselKlasorId3 = gKlasor[0].id;
+
+        // Prompt bos gelirse questions.json'daki mevcut prompt kullanilir
+        const hedefler = [];
+        for (const g of gorselIstek) {
+          const slot = parseInt(g?.slot, 10);
+          if (!Number.isInteger(slot) || slot < 1) { console.warn(`  ? Gecersiz slot: ${JSON.stringify(g)}`); continue; }
+          const coz = slotPromptCoz(questionsData, slot);
+          if (!coz) { console.warn(`  ? Slot ${slot} questions.json'da karsiliksiz, atlandi`); continue; }
+          const yeniPrompt = String(g?.prompt || "").trim();
+          const prompt = yeniPrompt || String(coz.oku() || "").trim();
+          if (!prompt) { console.warn(`  ? Slot ${slot} (${coz.etiket}): prompt YOK, atlandi`); continue; }
+          if (yeniPrompt && yeniPrompt !== String(coz.oku() || "").trim()) coz.yaz(yeniPrompt);  // prompt kaydi guncellensin
+          hedefler.push({ slot, etiket: coz.etiket, prompt: cleanGorselPrompt(prompt) });
+        }
+
+        if (hedefler.length === 0) {
+          console.log("Gorsel: isaretli slot vardi ama hicbiri uretilebilir degil -> 0 FLUX cagrisi");
+        } else {
+          console.log(`FLUX (stage=3): ${hedefler.length} gorsel regen -> ${hedefler.map(h => `slot ${h.slot} (${h.etiket})`).join(", ")}`);
+          const prompts = hedefler.map(h => h.prompt);
+          // flux-1-schnell width/height KABUL ETMIYOR (resmi dokuman: prompt/steps/seed)
+          const res = await fluxRotationCagri(prompts, {
+            onSuccess: async (idx, buffer) => {
+              const h = hedefler[idx];
+              const ok = await regenSlotYaz(gorselKlasorId3, h.slot, buffer, idx + 1, prompts.length, h.etiket);
+              if (ok) gorselOk++; else gorselDriveHata++;
+            },
+          });
+          gorselFluxHata = (res.hatalar || []).length;
+          for (const hata of res.hatalar || []) {
+            const h = hedefler[hata.index];
+            console.error(`son onay regen slot ${h?.slot} (${h?.etiket}): FLUX HATA (${String(hata.hata).substring(0, 120)}) -> eski gorsel korundu`);
+          }
+          console.log(`📊 Gorsel ozeti: istenen ${hedefler.length}, Drive ok ${gorselOk}, Drive hata ${gorselDriveHata}, FLUX hata ${gorselFluxHata}`);
+        }
+      }
+      const gorselDegisti = gorselOk + gorselYuklenen.length;
+
       await driveWrite.files.update({
         fileId: questionsFileId,
         media: { mimeType: "application/json", body: Readable.from(JSON.stringify(questionsData, null, 2)) },
@@ -442,25 +546,34 @@ async function main() {
 
       await jobGuncelle(JOB_ID, { onay_status: "completed:stage3" });
 
-      if (yenidenUret.length === 0 && yazilan === 0) {
+      // ORTAK OZET (ses + gorsel birlikte)
+      const toplamSegment = questions.length * 2 + 3;
+      const toplamSlot = questions.length * 2 + 1;
+      const ozet = [
+        `Job: ${JOB_ID}`,
+        "",
+        `SES: ${yenidenUret.length}/${toplamSegment} yeniden uretilecek` + (yenidenUret.length ? ` (${yenidenUret.map(segmentAdi).join(", ")})` : " - hepsi aynen kaliyor"),
+        `Degisen metin: ${yazilan}`,
+        `GORSEL: ${gorselOk}/${toplamSlot} FLUX ile yenilendi` + (gorselYuklenen.length ? `, ${gorselYuklenen.length} elle yuklendi` : "") + (gorselFluxHata || gorselDriveHata ? ` (HATA: FLUX ${gorselFluxHata}, Drive ${gorselDriveHata})` : ""),
+      ].join("\n");
+
+      if (yenidenUret.length === 0 && yazilan === 0 && gorselDegisti === 0) {
         // HIC DEGISIKLIK YOK -> hicbir sey calistirma, uyari ver
         await telegram(job.chat_id,
-          `Son onay: HIC DEGISIKLIK YOK.\n\nJob: ${JOB_ID}\nNe ses yeniden uretildi ne metin degisti - hicbir islem calistirilmadi.`);
-        console.log("Degisiklik yok -> workflow tetiklenmedi");
+          `Son onay: HIC DEGISIKLIK YOK.\n\n${ozet}\n\nNe ses ne gorsel degisti - hicbir islem calistirilmadi.`);
+        console.log("Degisiklik yok (ses + gorsel) -> workflow tetiklenmedi");
         process.exit(0);
       }
 
       if (yenidenUret.length === 0) {
-        // Metin degismis ama kullanici yeniden uretim istememis -> sadece render
-        await telegram(job.chat_id,
-          `Son onay uygulandi\n\nJob: ${JOB_ID}\nYeniden uretilen ses: 0\nDegisen metin: ${yazilan}\n\nSadece video render ediliyor...`);
+        // Ses yenilenmiyor (gorsel degismis olabilir) -> dogrudan render
+        await telegram(job.chat_id, `Son onay uygulandi\n\n${ozet}\n\nSes yenilenmiyor, video render ediliyor...`);
         await tetikle("video_montaj", { job_id: JOB_ID, chat_id: job.chat_id });
         console.log("07-video-montaj tetiklendi (ses yeniden uretilmiyor)");
         process.exit(0);
       }
 
-      await telegram(job.chat_id,
-        `Son onay uygulandi\n\nJob: ${JOB_ID}\nYeniden uretilecek ses: ${yenidenUret.length} (${yenidenUret.join(", ")})\nAynen birakilan: ${(questions.length * 2 + 3) - yenidenUret.length}\nDegisen metin: ${yazilan}\n\nSeslendirme basliyor...`);
+      await telegram(job.chat_id, `Son onay uygulandi\n\n${ozet}\n\nSeslendirme basliyor...`);
       await tetikle("seslendirme_uret", { job_id: JOB_ID, chat_id: job.chat_id });
       console.log("03-seslendirme tetiklendi (secici uretim)");
       process.exit(0);
