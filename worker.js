@@ -1,4 +1,4 @@
-// REV 081/19SEP26 - son onay (stage=3) formuna gorsel yonetimi: birak/FLUX/yukle + secici liste
+// REV 082/19SEP26 - stage=3 gorsel yonetimi + inline JS kesme isareti kacisi duzeltmesi
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
 // REV 068/28JUN26 - regen fix: global try/catch (HTML hata->JSON), issueGuncelle res.ok kontrol, handleSubmit edit yazimi basarisizsa dispatch yok, handleStoreJob stale edits sifirla
@@ -2813,7 +2813,7 @@ async function gorselYukle(i){
   try{
     var r=await fetch('/api/upload-medya/'+JOB_ID+'/'+el.dataset.soru+'/'+el.dataset.slotkey,{method:'POST',body:fd});
     var j=await r.json();
-    if(j.ok){ YUKLENDI[i]=true; s.style.color='#6ee7b7'; s.textContent='✅ Drive'a yazildi (slot '+el.dataset.slot+')'; }
+    if(j.ok){ YUKLENDI[i]=true; s.style.color='#6ee7b7'; s.textContent="✅ Drive'a yazildi (slot "+el.dataset.slot+")"; }
     else { YUKLENDI[i]=false; s.style.color='#fca5a5'; s.textContent='❌ '+(j.error||'Yukleme hatasi'); }
   }catch(e){ YUKLENDI[i]=false; s.style.color='#fca5a5'; s.textContent='❌ '+e.message; }
   ozetGuncelle();
