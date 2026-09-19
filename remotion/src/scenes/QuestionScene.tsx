@@ -1,4 +1,4 @@
-// REV 025/08SEP26 - sik karti sagdan tasiyordu: reveal olcegi (1.15x) icin kolona yatay pay eklendi (sagda >=40px bosluk)
+// REV 026/19SEP26 - ses seviyeleri SES.* sabitlerinden
 import React from "react";
 import {
   AbsoluteFill,
@@ -12,7 +12,7 @@ import {
   Img,
   OffthreadVideo,
 } from "remotion";
-import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor, highlightPalette } from "../styles/theme";
+import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor, highlightPalette, SES } from "../styles/theme";
 import { Question, JessPoses } from "../types/schemas";
 import { JessCharacter } from "../components/JessCharacter";
 import { QuizHeader } from "../components/QuizHeader";
@@ -181,36 +181,36 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
       {/* AUDIO */}
       {question.question_audio_path && (
         <Sequence from={phases.show} durationInFrames={phases.countdown - phases.show}>
-          <Audio src={staticFile(question.question_audio_path)} volume={2.4} />
+          <Audio src={staticFile(question.question_audio_path)} volume={SES.KONUSMA_SORU} />
         </Sequence>
       )}
       {question.answer_audio_path && (
         <Sequence from={phases.reveal} durationInFrames={phases.transition - phases.reveal}>
-          <Audio src={staticFile(question.answer_audio_path)} volume={2.4} />
+          <Audio src={staticFile(question.answer_audio_path)} volume={SES.KONUSMA_SORU} />
         </Sequence>
       )}
       
       {/* SFX */}
       {sfx_progress && (
         <Sequence from={phases.countdown} durationInFrames={FIXED_FRAMES.countdown}>
-          <Audio src={staticFile(sfx_progress)} volume={0.5} />
+          <Audio src={staticFile(sfx_progress)} volume={SES.SFX_PROGRESS} />
         </Sequence>
       )}
       {sfx_tick && (
         <Sequence from={phases.drumRoll - (3 * FPS)} durationInFrames={3 * FPS}>
-          <Audio src={staticFile(sfx_tick)} volume={0.6} loop />
+          <Audio src={staticFile(sfx_tick)} volume={SES.SFX_TICK} loop />
         </Sequence>
       )}
       {/* DRUM - countdown bitince DRUMROLL fazında çalar (1s), sonra SESSIZ silentPause 1s */}
       {sfx_drum && (
         <Sequence from={phases.drumRoll} durationInFrames={FIXED_FRAMES.drumRoll}>
-          <Audio src={staticFile(sfx_drum)} volume={0.5} />
+          <Audio src={staticFile(sfx_drum)} volume={SES.SFX_DRUM} />
         </Sequence>
       )}
       {/* CORRECT - reveal anında çalar (silentPause bittikten sonra) */}
       {sfx_correct && (
         <Sequence from={phases.reveal} durationInFrames={Math.floor(FPS * 1.5)}>
-          <Audio src={staticFile(sfx_correct)} volume={0.5} />
+          <Audio src={staticFile(sfx_correct)} volume={SES.SFX_CORRECT} />
         </Sequence>
       )}
       {/* WHOOSH - 5 frame erken, +10 frame uzun, volume 1.0 */}
@@ -219,29 +219,29 @@ export const QuestionScene: React.FC<QuestionSceneProps> = ({
           from={Math.max(0, phases.transition - 5)}
           durationInFrames={FIXED_FRAMES.transition + 10}
         >
-          <Audio src={staticFile(sfx_whoosh)} volume={1.0} />
+          <Audio src={staticFile(sfx_whoosh)} volume={SES.SFX_WHOOSH} />
         </Sequence>
       )}
       {/* POP - şıklar çıkarken: card[0]=show+8, card[1]=show+26, card[2]=show+44 (ENTRY_OFFSET=8, STAGGER=18) */}
       {sfx_pop_single && (
         <Sequence from={phases.show + 8} durationInFrames={30}>
-          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
+          <Audio src={staticFile(sfx_pop_single)} volume={SES.SFX_POP} />
         </Sequence>
       )}
       {sfx_pop_single && (
         <Sequence from={phases.show + 26} durationInFrames={30}>
-          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
+          <Audio src={staticFile(sfx_pop_single)} volume={SES.SFX_POP} />
         </Sequence>
       )}
       {sfx_pop_double && (
         <Sequence from={phases.show + 44} durationInFrames={30}>
-          <Audio src={staticFile(sfx_pop_double)} volume={0.5} />
+          <Audio src={staticFile(sfx_pop_double)} volume={SES.SFX_POP} />
         </Sequence>
       )}
       {/* POP - fun fact ekranı açılınca */}
       {sfx_pop_single && (
         <Sequence from={phases.funFact} durationInFrames={30}>
-          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
+          <Audio src={staticFile(sfx_pop_single)} volume={SES.SFX_POP} />
         </Sequence>
       )}
       

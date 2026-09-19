@@ -1,4 +1,4 @@
-// REV 020/19SEP26 - YEREL gorsel onceligi: uploaded_image_url Drive URL i her karede agdan cekiliyordu -> Drive 429 -> render coktu
+// REV 021/19SEP26 - ses seviyeleri: sabit sayilar SES.* ile degistirildi, konusma+muzik yukseltildi
 import React from "react";
 import {
   AbsoluteFill,
@@ -7,7 +7,7 @@ import {
   useVideoConfig,
   staticFile,
 } from "remotion";
-import { FPS, FIXED_FRAMES, MUSIC_DUCK_FRAMES, getThemeForQuestion } from "../styles/theme";
+import { FPS, FIXED_FRAMES, MUSIC_DUCK_FRAMES, getThemeForQuestion, SES } from "../styles/theme";
 import { QuizCompositionProps } from "../types/schemas";
 import { IntroSceneShorts } from "../scenes/IntroSceneShorts";
 import { IntroSceneLong } from "../scenes/IntroSceneLong";
@@ -150,8 +150,8 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
       }
     }
 
-    const targetVol = whooshing ? 0.20 : (speaking ? 0.05 : 0.09);
-    const startVol = prevSpeaking ? 0.05 : 0.09;
+    const targetVol = whooshing ? SES.MUZIK_GECIS : (speaking ? SES.MUZIK_KONUSURKEN : SES.MUZIK_NORMAL);
+    const startVol = prevSpeaking ? SES.MUZIK_KONUSURKEN : SES.MUZIK_NORMAL;
 
     if (framesSinceChange < MUSIC_DUCK_FRAMES) {
       const t = framesSinceChange / MUSIC_DUCK_FRAMES;
@@ -182,7 +182,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
 
       {!is_test_mode && intro_audio_path && (
         <Sequence from={0} durationInFrames={introFrames}>
-          <Audio src={staticFile(intro_audio_path)} volume={2.2} />
+          <Audio src={staticFile(intro_audio_path)} volume={SES.KONUSMA_INTRO_OUTRO} />
         </Sequence>
       )}
       
@@ -192,7 +192,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           from={Math.ceil(jess_intro_video_duration * FPS) + Math.floor(FPS * 0.4)}
           durationInFrames={Math.ceil(topic_announce_duration * FPS)}
         >
-          <Audio src={staticFile(topic_announce_path)} volume={1.4} />
+          <Audio src={staticFile(topic_announce_path)} volume={SES.KONUSMA_DUYURU} />
         </Sequence>
       )}
       
@@ -309,7 +309,7 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
 
       {!is_test_mode && !skip_outro && outro_audio_path && (
         <Sequence from={outroStart + APPLAUSE_DELAY_FRAMES + 20} durationInFrames={outroFrames}>
-          <Audio src={staticFile(outro_audio_path)} volume={2.2} />
+          <Audio src={staticFile(outro_audio_path)} volume={SES.KONUSMA_INTRO_OUTRO} />
         </Sequence>
       )}
 
@@ -319,14 +319,14 @@ export const KidsQuizComposition: React.FC<QuizCompositionProps> = ({
           from={outroStart + APPLAUSE_DELAY_FRAMES + Math.ceil(jess_outro_video_duration * FPS) + Math.floor(FPS * 0.4)}
           durationInFrames={Math.ceil(outro_announce_duration * FPS)}
         >
-          <Audio src={staticFile(outro_announce_path)} volume={1.4} />
+          <Audio src={staticFile(outro_announce_path)} volume={SES.KONUSMA_DUYURU} />
         </Sequence>
       )}
 
       {/* OUTRO ALKIŞ - test modunda ve skip_outro=true ise atlanır */}
       {!is_test_mode && !skip_outro && sfx_applause && (
         <Sequence from={outroStart} durationInFrames={Math.floor(FPS * 3)}>
-          <Audio src={staticFile(sfx_applause)} volume={0.6} />
+          <Audio src={staticFile(sfx_applause)} volume={SES.SFX_APPLAUSE} />
         </Sequence>
       )}
       

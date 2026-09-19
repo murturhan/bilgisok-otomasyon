@@ -1,4 +1,4 @@
-// REV 002/28MAY26 - Jess jessEntryFrames sonra sağdan kayar; sahne sfx_celebration ile aynı anda başlar
+// REV 002/19SEP26 - ses seviyeleri SES.* sabitlerinden
 import React from "react";
 import {
   AbsoluteFill,
@@ -10,7 +10,7 @@ import {
   Video,
   staticFile,
 } from "remotion";
-import { BRAND, FONTS, THEME_COLORS, FPS } from "../styles/theme";
+import { BRAND, FONTS, THEME_COLORS, FPS, SES } from "../styles/theme";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { JessPoses } from "../types/schemas";
@@ -176,7 +176,7 @@ const JessEntryShorts: React.FC = () => {
       <Video
         src={staticFile("jess/outro.webm")}
         style={{ width: 900, height: 900, objectFit: "contain" }}
-        volume={1}
+        volume={SES.JESS_VIDEO}
       />
     </div>
   );

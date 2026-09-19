@@ -1,3 +1,4 @@
+// REV 001/19SEP26 - ses seviyeleri shared/ses-seviyeleri.js ten re-export
 /**
  * GeniMini Tests - Theme System (Quiz Blitz tarzı)
  * 
@@ -16,6 +17,12 @@ export const highlightPalette = ["#FFE600", "#FF5BA7", "#5BE0FF", "#7FFF7F", "#F
 
 // Yumuşak music ducking için frame sayısı
 export const MUSIC_DUCK_FRAMES = 15;
+
+// ─── SES SEVİYELERİ ───────────────────────────────────────────────────────
+// TEK KAYNAK: shared/ses-seviyeleri.js. Ayar için SADECE o dosyayı düzenle.
+// Aynı dosyayı scripts/07-video-montaj.js de okuyor (loudnorm hedefleri).
+// @ts-ignore - shared/ düz ESM JS; tsconfig include'u dışında ama bundler çözer.
+export { SES } from "../../../shared/ses-seviyeleri.js";
 
 // ─── FONT ─────────────────────────────────────────────
 // Quiz Blitz'in font ailesi: kalın, yuvarlak, çocuksu, sans-serif

@@ -1,4 +1,4 @@
-// REV 023/19SEP26 - hata bildirimi: Telegram ILK + duz metin, sessiz yutma kaldirildi (18EYL job sessizce dustu)
+// REV 024/19SEP26 - render sonrasi loudnorm: ses yuksekligi normalize, true-peak sinirli (clipping yok)
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
  *
@@ -32,6 +32,8 @@ import {
   getServiceAccountAuth,
 } from "./lib/google.js";
 import { telegram, telegramHata } from "./lib/telegram.js";
+// SES SEVIYELERI TEK KAYNAK — Remotion mix ile ayni dosya
+import { LOUDNESS, loudnormFiltresi } from "../shared/ses-seviyeleri.js";
 
 const execAsync = promisify(exec);
 
@@ -848,6 +850,34 @@ async function main() {
     
     const finalStats = fs.statSync(finalVideoYol);
     console.log(`✓ Final video: ${(finalStats.size / 1024 / 1024).toFixed(1)} MB`);
+
+    // ── 11b. SES YÜKSEKLİĞİ NORMALİZASYONU (loudnorm) ───────────────────────
+    // Konuşma ve müzik "düşük geliyor" şikâyetinin ASIL çözümü burası.
+    // Remotion'daki volume çarpanlarını büyütmek kaynak zaten yüksekse
+    // CLIPPING yapar, sesi açmaz. loudnorm mix'i ÖLÇÜP hedef yüksekliğe
+    // normalize eder ve true-peak'i sınırlar → bozulma olmadan yüksek ses.
+    // Hedefler shared/ses-seviyeleri.js içinde (tek kaynak).
+    // VİDEO YENİDEN KODLANMAZ (-c:v copy) — sadece ses işlenir, hızlıdır.
+    try {
+      const normYol = path.join(TMP_DIR, "final-norm.mp4");
+      const normCmd =
+        `ffmpeg -y -hide_banner -loglevel error -i "${finalVideoYol}" ` +
+        `-c:v copy -af "${loudnormFiltresi()}" -c:a aac -b:a ${LOUDNESS.AAC_BITRATE} "${normYol}"`;
+      console.log(`🔊 Ses normalize ediliyor: ${loudnormFiltresi()}`);
+      const normBaslangic = Date.now();
+      await execAsync(normCmd, { maxBuffer: 10 * 1024 * 1024 });
+      if (fs.existsSync(normYol) && fs.statSync(normYol).size > 0) {
+        fs.rmSync(finalVideoYol, { force: true });
+        fs.renameSync(normYol, finalVideoYol);
+        const yeniBoyut = fs.statSync(finalVideoYol).size;
+        console.log(`✓ Ses normalize edildi (${((Date.now() - normBaslangic) / 1000).toFixed(0)}s, ${(yeniBoyut / 1024 / 1024).toFixed(1)} MB)`);
+      } else {
+        console.warn("⚠ Normalize çıktısı oluşmadı — ORİJİNAL ses korunuyor");
+      }
+    } catch (e) {
+      // Normalize başarısız olursa video YİNE DE teslim edilir (sadece ses daha kısık)
+      console.warn(`⚠ Ses normalize edilemedi (devam): ${e.message.substring(0, 200)}`);
+    }
 
     // 12. Drive'a yükle
     let videoKlasor = await driveAltKlasorBul("07-video", job.drive_folder_id);

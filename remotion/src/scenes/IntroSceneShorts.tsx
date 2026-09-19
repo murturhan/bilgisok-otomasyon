@@ -1,4 +1,4 @@
-// REV 009/15SEP26 - muteJessVoice: selamlama TTS ten gelince Jess videosunun kendi sesi kisilir (cift selamlama)
+// REV 010/19SEP26 - ses seviyeleri SES.* sabitlerinden
 import React from "react";
 import {
   AbsoluteFill,
@@ -11,7 +11,7 @@ import {
   Video,
   staticFile,
 } from "remotion";
-import { BRAND, FONTS, THEME_COLORS, FPS } from "../styles/theme";
+import { BRAND, FONTS, THEME_COLORS, FPS, SES } from "../styles/theme";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { GeniMiniLogo } from "../components/BrandAssets";
@@ -161,7 +161,7 @@ const Scene1Shorts: React.FC<{ muteJessVoice?: boolean }> = ({ muteJessVoice = f
         <Video
           src={staticFile("jess/intro.webm")}
           style={{ width: 900, height: 900, objectFit: "contain" }}
-          volume={muteJessVoice ? 0 : 1}
+          volume={muteJessVoice ? 0 : SES.JESS_VIDEO}
         />
       </div>
     </>
@@ -320,18 +320,18 @@ const Scene2Shorts: React.FC<{ topic: string; topicEmojis?: string[]; startFrame
       {Array.from({ length: emojiSingleCount }).map((_, i) =>
         sfx_pop_single ? (
           <Sequence key={`epop-s-${i}`} from={startFrame + titleEndLocalFrame + i * EMOJI_STAGGER} durationInFrames={20}>
-            <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
+            <Audio src={staticFile(sfx_pop_single)} volume={SES.SFX_POP} />
           </Sequence>
         ) : null
       )}
       {emojiCount >= 2 && sfx_pop_double && (
         <Sequence from={startFrame + titleEndLocalFrame + emojiSingleCount * EMOJI_STAGGER} durationInFrames={20}>
-          <Audio src={staticFile(sfx_pop_double)} volume={0.5} />
+          <Audio src={staticFile(sfx_pop_double)} volume={SES.SFX_POP} />
         </Sequence>
       )}
       {emojiCount === 1 && sfx_pop_single && (
         <Sequence from={startFrame + titleEndLocalFrame} durationInFrames={20}>
-          <Audio src={staticFile(sfx_pop_single)} volume={0.5} />
+          <Audio src={staticFile(sfx_pop_single)} volume={SES.SFX_POP} />
         </Sequence>
       )}
     </>

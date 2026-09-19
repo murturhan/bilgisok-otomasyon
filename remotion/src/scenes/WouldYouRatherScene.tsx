@@ -1,4 +1,4 @@
-// REV 013/17JUN26 - whoosh SFX WYR transition'a eklendi
+// REV 002/19SEP26 - ses seviyeleri SES.* sabitlerinden
 import React from "react";
 import {
   AbsoluteFill,
@@ -12,7 +12,7 @@ import {
   Img,
   OffthreadVideo,
 } from "remotion";
-import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor, highlightPalette } from "../styles/theme";
+import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor, highlightPalette, SES } from "../styles/theme";
 import { WouldYouRatherQuestion, JessPoses } from "../types/schemas";
 import { JessCharacter } from "../components/JessCharacter";
 import { QuizHeader } from "../components/QuizHeader";
@@ -190,27 +190,27 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
       {/* AUDIO */}
       {question.question_audio_path && (
         <Sequence from={phases.show} durationInFrames={phases.countdown - phases.show}>
-          <Audio src={staticFile(question.question_audio_path)} volume={2.4} />
+          <Audio src={staticFile(question.question_audio_path)} volume={SES.KONUSMA_SORU} />
         </Sequence>
       )}
       {question.reveal_audio_path && (
         <Sequence from={phases.reaction} durationInFrames={phases.transition - phases.reaction}>
-          <Audio src={staticFile(question.reveal_audio_path)} volume={2.4} />
+          <Audio src={staticFile(question.reveal_audio_path)} volume={SES.KONUSMA_SORU} />
         </Sequence>
       )}
       {sfx_pop_double && isRevealed && (
         <Sequence from={phases.reveal} durationInFrames={30}>
-          <Audio src={staticFile(sfx_pop_double)} volume={0.8} />
+          <Audio src={staticFile(sfx_pop_double)} volume={SES.SFX_POP_WYR} />
         </Sequence>
       )}
       {sfx_progress && showProgressBar && (
         <Sequence from={phases.countdown} durationInFrames={WYR_COUNTDOWN_FRAMES}>
-          <Audio src={staticFile(sfx_progress)} volume={0.4} />
+          <Audio src={staticFile(sfx_progress)} volume={SES.SFX_PROGRESS_WYR} />
         </Sequence>
       )}
       {sfx_drum && inSilentPause && (
         <Sequence from={phases.timerEnd} durationInFrames={Math.floor(FPS * 0.8)}>
-          <Audio src={staticFile(sfx_drum)} volume={0.8} />
+          <Audio src={staticFile(sfx_drum)} volume={SES.SFX_DRUM_WYR} />
         </Sequence>
       )}
       {sfx_whoosh && (
@@ -218,7 +218,7 @@ export const WouldYouRatherScene: React.FC<WouldYouRatherSceneProps> = ({
           from={Math.max(0, phases.transition - 5)}
           durationInFrames={FIXED_FRAMES.transition + 10}
         >
-          <Audio src={staticFile(sfx_whoosh)} volume={1.0} />
+          <Audio src={staticFile(sfx_whoosh)} volume={SES.SFX_WHOOSH} />
         </Sequence>
       )}
 
