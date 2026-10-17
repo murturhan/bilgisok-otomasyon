@@ -1,3 +1,4 @@
+// REV 083/17EKI26 - Onay 2: video da aninda /api/upload-medya (base64 yok, % ilerleme, yukleme bitmeden gonder kilitli) + siskin alan raporu + ekran_basligi konudan turetme fallback
 // REV 082/19SEP26 - stage=3 gorsel yonetimi + inline JS kesme isareti kacisi duzeltmesi
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
 // REV 069/29JUN26 - submit_ saglamlastirma: timeout+otomatik retry (Failed to fetch), buyuk base64 govde uyarisi, JSON parse fallback, net hata mesaji
@@ -456,6 +457,26 @@ async function handleSubmit(request, env, url, ctx) {
   return json({ ok: true });
 }
 
+// ─── EKRAN BAŞLIĞI ASLA BOŞ KALMAZ — konudan türet ────────────
+// "dinosaurs" -> "AMAZING DINOSAURS", "wild animals of africa" -> "WILD ANIMALS AFRICA".
+// Max 25 karakter / 4 kelime (onay formu sayacı ile aynı kural), kelime ortasından kesmez.
+function ekranBasligiKonudanTuret(konu) {
+  const DOLGU = new Set(["the","a","an","of","for","in","on","at","to","and","or","with","about","from","by",
+    "kids","kid","quiz","quizzes","trivia","fun","facts","fact","test","video","videos","game","games","challenge","edition","children"]);
+  const ilkCumle = String(konu || "").replace(/[*]{2}/g, "").split(/[?!.\n]/)[0] || "";
+  const kelimeler = ilkCumle.replace(/[^\p{L}\p{N}\s'-]/gu, " ").split(/\s+/).filter(Boolean)
+    .filter(k => !DOLGU.has(k.toLowerCase()));
+  const sec = [];
+  for (const w of kelimeler.slice(0, 3)) {
+    const aday = sec.length ? `${sec.join(" ")} ${w}` : w;
+    if (aday.length > 25) break;
+    sec.push(w);
+  }
+  let eb = sec.join(" ").toUpperCase();
+  if (sec.length === 1 && eb.length <= 17) eb = `AMAZING ${eb}`;
+  return eb || "FUN QUIZ";
+}
+
 // ─── GET /?job=ID — Onay Sayfası ──────────────────────────────
 async function handleApprovalPage(request, env, url) {
   const jobId = url.searchParams.get("job") || "";
@@ -496,9 +517,11 @@ async function handleApprovalPage(request, env, url) {
     return sec.join(" ");
   };
   const ekranBasligiHam = String(job.ekran_basligi || job.intro_title || "").replace(/[*]{2}/g, "").trim();
-  const ekranBasligi = (ekranBasligiHam.length > EB_MAX || ekranBasligiHam.split(/\s+/).filter(Boolean).length > EB_MAX_KELIME)
+  const ekranBasligiKisa = (ekranBasligiHam.length > EB_MAX || ekranBasligiHam.split(/\s+/).filter(Boolean).length > EB_MAX_KELIME)
     ? ebKisalt(ekranBasligiHam)
     : ekranBasligiHam;
+  // ASLA boş kalmasın: kayıtlı değer yoksa konudan türet
+  const ekranBasligi = ekranBasligiKisa || ekranBasligiKonudanTuret(topic || job.konu || baslik);
 
   // JESS METİNLERİ — kutular ASLA boş kalmasın. Kayıtlı değer varsa o, yoksa
   // konuya uygun GERÇEK bir metin üretilir (placeholder DEĞİL; kullanıcı okur,
@@ -604,6 +627,7 @@ textarea{min-height:56px}
   </div>
 </div>
 <div id="status"></div>
+<div id="upload_bar" style="display:none;margin:0 16px 8px;padding:8px 12px;border-radius:8px;background:#78350f;color:#fef3c7;font-size:.82em;font-weight:600"></div>
 <form id="frm" onsubmit="return false" class="cards">
 <div class="card" style="padding:12px 14px;border:1px solid #b45309">
   <div style="font-size:.8em;color:#fcd34d;font-weight:700;margin-bottom:10px">🎬 VİDEO METİNLERİ (ekranda görünen + Jess'in konuştuğu)</div>
@@ -703,45 +727,64 @@ function joSayac(){jessSayacUygula("jess_outro_s2","jo_sayac",30);}   // SEGMENT
 document.addEventListener("DOMContentLoaded",function(){ebSayac();kdSayac();joSayac();});
 function chk(id){const e=document.getElementById(id);return e?e.checked:false;}
 
-// Resim seclince ANINDA Drive'a yukle, state'te sadece URL tut (base64 YOK -> body sismez).
-// Video: simdilik base64 (degismedi) — buyuk video body'yi sisirir, guard uyarir.
+// Resim VE video seclince ANINDA Drive'a yukle (/api/upload-medya), state'te sadece URL tut.
+// POST govdesinde base64 YOK -> body sismez. Yukleme bitene kadar gonder butonlari kilitli.
+var _aktifYukleme=0;
+function yuklemeDurumu(){
+  var kilit=_aktifYukleme>0;
+  document.querySelectorAll(".sticky-btns button").forEach(function(b){b.disabled=kilit;b.style.opacity=kilit?".45":"";b.style.cursor=kilit?"not-allowed":"";});
+  var ub=document.getElementById("upload_bar");
+  if(ub){ub.style.display=kilit?"block":"none";ub.textContent="⏳ "+_aktifYukleme+" dosya Drive'a yukleniyor — bitene kadar gonder butonlari kapali";}
+}
+function medyaYukle(file,idx,slotKey,isVideo,onProg){
+  return new Promise(function(res,rej){
+    var fd=new FormData();fd.append("file",file);
+    if(isVideo)fd.append("video_ayri","1"); // video-NN-<ts> adiyla yaz, slot gorselini SILME
+    var x=new XMLHttpRequest();
+    x.open("POST","/api/upload-medya/"+JOB_ID+"/"+idx+"/"+slotKey);
+    x.upload.onprogress=function(e){if(e.lengthComputable&&onProg)onProg(Math.round(e.loaded*100/e.total));};
+    x.onload=function(){var d;try{d=JSON.parse(x.responseText);}catch(_){return rej(new Error("HTTP "+x.status+": "+String(x.responseText||"").slice(0,120)));}res(d);};
+    x.onerror=function(){rej(new Error("Ag hatasi"));};
+    x.send(fd);
+  });
+}
 function handleFileChange(inp,previewId,key,isVideo){
   var file=inp.files[0];if(!file)return;
   var prev=document.getElementById(previewId);
-  if(isVideo){
-    var reader=new FileReader();
-    reader.onload=function(e){
-      customVideos[key]=e.target.result;
-      var mb=(file.size/1024/1024).toFixed(1);
-      if(prev)prev.innerHTML='<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video</span><button type="button" data-p="'+previewId+'" data-k="'+key+'" onclick="clearMediaStage2(this.dataset.p,this.dataset.k,true)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
-    };
-    reader.readAsDataURL(file);
-    return;
-  }
-  // key: cq/cf/cv/cs (2 char prefix) + index. slice ile parse (regex/escape derdi yok).
-  var pfx=key.slice(0,2), idx=key.slice(2);
-  var slotMap={cq:"image",cf:"fact_image",cv:"visible_image",cs:"surprise_image"};
+  // key: gorsel cq/cf/cv/cs + index | video cqv/cfv/cvv/csv + index. slice ile parse (regex/escape derdi yok).
+  var pfxLen=isVideo?3:2;
+  var pfx=key.slice(0,pfxLen), idx=key.slice(pfxLen);
+  var slotMap=isVideo?{cqv:"image",cfv:"fact_image",cvv:"visible_image",csv:"surprise_image"}:{cq:"image",cf:"fact_image",cv:"visible_image",cs:"surprise_image"};
   var regMap={cq:"_rq",cf:"_rf",cv:"_rv",cs:"_rs"};
   var slotKey=slotMap[pfx];
   if(!slotKey){if(prev)prev.innerHTML='<span style="color:#fca5a5">Slot cozulemedi: '+key+'</span>';return;}
-  // Custom yukleme regen'i ezsin (ikisi birden olmasin)
-  var rcb=document.getElementById("q"+idx+regMap[pfx]);if(rcb)rcb.checked=false;
-  // Aninda onizleme (object URL), arkada Drive upload
+  // Custom gorsel yukleme regen'i ezsin (ikisi birden olmasin)
+  if(!isVideo){var rcb=document.getElementById("q"+idx+regMap[pfx]);if(rcb)rcb.checked=false;}
+  if(isVideo)delete customVideos[key];else delete customImages[key];
+  var mb=(file.size/1024/1024).toFixed(1);
+  // Aninda onizleme (object URL), arkada Drive upload + yuzde gostergesi
   var objUrl=URL.createObjectURL(file);
-  if(prev)prev.innerHTML='<img src="'+objUrl+'" style="width:100%;border-radius:8px"><span class="preview-badge">⏳ Yukleniyor...</span>';
-  var fd=new FormData();fd.append("file",file);
-  fetch("/api/upload-medya/"+JOB_ID+"/"+idx+"/"+slotKey,{method:"POST",body:fd})
-    .then(function(r){return r.json();})
+  if(prev)prev.innerHTML=(isVideo
+    ?'<video src="'+objUrl+'" muted style="max-height:90px;width:100%;border-radius:8px"></video>'
+    :'<img src="'+objUrl+'" style="width:100%;border-radius:8px">')
+    +'<span class="preview-badge" style="background:#b45309">⏳ %0</span>';
+  var badge=prev?prev.querySelector(".preview-badge"):null;
+  _aktifYukleme++;yuklemeDurumu();
+  medyaYukle(file,idx,slotKey,isVideo,function(p){if(badge)badge.textContent=(p<100?"⏳ %"+p:"⏳ Drive'a yaziliyor...");})
     .then(function(d){
       if(d.ok&&d.url){
-        customImages[key]=d.url; // SADECE URL (kisa string), base64 degil
-        console.log("[upload-medya] "+key+" (soru "+idx+", "+slotKey+") -> "+d.url);
-        if(prev)prev.innerHTML='<img src="'+d.url+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yuklendi (Drive)</span><button type="button" data-p="'+previewId+'" data-k="'+key+'" onclick="clearMediaStage2(this.dataset.p,this.dataset.k,false)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
+        if(isVideo)customVideos[key]=d.url;else customImages[key]=d.url; // SADECE URL (kisa string), base64 degil
+        console.log("[upload-medya] "+key+" (soru "+idx+", "+slotKey+", "+mb+"MB) -> "+d.url);
+        var kaldir='<button type="button" data-p="'+previewId+'" data-k="'+key+'" data-v="'+(isVideo?"1":"")+'" onclick="clearMediaStage2(this.dataset.p,this.dataset.k,!!this.dataset.v)" style="display:block;margin-top:4px;padding:3px 8px;background:transparent;border:1px solid #ef4444;color:#fca5a5;border-radius:4px;font-size:.75em;cursor:pointer">❌ Kaldır</button>';
+        if(prev)prev.innerHTML=(isVideo
+          ?'<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video yuklendi (Drive)</span>'
+          :'<img src="'+d.url+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yuklendi (Drive)</span>')+kaldir;
       }else{
         if(prev)prev.innerHTML='<span style="color:#fca5a5">✗ Yukleme hatasi: '+(d.error||"bilinmeyen")+'</span>';
       }
     })
-    .catch(function(e){if(prev)prev.innerHTML='<span style="color:#fca5a5">✗ Ag hatasi: '+e.message+'</span>';});
+    .catch(function(e){if(prev)prev.innerHTML='<span style="color:#fca5a5">✗ Ag hatasi: '+e.message+'</span>';})
+    .then(function(){_aktifYukleme--;yuklemeDurumu();});
   inp.value="";
 }
 function clearMediaStage2(previewId,key,isVideo){
@@ -981,8 +1024,26 @@ function collectEdits(){
   return edits;
 }
 
+// Govde sisince suclu alanlari bul: 100 KB ustu her alan "soru N alan (X MB)" olarak listelenir.
+function siskinAlanlar(obj){
+  const liste=[];
+  (function gez(o,yol){
+    if(o&&typeof o==="object"){Object.keys(o).forEach(function(k){gez(o[k],yol?yol+"."+k:k);});return;}
+    const n=JSON.stringify(o===undefined?null:o).length;
+    if(n>102400)liste.push({yol:yol,n:n});
+  })(obj,"");
+  liste.sort(function(a,b){return b.n-a.n;});
+  if(!liste.length)return "(tek bir buyuk alan yok — toplam metin hacmi)";
+  return liste.slice(0,6).map(function(a){
+    const p=a.yol.split(".");
+    const ad=(p[0]==="edits"&&/^[0-9]+$/.test(p[1]||""))?("soru "+(parseInt(p[1])+1)+" "+p.slice(2).join(".")):a.yol;
+    return ad+" ("+(a.n/1048576).toFixed(1)+" MB)";
+  }).join(", ");
+}
+
 async function submit_(level, applyEdits){
   playClick();
+  if(_aktifYukleme>0){const s0=document.getElementById("status");s0.style.display="block";s0.className="err";s0.textContent="⏳ "+_aktifYukleme+" dosya hala yukleniyor — bitince tekrar bas.";return;}
   const allBtns=document.querySelectorAll(".sticky-btns button");
   allBtns.forEach(function(b){b.disabled=true;});
   const edits = applyEdits ? collectEdits() : {};
@@ -998,10 +1059,11 @@ async function submit_(level, applyEdits){
   st.style.display="block";st.className="";
   st.textContent="⏳ "+(msgs[level+"+"+applyEdits]||"Gönderiliyor...");
   const payload=JSON.stringify({edits,approval_level:level,chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2'),konu_duyuru_audio_text:val('konu_duyuru_s2'),outro_audio_text:val('jess_outro_s2')});
-  // Cok buyuk govde uyarisi (custom gorseller base64 data URL olarak gomulu -> "Failed to fetch" sebebi)
+  // Cok buyuk govde guard'i — medya artik URL olarak gidiyor, normalde TETIKLENMEZ.
+  // Tetiklenirse hangi alanin sistigini soyler.
   const mb=payload.length/1048576;
   if(applyEdits) console.log("[submit_] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
-  if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB) — custom gorselleri tek tek 'Yukle' butonuyla yukleyip oyle gonder. Base64 yukleme cok agir.";allBtns.forEach(function(b){b.disabled=false;});return;}
+  if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB). Sisen alanlar: "+siskinAlanlar(JSON.parse(payload));allBtns.forEach(function(b){b.disabled=false;});return;}
   // Timeout + otomatik yeniden deneme (transient "Failed to fetch" icin)
   async function postOnce(){
     const ctl=new AbortController();
@@ -1042,6 +1104,7 @@ async function submit_(level, applyEdits){
 // ─── KAYDET: degisiklikleri sakla, RENDER TETIKLEME ──────────────
 async function kaydet(){
   playClick();
+  if(_aktifYukleme>0){const s0=document.getElementById("status");s0.style.display="block";s0.className="err";s0.textContent="⏳ "+_aktifYukleme+" dosya hala yukleniyor — bitince tekrar bas.";return;}
   const allBtns=document.querySelectorAll(".sticky-btns button");
   allBtns.forEach(function(b){b.disabled=true;});
   const st=document.getElementById("status");
@@ -1052,7 +1115,7 @@ async function kaydet(){
   const payload=JSON.stringify({edits,approval_level:"save_only",chat_id:CHAT_ID,video_baslik:val('video_baslik_s2'),ekran_basligi:val('ekran_basligi_s2'),konu_duyuru_audio_text:val('konu_duyuru_s2'),outro_audio_text:val('jess_outro_s2')});
   const mb=payload.length/1048576;
   console.log("[KAYDET] body size: "+(payload.length/1024).toFixed(1)+" KB ("+mb.toFixed(2)+" MB)");
-  if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB) — custom gorselleri tek tek 'Yukle' butonuyla yukle.";allBtns.forEach(function(b){b.disabled=false;});return;}
+  if(mb>20){st.className="err";st.textContent="❌ Govde cok buyuk ("+mb.toFixed(1)+" MB). Sisen alanlar: "+siskinAlanlar(JSON.parse(payload));allBtns.forEach(function(b){b.disabled=false;});return;}
   try{
     const ctl=new AbortController();
     const to=setTimeout(function(){ctl.abort();},90000);
@@ -1429,7 +1492,8 @@ async function handleContentApprovalPage(request, env, url) {
   const job = mevcut.data.job;
   const { baslik = "", format = "", chat_id = "", topic_emojis = [], questions = [], konu = "" } = job;
   // Ekran basligi: videoda gorunen KISA baslik (max 4 kelime). Ham konu paragrafi ASLA kullanilmaz.
-  const ekranBasligi = String(job.ekran_basligi || job.intro_title || "").replace(/[*]{2}/g, "").trim();
+  const ekranBasligi = String(job.ekran_basligi || job.intro_title || "").replace(/[*]{2}/g, "").trim()
+    || ekranBasligiKonudanTuret(konu || job.topic || baslik); // ASLA boş kalmasın
 
   // Server-side kart render (JS render problemini bypass eder)
   const typeOptsHtml = (qtype) =>
@@ -2193,11 +2257,15 @@ async function handleUploadMedya(request, env, url) {
     const soruIdxInt = parseInt(soruIdx) || 0;
     const gorselNum = (slotKey === "image" || slotKey === "visible_image") ? (2 * soruIdxInt + 1) : (2 * soruIdxInt + 2);
     const slotStr = String(gorselNum).padStart(2, "0");
-    const filename = `gorsel-${slotStr}.${ext}`;
+    // video_ayri=1 (onay 2 video yukleme): eski base64 akisiyla (02.7 driveVideoYukle) AYNI ad
+    // "video-NN-<ts>" — slot gorseli SILINMEZ. 07 montaj gorselleri uzantiyla filtreleyip
+    // sirayla eslestirdigi icin gorsel-NN silinirse tum sorularin gorseli kayar.
+    const videoAyri = String(formData.get("video_ayri") || "") === "1";
+    const filename = videoAyri ? `video-${slotStr}-${Date.now()}.${ext}` : `gorsel-${slotStr}.${ext}`;
 
     // Ayni slot'taki eski gorselleri sil (02.7 ile ayni davranis — duplicate slot dosyasi olmasin,
     // render/02.5 dogru gorseli secsin). Best-effort: hata olursa upload yine devam eder.
-    try {
+    if (!videoAyri) try {
       const slotPrefix = `gorsel-${slotStr}`;
       const slotRe = new RegExp(`^gorsel-${slotStr}[-.]`); // "gorsel-05.jpg" + legacy "gorsel-05-<ts>.jpg"
       const eskiRes = await fetch(

@@ -1,3 +1,4 @@
+// REV 024/17EKI26 - custom_*_video artik hazir Drive URL olarak gelebiliyor (onay 2 anlik yukleme), base64 yolu korundu
 // REV 023/19SEP26 - stage=3 gorsel yonetimi: secici FLUX regen (slot bazli) + ortak ses/gorsel ozeti
 /**
  * 02.7-degisiklik-uygula.js
@@ -254,6 +255,15 @@ function base64ToVideoBuffer(dataUrl) {
   let ext = mime.split("/")[1];
   if (ext === "quicktime") ext = "mov";
   return { ext, mime, buffer: Buffer.from(match[2], "base64") };
+}
+
+/**
+ * Onay 2 artik videoyu /api/upload-medya ile ONCEDEN Drive'a yukluyor ve
+ * edit'e sadece URL koyuyor (base64 degil). URL ise aynen kullan, degilse null.
+ */
+function hazirVideoUrl(v) {
+  const s = String(v || "").trim();
+  return /^https?:\/\//i.test(s) ? s : null;
 }
 
 /**
@@ -712,7 +722,13 @@ async function main() {
         }
 
         // WYR custom VIDEO upload (görsel yerine video)
-        if (edit.custom_visible_video) {
+        if (edit.custom_visible_video && hazirVideoUrl(edit.custom_visible_video)) {
+          const videoUrl = hazirVideoUrl(edit.custom_visible_video); // onay 2'de zaten Drive'a yuklendi
+          if (!q.visible_option) q.visible_option = {};
+          q.visible_option.video_url = videoUrl;
+          customUploadedCount++;
+          console.log(`WYR visible video (hazir URL): ${videoUrl}`);
+        } else if (edit.custom_visible_video) {
           const decoded = base64ToVideoBuffer(edit.custom_visible_video);
           if (decoded) {
             const slot = slotForQuestion(idx, "question");
@@ -724,7 +740,13 @@ async function main() {
           }
         }
 
-        if (edit.custom_surprise_video) {
+        if (edit.custom_surprise_video && hazirVideoUrl(edit.custom_surprise_video)) {
+          const videoUrl = hazirVideoUrl(edit.custom_surprise_video); // onay 2'de zaten Drive'a yuklendi
+          if (!q.surprise_option) q.surprise_option = {};
+          q.surprise_option.surprise_video_url = videoUrl;
+          customUploadedCount++;
+          console.log(`WYR surprise video (hazir URL): ${videoUrl}`);
+        } else if (edit.custom_surprise_video) {
           const decoded = base64ToVideoBuffer(edit.custom_surprise_video);
           if (decoded) {
             const slot = slotForQuestion(idx, "fact");
@@ -802,7 +824,12 @@ async function main() {
       q.answer_audio_text = `The correct answer is ${correctLetter}: ${correctOption}! ${q.fun_fact}`;
       
       // Custom VIDEO upload (görsel yerine video)
-      if (edit.custom_question_video) {
+      if (edit.custom_question_video && hazirVideoUrl(edit.custom_question_video)) {
+        const videoUrl = hazirVideoUrl(edit.custom_question_video); // onay 2'de zaten Drive'a yuklendi
+        q.question_video_url = videoUrl;
+        customUploadedCount++;
+        console.log(`Custom question video (hazir URL): ${videoUrl}`);
+      } else if (edit.custom_question_video) {
         const decoded = base64ToVideoBuffer(edit.custom_question_video);
         if (decoded) {
           const slot = slotForQuestion(idx, "question");
@@ -813,7 +840,12 @@ async function main() {
         }
       }
 
-      if (edit.custom_fact_video) {
+      if (edit.custom_fact_video && hazirVideoUrl(edit.custom_fact_video)) {
+        const videoUrl = hazirVideoUrl(edit.custom_fact_video); // onay 2'de zaten Drive'a yuklendi
+        q.fun_fact_video_url = videoUrl;
+        customUploadedCount++;
+        console.log(`Custom fact video (hazir URL): ${videoUrl}`);
+      } else if (edit.custom_fact_video) {
         const decoded = base64ToVideoBuffer(edit.custom_fact_video);
         if (decoded) {
           const slot = slotForQuestion(idx, "fact");

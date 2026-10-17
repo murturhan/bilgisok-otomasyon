@@ -1,3 +1,4 @@
+// REV 003/17EKI26 - Worker job payload'una ekran_basligi + intro_title eklendi (onay 1 formu bos geliyordu)
 // REV 002/04JUN26 - Worker'a job data POST et + stage=1 onay linki gönder (Parça 2)
 
 import { google } from "googleapis";
@@ -69,6 +70,10 @@ async function main() {
       baslik: questionsData.baslik || job.baslik || "",
       format: FORMAT,
       konu: questionsData.konu || job.konu || "",
+      // 01 ekran_basligi'ni uretip questions.json'a yaziyor; buraya aktarilmazsa
+      // onay 1 formu BOS aciliyor ve submit "" yaziyordu (U2610163148L).
+      ekran_basligi: String(questionsData.ekran_basligi || questionsData.intro_title || "").replace(/[*]{2}/g, "").trim(),
+      intro_title: questionsData.intro_title || "",
       topic_emojis: questionsData.topic_emojis || [],
       drive_folder_id: driveFolderId,
       questions: questionsData.questions || [],
