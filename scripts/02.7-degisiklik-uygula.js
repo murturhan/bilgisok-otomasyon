@@ -1,3 +1,4 @@
+// REV 025/18EKI26 - video raporu: form yukleme hatalari + taninmayan video degeri + video slot sayisi Telegram mesajina
 // REV 024/17EKI26 - custom_*_video artik hazir Drive URL olarak gelebiliyor (onay 2 anlik yukleme), base64 yolu korundu
 // REV 023/19SEP26 - stage=3 gorsel yonetimi: secici FLUX regen (slot bazli) + ortak ses/gorsel ozeti
 /**
@@ -656,6 +657,26 @@ async function main() {
     const regenQuestionImages = []; // FLUX ile üretilecek
     const regenFactImages = [];
     let customUploadedCount = 0;
+
+    // VIDEO RAPORU — yukleme basarisizliklari SESSIZ KALMASIN (Telegram'a yazilir).
+    // a) formun bildirdigi hatalar (edits._yukleme_hatalari: tarayicida yukleme dustu / kaldirildi)
+    // b) 02.7'ye gelen ama kullanilamayan video degerleri (URL de degil, data:video base64 de degil)
+    const videoSorunlari = [];
+    for (const h of (Array.isArray(edits._yukleme_hatalari) ? edits._yukleme_hatalari : [])) {
+      videoSorunlari.push(`soru ${h.soru} ${h.slot || ""} ${h.tip === "video" ? "video" : "gorsel"} yuklenemedi: ${h.sebep || "bilinmeyen"}`.replace(/\s+/g, " "));
+    }
+    const VIDEO_ALANLARI = { custom_question_video: "soru gorseli", custom_fact_video: "fact gorseli", custom_visible_video: "secenek", custom_surprise_video: "surpriz" };
+    for (const [idxStr, edit] of Object.entries(edits)) {
+      if (!/^\d+$/.test(idxStr) || !edit) continue;
+      for (const [alan, slotAdi] of Object.entries(VIDEO_ALANLARI)) {
+        const v = edit[alan];
+        if (!v) continue;
+        if (!hazirVideoUrl(v) && !base64ToVideoBuffer(v)) {
+          videoSorunlari.push(`soru ${parseInt(idxStr) + 1} ${slotAdi} video yuklenemedi: format taninmadi (${String(v).slice(0, 30)}...)`);
+        }
+      }
+    }
+    if (videoSorunlari.length) console.warn(`⚠ Video sorunlari:\n  ${videoSorunlari.join("\n  ")}`);
     
     for (const [idxStr, edit] of Object.entries(edits)) {
       // Sadece sayisal anahtarlar soru index'idir. _stage1_meta/sorular/silinen_original_indices/
@@ -1046,6 +1067,15 @@ async function main() {
     }
     
     const editCount = Object.keys(edits).length;
+
+    // Video slot ozeti (questions.json'daki SON durum): kac slotta video var
+    let videoSlotSayisi = 0;
+    for (const q of (questionsData.questions || [])) {
+      if (q.question_video_url || q.uploaded_video_url || q.visible_option?.video_url) videoSlotSayisi++;
+      if (q.fun_fact_video_url || q.uploaded_fact_video_url || q.surprise_option?.surprise_video_url) videoSlotSayisi++;
+    }
+    const videoRaporMetni = `\nVideo slot: ${videoSlotSayisi}` +
+      (videoSorunlari.length ? `\n⚠ ${videoSorunlari.join("\n⚠ ")}` : "");
     
     await jobGuncelle(JOB_ID, { onay_status: `completed:${APPROVAL}` });
     
@@ -1054,7 +1084,7 @@ async function main() {
       // Sadece görsel + text değişiklikleri uygulandı, yeni onay turuna git
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}${videoRaporMetni}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
 Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sabit
 Ses yenilendi: ${sesYenidenUret.length ? sesYenidenUret.map(segmentAdi).join(", ") : "hicbiri"}\n\nYeni onay sayfasi hazirlaniyor...`
       );
@@ -1065,7 +1095,7 @@ Ses yenilendi: ${sesYenidenUret.length ? sesYenidenUret.map(segmentAdi).join(", 
       // TTS atla, doğrudan 07-video-montaj
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}${videoRaporMetni}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
 Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sabit
 Ses yenilendi: ${sesYenidenUret.length ? sesYenidenUret.map(segmentAdi).join(", ") : "hicbiri"}\n\nVideo render basliyor (ses korunuyor)...`
       );
@@ -1082,7 +1112,7 @@ Ses yenilendi: ${sesYenidenUret.length ? sesYenidenUret.map(segmentAdi).join(", 
       const ilkSesMi = !String(job.ses_status || "").startsWith("completed");
       await telegram(
         job.chat_id,
-        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
+        `Degisiklikler uygulandi\n\nJob: ${JOB_ID}\nEdit: ${editCount} soru\nCustom upload: ${customUploadedCount}${videoRaporMetni}\nFLUX regen: ${fluxRegenSayisi}/${regenIstenen}${regenDriveHata || regenFluxHata ? ` (FLUX hata: ${regenFluxHata}, Drive hata: ${regenDriveHata})` : ""}
 Ekran basligi: ${ekranBasligiDegisti ? "degisti" : "ayni"} / Jess selamlama: sabit
 Ses yenilendi: ${sesYenidenUret.length ? sesYenidenUret.map(segmentAdi).join(", ") : "hicbiri"}\n\n${ilkSesMi ? "Ses üretiliyor..." : "Sesler yeniden üretiliyor..."}`
       );

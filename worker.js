@@ -1,3 +1,4 @@
+// REV 084/18EKI26 - Onay 2 tek Yukle butonu (gorsel/video tur algilama), slot gorsel+video state temizligi, basarisiz yukleme takibi + submit onayi + edits._yukleme_hatalari
 // REV 083/17EKI26 - Onay 2: video da aninda /api/upload-medya (base64 yok, % ilerleme, yukleme bitmeden gonder kilitli) + siskin alan raporu + ekran_basligi konudan turetme fallback
 // REV 082/19SEP26 - stage=3 gorsel yonetimi + inline JS kesme isareti kacisi duzeltmesi
 // REV 070/29JUN26 - Onay2 "Kaydet" butonu: collectEdits() ortak toplama + debug log, save_only (dispatch yok, edit'leri issue+Drive'a yaz, ozet don), bsave buton
@@ -748,8 +749,23 @@ function medyaYukle(file,idx,slotKey,isVideo,onProg){
     x.send(fd);
   });
 }
+// Slot bazli yukleme hatalari (anahtar: gorsel key cq/cf/cv/cs+idx). Submit oncesi gosterilir,
+// edits._yukleme_hatalari ile 02.7'ye gider -> Telegram raporunda "soru N ... yuklenemedi: sebep".
+var _yuklemeHatalari={};
+var _slotSira={}; // ayni slota yeni dosya secilirse eski yuklemenin gec gelen cevabi YOK sayilir
+var SLOT_ADI={cq:"soru gorseli",cf:"fact gorseli",cv:"secenek",cs:"surpriz"};
 function handleFileChange(inp,previewId,key,isVideo){
   var file=inp.files[0];if(!file)return;
+  // isVideo===null: tek Yukle butonu — tur dosyadan algilanir (yanlis butona basma riski yok)
+  if(isVideo===null){
+    isVideo=/^video[/]/i.test(file.type||"")||/[.](mp4|mov|webm)$/i.test(file.name||"");
+    if(isVideo)key=key.slice(0,2)+"v"+key.slice(2);
+  }
+  // Slotun onceki gorsel+video state'i temizlenir: slot ya gorsel ya video olur, ikisi birden degil
+  var gKey=isVideo?key.slice(0,2)+key.slice(3):key, vKey=gKey.slice(0,2)+"v"+gKey.slice(2);
+  delete customImages[gKey];delete customVideos[vKey];delete _yuklemeHatalari[gKey];
+  var sira=_slotSira[gKey]=(_slotSira[gKey]||0)+1, guncelMi=function(){return _slotSira[gKey]===sira;};
+  var hataKaydet=function(sebep){_yuklemeHatalari[gKey]={soru:parseInt(gKey.slice(2))+1,slot:SLOT_ADI[gKey.slice(0,2)]||gKey,tip:isVideo?"video":"gorsel",sebep:String(sebep||"bilinmeyen").slice(0,160),dosya:String(file.name||"").slice(0,60)};};
   var prev=document.getElementById(previewId);
   // key: gorsel cq/cf/cv/cs + index | video cqv/cfv/cvv/csv + index. slice ile parse (regex/escape derdi yok).
   var pfxLen=isVideo?3:2;
@@ -772,6 +788,7 @@ function handleFileChange(inp,previewId,key,isVideo){
   _aktifYukleme++;yuklemeDurumu();
   medyaYukle(file,idx,slotKey,isVideo,function(p){if(badge)badge.textContent=(p<100?"⏳ %"+p:"⏳ Drive'a yaziliyor...");})
     .then(function(d){
+      if(!guncelMi()){console.log("[upload-medya] "+key+" eski yukleme cevabi yok sayildi (slota yeni dosya secildi)");return;}
       if(d.ok&&d.url){
         if(isVideo)customVideos[key]=d.url;else customImages[key]=d.url; // SADECE URL (kisa string), base64 degil
         console.log("[upload-medya] "+key+" (soru "+idx+", "+slotKey+", "+mb+"MB) -> "+d.url);
@@ -780,10 +797,11 @@ function handleFileChange(inp,previewId,key,isVideo){
           ?'<div style="background:#0a1f12;border-radius:8px;padding:10px;color:#10b981;font-size:.82em;text-align:center">🎬 '+file.name.substring(0,24)+'<br><span style="color:#6b7280">'+mb+'MB</span></div><span class="preview-badge">✓ Video yuklendi (Drive)</span>'
           :'<img src="'+d.url+'" style="width:100%;border-radius:8px"><span class="preview-badge">✓ Yuklendi (Drive)</span>')+kaldir;
       }else{
+        hataKaydet(d.error||"bilinmeyen");
         if(prev)prev.innerHTML='<span style="color:#fca5a5">✗ Yukleme hatasi: '+(d.error||"bilinmeyen")+'</span>';
       }
     })
-    .catch(function(e){if(prev)prev.innerHTML='<span style="color:#fca5a5">✗ Ag hatasi: '+e.message+'</span>';})
+    .catch(function(e){if(!guncelMi())return;hataKaydet("ag hatasi: "+e.message);if(prev)prev.innerHTML='<span style="color:#fca5a5">✗ Ag hatasi: '+e.message+'</span>';})
     .then(function(){_aktifYukleme--;yuklemeDurumu();});
   inp.value="";
 }
@@ -1017,6 +1035,9 @@ function collectEdits(){
       };
     }
   }
+  // Basarisiz yuklemeler 02.7 Telegram raporuna gitsin (sessiz kalmasin)
+  const hs=Object.keys(_yuklemeHatalari).map(function(k){return _yuklemeHatalari[k];});
+  if(hs.length) edits._yukleme_hatalari=hs;
   // Topic emojileri
   const te=[];
   for(let i=0;i<5;i++){const e=val("te_"+i);if(e)te.push(e);}
@@ -1044,6 +1065,9 @@ function siskinAlanlar(obj){
 async function submit_(level, applyEdits){
   playClick();
   if(_aktifYukleme>0){const s0=document.getElementById("status");s0.style.display="block";s0.className="err";s0.textContent="⏳ "+_aktifYukleme+" dosya hala yukleniyor — bitince tekrar bas.";return;}
+  // Basarisiz yukleme varsa ACIKCA sor — slot eski haliyle kalacak
+  const hataListe=Object.keys(_yuklemeHatalari).map(function(k){const h=_yuklemeHatalari[k];return "- soru "+h.soru+" "+h.slot+" "+h.tip+" yuklenemedi: "+h.sebep;});
+  if(applyEdits&&hataListe.length&&!confirm("Su yuklemeler BASARISIZ, bu slotlar eski haliyle kalacak:\\n\\n"+hataListe.join("\\n")+"\\n\\nYine de gonderilsin mi?")) return;
   const allBtns=document.querySelectorAll(".sticky-btns button");
   allBtns.forEach(function(b){b.disabled=true;});
   const edits = applyEdits ? collectEdits() : {};
@@ -1207,10 +1231,8 @@ function buildQuestionCard(q, i) {
       <label class="lbl" style="margin:0">Soru görseli prompt</label>
       <textarea id="q${i}_ip" style="min-height:52px;flex:1">${esc(image_prompt)}</textarea>
       <div class="img-actions">
-        <label class="btn-sm btn-upload" for="q${i}_cq_file">⬆ Yükle</label>
-        <input type="file" id="q${i}_cq_file" accept="image/*" onchange="handleFileChange(this,'q${i}_qimg','cq${i}',false)">
-        <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_cqv_file">🎬 Video</label>
-        <input type="file" id="q${i}_cqv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_qimg','cqv${i}',true)">
+        <label class="btn-sm btn-upload" for="q${i}_cq_file" title="Gorsel veya video (mp4/mov/webm) secin, tur otomatik algilanir">⬆ Yükle <span style="opacity:.75">(görsel/video)</span></label>
+        <input type="file" id="q${i}_cq_file" accept="image/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_qimg','cq${i}',null)">
         <select id="q${i}_stili_q" style="padding:3px 5px;font-size:.76em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:4px">${qStiliOpts}</select>
         <button type="button" class="btn-sm btn-regen" id="q${i}_rq_btn" onclick="toggleRegen('q${i}_rq','q${i}_rq_btn','cq${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rq" style="display:none">
@@ -1230,10 +1252,8 @@ function buildQuestionCard(q, i) {
       <label class="lbl" style="margin:0">Fact görseli prompt</label>
       <textarea id="q${i}_fp" style="min-height:52px;flex:1">${esc(fun_fact_image_prompt)}</textarea>
       <div class="img-actions">
-        <label class="btn-sm btn-upload" for="q${i}_cf_file">⬆ Yükle</label>
-        <input type="file" id="q${i}_cf_file" accept="image/*" onchange="handleFileChange(this,'q${i}_fimg','cf${i}',false)">
-        <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_cfv_file">🎬 Video</label>
-        <input type="file" id="q${i}_cfv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_fimg','cfv${i}',true)">
+        <label class="btn-sm btn-upload" for="q${i}_cf_file" title="Gorsel veya video (mp4/mov/webm) secin, tur otomatik algilanir">⬆ Yükle <span style="opacity:.75">(görsel/video)</span></label>
+        <input type="file" id="q${i}_cf_file" accept="image/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_fimg','cf${i}',null)">
         <select id="q${i}_stili_f" style="padding:3px 5px;font-size:.76em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:4px">${fStiliOpts}</select>
         <button type="button" class="btn-sm btn-regen" id="q${i}_rf_btn" onclick="toggleRegen('q${i}_rf','q${i}_rf_btn','cf${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rf" style="display:none">
@@ -1275,10 +1295,8 @@ function buildWyrCard(q, i) {
       <label class="lbl" style="margin-top:8px;margin-bottom:0">Görsel prompt</label>
       <textarea id="q${i}_vp" style="min-height:42px">${esc(vPrompt)}</textarea>
       <div class="img-actions">
-        <label class="btn-sm btn-upload" for="q${i}_cv_file">⬆ Yükle</label>
-        <input type="file" id="q${i}_cv_file" accept="image/*" onchange="handleFileChange(this,'q${i}_vimg','cv${i}',false)">
-        <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_cvv_file">🎬 Video</label>
-        <input type="file" id="q${i}_cvv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_vimg','cvv${i}',true)">
+        <label class="btn-sm btn-upload" for="q${i}_cv_file" title="Gorsel veya video (mp4/mov/webm) secin, tur otomatik algilanir">⬆ Yükle <span style="opacity:.75">(görsel/video)</span></label>
+        <input type="file" id="q${i}_cv_file" accept="image/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_vimg','cv${i}',null)">
         <select id="q${i}_stili_v" style="padding:3px 5px;font-size:.76em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:4px">${vStiliOpts}</select>
         <button type="button" class="btn-sm btn-regen" id="q${i}_rv_btn" onclick="toggleRegen('q${i}_rv','q${i}_rv_btn','cv${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rv" style="display:none">
@@ -1300,10 +1318,8 @@ function buildWyrCard(q, i) {
       <label class="lbl" style="margin-top:8px;margin-bottom:0">Görsel prompt</label>
       <textarea id="q${i}_sp" style="min-height:42px">${esc(sPrompt)}</textarea>
       <div class="img-actions">
-        <label class="btn-sm btn-upload" for="q${i}_cs_file">⬆ Yükle</label>
-        <input type="file" id="q${i}_cs_file" accept="image/*" onchange="handleFileChange(this,'q${i}_simg','cs${i}',false)">
-        <label class="btn-sm btn-upload" style="border-color:#6366f1;color:#a5b4fc" for="q${i}_csv_file">🎬 Video</label>
-        <input type="file" id="q${i}_csv_file" accept=".mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_simg','csv${i}',true)">
+        <label class="btn-sm btn-upload" for="q${i}_cs_file" title="Gorsel veya video (mp4/mov/webm) secin, tur otomatik algilanir">⬆ Yükle <span style="opacity:.75">(görsel/video)</span></label>
+        <input type="file" id="q${i}_cs_file" accept="image/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" onchange="handleFileChange(this,'q${i}_simg','cs${i}',null)">
         <select id="q${i}_stili_s" style="padding:3px 5px;font-size:.76em;background:#111827;color:#f3f4f6;border:1px solid #374151;border-radius:4px">${sStiliOpts}</select>
         <button type="button" class="btn-sm btn-regen" id="q${i}_rs_btn" onclick="toggleRegen('q${i}_rs','q${i}_rs_btn','cs${i}')">🔄 Yeniden Üret</button>
         <input type="checkbox" id="q${i}_rs" style="display:none">

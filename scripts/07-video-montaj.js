@@ -1,3 +1,4 @@
+// REV 026/18EKI26 - render oncesi video dogrulama (Drive URL erisim + sahipsiz video-NN), Telegram: video slot N adet / M render a girdi
 // REV 025/19SEP26 - loudnorm ciktisina -ar 48000: AAC 96 kHz e tasiniyordu
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
@@ -74,6 +75,66 @@ async function driveKlasorIcerigi(klasorId, auth) {
     orderBy: "name",
   });
   return res.data.files || [];
+}
+
+/**
+ * RENDER ÖNCESİ VİDEO DOĞRULAMA
+ * questions.json'da video alanı dolu her slot için Drive dosyası gerçekten var mı ve
+ * Remotion'ın indireceği URL anonim erişilebilir mi kontrol eder. Bozuk olan slotun
+ * video alanı TEMİZLENİR (render çökmesin, slot görsele düşsün) ve raporlanır.
+ * Ayrıca 01-gorseller'de duran ama hiçbir soruya bağlı olmayan video-NN dosyalarını bulur
+ * (form yüklemesi Drive'a ulaşıp tarayıcı state'inden düşmüşse burada yakalanır).
+ */
+async function videoSlotDogrula(questions, gorselKlasorDosyalari) {
+  const slotlar = [];
+  questions.forEach((q, i) => {
+    const wyr = q.question_type === "would_you_rather";
+    slotlar.push({ soru: i + 1, slot: "soru", url: q.question_video_url || q.uploaded_video_url || (wyr ? q.visible_option?.video_url : "") || "",
+      temizle: () => { delete q.question_video_url; delete q.uploaded_video_url; if (q.visible_option) delete q.visible_option.video_url; } });
+    slotlar.push({ soru: i + 1, slot: "fact", url: q.fun_fact_video_url || q.uploaded_fact_video_url || (wyr ? q.surprise_option?.surprise_video_url : "") || "",
+      temizle: () => { delete q.fun_fact_video_url; delete q.uploaded_fact_video_url; if (q.surprise_option) delete q.surprise_option.surprise_video_url; } });
+  });
+  const videolu = slotlar.filter(s => s.url);
+  const klasorIdleri = new Map(gorselKlasorDosyalari.map(f => [f.id, f.name]));
+  const sorunlar = [];
+  const bagliIdler = new Set();
+  let girdi = 0;
+
+  for (const s of videolu) {
+    const id = (String(s.url).match(/[?&]id=([A-Za-z0-9_-]+)/) || [])[1] || "";
+    if (id) bagliIdler.add(id);
+    let sebep = "";
+    try {
+      const r = await fetch(s.url, { headers: { Range: "bytes=0-0" }, redirect: "follow" });
+      const tip = r.headers.get("content-type") || "";
+      if (!r.ok) sebep = `URL erisilemiyor (HTTP ${r.status})`;
+      else if (!/^video\//i.test(tip) && !/octet-stream|binary/i.test(tip)) sebep = `URL video dondurmuyor (${tip || "content-type yok"})`;
+      try { await r.body?.cancel(); } catch (e) { /* govdeyi okumaya gerek yok */ }
+    } catch (e) {
+      sebep = `URL erisim hatasi: ${e.message}`;
+    }
+    if (!sebep && id && !klasorIdleri.has(id)) {
+      console.log(`  ℹ soru ${s.soru} ${s.slot} videosu 01-gorseller disinda (id=${id}) ama URL erisilebilir — kullaniliyor`);
+    }
+    if (sebep) {
+      sorunlar.push(`soru ${s.soru} ${s.slot} videosu render'a giremez: ${sebep}`);
+      s.temizle();
+    } else {
+      girdi++;
+    }
+  }
+
+  // Sahipsiz videolar: Drive'da var, hiçbir soruya bağlı değil
+  for (const f of gorselKlasorDosyalari) {
+    const m = String(f.name || "").match(/^video-(\d+)-/);
+    if (!m || bagliIdler.has(f.id)) continue;
+    const no = parseInt(m[1], 10);
+    sorunlar.push(`soru ${Math.ceil(no / 2)} ${no % 2 ? "soru" : "fact"} videosu Drive'da var ama questions.json'a bagli degil (${f.name}) — slotu bilerek gorsele cevirmediysen formdan videoyu tekrar yukle`);
+  }
+
+  console.log(`🎞 Video slot: ${videolu.length} adet, ${girdi} tanesi render'a girecek`);
+  for (const s of sorunlar) console.warn(`  ⚠ ${s}`);
+  return { toplam: videolu.length, girdi, sorunlar };
 }
 
 async function driveAltKlasorAraSA(adKismi, parentId, auth) {
@@ -484,7 +545,19 @@ async function main() {
     if (gorselKlasor.length === 0) throw new Error("01-gorseller yok");
     const gorseller = await driveKlasorIcerigi(gorselKlasor[0].id, saAuth);
     const gorselDosyalar = gorseller.filter(d => d.name.match(/\.(jpg|jpeg|png|webp)$/i));
-    
+
+    // RENDER ÖNCESİ VİDEO DOĞRULAMA — eksik/bozuk video render'dan ÖNCE bildirilir
+    const videoKontrol = await videoSlotDogrula(questions, gorseller);
+    if (videoKontrol.sorunlar.length) {
+      try {
+        await telegram(job.chat_id,
+          `⚠ Render oncesi video kontrolu (${JOB_ID})\nVideo slot: ${videoKontrol.toplam} adet, ${videoKontrol.girdi} tanesi render'a girecek\n` +
+          videoKontrol.sorunlar.map(s => `• ${s}`).join("\n") + `\n\nRender devam ediyor (sorunlu slotlar gorselle).`);
+      } catch (e) {
+        console.error(`❌ Video kontrol Telegram mesaji gonderilemedi: ${e.message}`);
+      }
+    }
+
     // YENİ: Her soru için 2 görsel (question + fun_fact) + 1 background (en sonda)
     // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ..., background
     // Toplam 2N+1 görsel beklenir
@@ -930,9 +1003,11 @@ async function main() {
     const onayLink = workerUrl ? `${workerUrl}/?job=${JOB_ID}&stage=3` : "";
 
     // Markdown link syntax — bare URL with underscores (JOB_ID) causes Telegram parse errors
+    const videoSatiri = `\n🎞 Video slot: ${videoKontrol.toplam} adet, ${videoKontrol.girdi} tanesi render'a girdi` +
+      (videoKontrol.sorunlar.length ? ` (${videoKontrol.sorunlar.length} sorun — ayrintisi render oncesi mesajda)` : "");
     const msg = onayLink
-      ? `🎬 Video hazır!\n[Drive linki](${yuklenen.link})\n\n📝 Değişiklik yapmak için onay sayfasını tıklayınız:\n[Onay sayfası](${onayLink})`
-      : `🎬 Video hazır!\n[Drive linki](${yuklenen.link})`;
+      ? `🎬 Video hazır!\n[Drive linki](${yuklenen.link})${videoSatiri}\n\n📝 Değişiklik yapmak için onay sayfasını tıklayınız:\n[Onay sayfası](${onayLink})`
+      : `🎬 Video hazır!\n[Drive linki](${yuklenen.link})${videoSatiri}`;
 
     console.log(`📨 Telegram mesajı:\n${msg}`);
 

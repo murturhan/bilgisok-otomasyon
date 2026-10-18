@@ -1,3 +1,4 @@
+// REV 027/18EKI26 - fact slotu slot bazli: fact gorseli varsa soru videosu onu ezmez
 // REV 026/19SEP26 - ses seviyeleri SES.* sabitlerinden
 import React from "react";
 import {
@@ -511,7 +512,9 @@ const LongLayout: React.FC<LayoutProps> = ({
               {/* SOL: Resim */}
               <ImageCard
                 src={funFactImageSrc || imageSrc}
-                videoSrc={funFactVideoSrc || videoSrc}
+                // SLOT BAZLI: fact videosu > fact gorseli > soru videosu. Eskiden fact gorseli
+                // varken bile soru videosu (ImageCard'da video oncelikli) gorseli gizliyordu.
+                videoSrc={funFactVideoSrc || (funFactImageSrc ? undefined : videoSrc)}
                 width={factColWidth}
                 height={factColHeight}
                 isReveal={false}
@@ -654,7 +657,8 @@ const ShortsLayout: React.FC<LayoutProps> = ({
           const factBoxWidth = contentWidth;
           const factBoxHeight = Math.floor(height * 0.43);
           const factImageSrc = funFactImageSrc || imageSrc;
-          const factVideoSrc = funFactVideoSrc || videoSrc;
+          // SLOT BAZLI: fact videosu > fact gorseli > soru videosu (fact gorseli gizlenmesin)
+          const factVideoSrc = funFactVideoSrc || (funFactImageSrc ? undefined : videoSrc);
           
           return (
             <>
