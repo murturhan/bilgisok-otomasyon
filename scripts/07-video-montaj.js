@@ -1,4 +1,4 @@
-// REV 026/18EKI26 - render oncesi video dogrulama (Drive URL erisim + sahipsiz video-NN), Telegram: video slot N adet / M render a girdi
+// REV 027/19EKI26 - video sureleri ffprobe ile olculup inputProps.video_durations olarak Remotion'a verilir (sabit 5s dongu kalkti)
 // REV 025/19SEP26 - loudnorm ciktisina -ar 48000: AAC 96 kHz e tasiniyordu
 /**
  * 07 - Video Montaj v14 (Remotion + Çoklu ses parçaları - SES-VİDEO SENKRON)
@@ -135,6 +135,37 @@ async function videoSlotDogrula(questions, gorselKlasorDosyalari) {
   console.log(`🎞 Video slot: ${videolu.length} adet, ${girdi} tanesi render'a girecek`);
   for (const s of sorunlar) console.warn(`  ⚠ ${s}`);
   return { toplam: videolu.length, girdi, sorunlar };
+}
+
+/**
+ * VİDEO SÜRELERİ — Remotion LoopedVideo döngüyü videonun KENDİ süresine göre kurar
+ * (eskiden sabit 5s'de kesip başa dönüyordu). ffprobe URL'den sadece header okur.
+ * Dönen: { [url]: saniye }. Ölçülemeyen video map'e girmez → Remotion döngüsüz tek oynatır.
+ */
+async function videoSureleriniOlc(questions) {
+  const urller = new Set();
+  for (const q of questions) {
+    for (const u of [q.question_video_url, q.uploaded_video_url, q.fun_fact_video_url, q.uploaded_fact_video_url,
+      q.visible_option?.video_url, q.surprise_option?.surprise_video_url]) {
+      if (u && /^https?:\/\//i.test(String(u))) urller.add(String(u));
+    }
+  }
+  const sureler = {};
+  await Promise.all([...urller].map(async (u) => {
+    try {
+      const { stdout } = await execAsync(
+        `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${u}"`,
+        { timeout: 60000 }
+      );
+      const sn = parseFloat(String(stdout).trim());
+      if (sn > 0) sureler[u] = sn;
+      else console.warn(`  ⚠ video suresi okunamadi (${u.slice(-40)}): "${String(stdout).trim()}"`);
+    } catch (e) {
+      console.warn(`  ⚠ video suresi okunamadi (${u.slice(-40)}): ${e.message.split("\n")[0]}`);
+    }
+  }));
+  console.log(`⏱ Video sureleri: ${Object.keys(sureler).length}/${urller.size} olculdu — ${Object.values(sureler).map(x => x.toFixed(2) + "s").join(", ")}`);
+  return sureler;
 }
 
 async function driveAltKlasorAraSA(adKismi, parentId, auth) {
@@ -558,6 +589,9 @@ async function main() {
       }
     }
 
+    // Video süreleri (render'da sabit 5s döngü yerine videonun kendi süresi)
+    const videoSureleri = await videoSureleriniOlc(questions);
+
     // YENİ: Her soru için 2 görsel (question + fun_fact) + 1 background (en sonda)
     // Sıra: q1_question, q1_funfact, q2_question, q2_funfact, ..., background
     // Toplam 2N+1 görsel beklenir
@@ -835,6 +869,7 @@ async function main() {
       channel_name: "GeniMini Tests",
       questions: questions,
       jess_poses: jessPosesForRemotion,
+      video_durations: videoSureleri, // { url: saniye } — LoopedVideo döngü uzunluğu
 
       // SEGMENT 1 — Jess selamlaması, INTRO SAHNESİ (Sahne 1) başında çalar.
       // Varsa Jess videosunun kendi sesi kısılır (jess_intro_muted), yoksa iki ses üst üste biner.

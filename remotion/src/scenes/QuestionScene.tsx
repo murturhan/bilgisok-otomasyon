@@ -1,4 +1,4 @@
-// REV 027/18EKI26 - fact slotu slot bazli: fact gorseli varsa soru videosu onu ezmez
+// REV 028/19EKI26 - video sabit 5s yerine kendi suresi kadar oynar (Loop + video_durations)
 // REV 026/19SEP26 - ses seviyeleri SES.* sabitlerinden
 import React from "react";
 import {
@@ -12,6 +12,8 @@ import {
   Sequence,
   Img,
   OffthreadVideo,
+  Loop,
+  getInputProps,
 } from "remotion";
 import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor, highlightPalette, SES } from "../styles/theme";
 import { Question, JessPoses } from "../types/schemas";
@@ -764,20 +766,20 @@ const AnswerStack: React.FC<AnswerStackProps> = ({
   );
 };
 
-// OffthreadVideo loop prop is not in Remotion 4.0.300 types; use Sequence trick to simulate loop.
-// Each 5-second Sequence resets useCurrentFrame()→0, restarting the video from the beginning.
+// Video KENDI suresi kadar oynar, sonra basa doner (eskiden sabit 5s'de kesilip basa donuyordu).
+// Sure 07-video-montaj'in ffprobe ile olcup inputProps.video_durations[url] (saniye) olarak verdigi deger.
+// Video sahneden uzunsa ilk tur sahne bitene kadar surer, basa donmez. Sure yoksa dongu yok, tek oynatma.
 const LoopedVideo: React.FC<{ src: string; style: React.CSSProperties }> = ({ src, style }) => {
   const { fps } = useVideoConfig();
-  const LOOP_FRAMES = Math.floor(5 * fps); // 5-second segments
-  const MAX_LOOPS = 40;
+  const sure = Number((getInputProps() as any)?.video_durations?.[src]) || 0;
+  if (!(sure > 0)) {
+    return <OffthreadVideo src={src} muted style={style} />;
+  }
+  const loopFrames = Math.max(1, Math.floor(sure * fps));
   return (
-    <>
-      {Array.from({ length: MAX_LOOPS }).map((_, i) => (
-        <Sequence key={i} from={i * LOOP_FRAMES} durationInFrames={LOOP_FRAMES}>
-          <OffthreadVideo src={src} muted style={style} />
-        </Sequence>
-      ))}
-    </>
+    <Loop durationInFrames={loopFrames}>
+      <OffthreadVideo src={src} muted style={style} />
+    </Loop>
   );
 };
 

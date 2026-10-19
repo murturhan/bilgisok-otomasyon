@@ -1,4 +1,4 @@
-// REV 002/19SEP26 - ses seviyeleri SES.* sabitlerinden
+// REV 003/19EKI26 - video sabit 5s yerine kendi suresi kadar oynar (Loop + video_durations)
 import React from "react";
 import {
   AbsoluteFill,
@@ -11,6 +11,8 @@ import {
   Sequence,
   Img,
   OffthreadVideo,
+  Loop,
+  getInputProps,
 } from "remotion";
 import { BRAND, FONTS, FIXED_FRAMES, FPS, ThemeColor, highlightPalette, SES } from "../styles/theme";
 import { WouldYouRatherQuestion, JessPoses } from "../types/schemas";
@@ -21,18 +23,20 @@ import { VerticalBrandTag } from "../components/VerticalBrandTag";
 import { AnimatedBackground, getPatternForQuestion } from "../components/AnimatedBackground";
 import { computeWyrPhases, WYR_COUNTDOWN_FRAMES } from "../utils/timing";
 
+// Video KENDI suresi kadar oynar, sonra basa doner (eskiden sabit 5s'de kesilip basa donuyordu).
+// Sure 07-video-montaj'in ffprobe ile olcup inputProps.video_durations[url] (saniye) olarak verdigi deger.
+// Video sahneden uzunsa ilk tur sahne bitene kadar surer, basa donmez. Sure yoksa dongu yok, tek oynatma.
 const LoopedVideo: React.FC<{ src: string; style: React.CSSProperties }> = ({ src, style }) => {
   const { fps } = useVideoConfig();
-  const LOOP_FRAMES = Math.floor(5 * fps);
-  const MAX_LOOPS = 40;
+  const sure = Number((getInputProps() as any)?.video_durations?.[src]) || 0;
+  if (!(sure > 0)) {
+    return <OffthreadVideo src={src} muted style={style} />;
+  }
+  const loopFrames = Math.max(1, Math.floor(sure * fps));
   return (
-    <>
-      {Array.from({ length: MAX_LOOPS }).map((_, i) => (
-        <Sequence key={i} from={i * LOOP_FRAMES} durationInFrames={LOOP_FRAMES}>
-          <OffthreadVideo src={src} muted style={style} />
-        </Sequence>
-      ))}
-    </>
+    <Loop durationInFrames={loopFrames}>
+      <OffthreadVideo src={src} muted style={style} />
+    </Loop>
   );
 };
 
