@@ -1,3 +1,4 @@
+// REV 029/25EKI26 - fact bolumu: fact videosu > soru videosu (kaldigi yerden surer) > fact gorseli
 // REV 028/19EKI26 - video sabit 5s yerine kendi suresi kadar oynar (Loop + video_durations)
 // REV 026/19SEP26 - ses seviyeleri SES.* sabitlerinden
 import React from "react";
@@ -514,14 +515,15 @@ const LongLayout: React.FC<LayoutProps> = ({
               {/* SOL: Resim */}
               <ImageCard
                 src={funFactImageSrc || imageSrc}
-                // SLOT BAZLI: fact videosu > fact gorseli > soru videosu. Eskiden fact gorseli
-                // varken bile soru videosu (ImageCard'da video oncelikli) gorseli gizliyordu.
-                videoSrc={funFactVideoSrc || (funFactImageSrc ? undefined : videoSrc)}
+                // SLOT BAZLI: fact videosu > soru videosu > fact gorseli. Fact gorseli sadece hic video
+                // yoksa gorunur (her zaman uretildigi icin eskiden fact bolumu hep duragan kaliyordu).
+                // Soru videosu bastan baslamaz: LoopedVideo sahne karesine gore konumlanir, kaldigi yerden surer.
+                videoSrc={funFactVideoSrc || videoSrc}
                 width={factColWidth}
                 height={factColHeight}
                 isReveal={false}
                 revealTransition={1}
-                showAsPlaceholder={question.show_image === false && !funFactImageSrc && !funFactVideoSrc}
+                showAsPlaceholder={question.show_image === false && !funFactImageSrc && !funFactVideoSrc && !videoSrc}
                 borderColor={borderColor}
               />
 
@@ -659,8 +661,8 @@ const ShortsLayout: React.FC<LayoutProps> = ({
           const factBoxWidth = contentWidth;
           const factBoxHeight = Math.floor(height * 0.43);
           const factImageSrc = funFactImageSrc || imageSrc;
-          // SLOT BAZLI: fact videosu > fact gorseli > soru videosu (fact gorseli gizlenmesin)
-          const factVideoSrc = funFactVideoSrc || (funFactImageSrc ? undefined : videoSrc);
+          // SLOT BAZLI: fact videosu > soru videosu (kaldigi yerden surer) > fact gorseli
+          const factVideoSrc = funFactVideoSrc || videoSrc;
           
           return (
             <>
