@@ -1,3 +1,4 @@
+// REV 030/25EKI26 - fact videosu fact bolumu acilinca 0'dan baslar (ImageCard videoFrom); devam eden soru videosu sifirlanmaz
 // REV 029/25EKI26 - fact bolumu: fact videosu > soru videosu (kaldigi yerden surer) > fact gorseli
 // REV 028/19EKI26 - video sabit 5s yerine kendi suresi kadar oynar (Loop + video_durations)
 // REV 026/19SEP26 - ses seviyeleri SES.* sabitlerinden
@@ -519,6 +520,8 @@ const LongLayout: React.FC<LayoutProps> = ({
                 // yoksa gorunur (her zaman uretildigi icin eskiden fact bolumu hep duragan kaliyordu).
                 // Soru videosu bastan baslamaz: LoopedVideo sahne karesine gore konumlanir, kaldigi yerden surer.
                 videoSrc={funFactVideoSrc || videoSrc}
+                // Fact videosu fact bolumu acilinca 0'dan baslar; devam eden soru videosu sifirlanmaz
+                videoFrom={funFactVideoSrc ? phases.funFact : undefined}
                 width={factColWidth}
                 height={factColHeight}
                 isReveal={false}
@@ -670,6 +673,8 @@ const ShortsLayout: React.FC<LayoutProps> = ({
               <ImageCard
                 src={factImageSrc}
                 videoSrc={factVideoSrc}
+                // Fact videosu fact bolumu acilinca 0'dan baslar; devam eden soru videosu sifirlanmaz
+                videoFrom={funFactVideoSrc ? phases.funFact : undefined}
                 width={factBoxWidth}
                 height={factBoxHeight}
                 isReveal={false}
@@ -788,6 +793,8 @@ const LoopedVideo: React.FC<{ src: string; style: React.CSSProperties }> = ({ sr
 interface ImageCardProps {
   src: string;
   videoSrc?: string;
+  /** Verilirse video bu sahne karesinde 0'dan baslar (fact videosu). Yoksa sahne basina gore surer. */
+  videoFrom?: number;
   width: number;
   height: number;
   isReveal?: boolean;
@@ -807,7 +814,7 @@ interface ImageCardProps {
 }
 
 const ImageCard: React.FC<ImageCardProps> = ({
-  src, videoSrc, width, height, isReveal = false, revealTransition = 0,
+  src, videoSrc, videoFrom, width, height, isReveal = false, revealTransition = 0,
   blurAmount = 0, fusePhase = 0, burstActive = false, burstLocalFrame = 0,
   showAsPlaceholder = false, borderColor = BRAND.white,
 }) => {
@@ -908,7 +915,13 @@ const ImageCard: React.FC<ImageCardProps> = ({
             }}>?</div>
           </div>
         ) : videoSrc ? (
-          <LoopedVideo src={videoSrc} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          videoFrom !== undefined ? (
+            <Sequence from={videoFrom} layout="none">
+              <LoopedVideo src={videoSrc} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </Sequence>
+          ) : (
+            <LoopedVideo src={videoSrc} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          )
         ) : src ? (
           <Img
             src={src}
