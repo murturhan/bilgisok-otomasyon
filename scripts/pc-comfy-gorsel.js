@@ -1,3 +1,4 @@
+// REV 002/26EKI26 - video slotlari kare/hepsi'de atlanir, arka plan (slot 2N+1, background_prompt, 1280x720) eklendi
 // REV 001/20EKI26 - PC tarafi: ComfyUI (Z-Image Turbo) ile 1328x800 gorsel uret, yedekle, Drive 01-gorseller'e gorsel-NN olarak yukle
 /**
  * PC'de calisir (GitHub Actions'tan DEGIL — Actions PC'deki ComfyUI'ye erisemez).
@@ -5,10 +6,14 @@
  * Kullanim:
  *   node scripts/pc-comfy-gorsel.js <JOB_ID> [--slots 01,03,05 | --slots kare | --slots hepsi] [--yukle]
  *
- *   --slots kare   (varsayilan) Drive'daki gorseli kare (1024x1024 = FLUX) olan slotlar.
- *                  Kullanicinin yukledigi gorsellere dokunulmaz.
- *   --slots hepsi  tum slotlar (2 x soru sayisi)
+ *   --slots kare   (varsayilan) Drive'daki gorseli kare (1024x1024 = FLUX) olan veya gorseli hic
+ *                  olmayan slotlar. Kullanicinin yukledigi gorsellere dokunulmaz. VIDEO slotlari atlanir.
+ *   --slots hepsi  tum slotlar (2 x soru sayisi + arka plan 2N+1). VIDEO slotlari atlanir.
+ *   --slots 01,03  acikca istenen slotlar — video olsa bile uretilir (bilerek istenmis).
  *   --yukle        uretilenleri Drive'a yukle. Yoksa sadece yerelde uretir (deneme).
+ *
+ *   Gecici klasorler os.tmpdir() altinda (Windows: TEMP). C: yerine D: icin:
+ *     $env:TEMP="D:\AI\bilgisok-temp"; node scripts/pc-comfy-gorsel.js ...
  *
  * Akis:
  *   1. gh ile job issue'sundan drive_folder_id
@@ -30,6 +35,8 @@ const WORKER = "https://telegram-to-github.murturhan.workers.dev";
 const REPO = "murturhan/bilgisok-otomasyon";
 const COMFY = process.env.COMFY_URL || "http://127.0.0.1:8188";
 const GEN = 1328, YUK = 800; // ~1.66 oran = LongLayout cercevesi 885x535; 16'nin kati
+// Arka plan tum kareyi (1920x1080) kaplar -> 16:9. 1280x720 = 16'nin kati, soru gorseliyle ayni ~1 MP
+const BG_GEN = 1280, BG_YUK = 720;
 
 const args = process.argv.slice(2);
 const JOB_ID = args.find(a => !a.startsWith("--"));
@@ -69,7 +76,7 @@ function boyut(dosya) {
   return { w, h };
 }
 
-function workflow(prompt, seed, onek) {
+function workflow(prompt, seed, onek, en = GEN, boy = YUK) {
   return {
     "3": { class_type: "KSampler", inputs: { seed, steps: 8, cfg: 1, sampler_name: "res_multistep", scheduler: "simple", denoise: 1, model: ["11", 0], positive: ["6", 0], negative: ["7", 0], latent_image: ["13", 0] } },
     "6": { class_type: "CLIPTextEncode", inputs: { text: prompt, clip: ["18", 0] } },
@@ -77,15 +84,15 @@ function workflow(prompt, seed, onek) {
     "8": { class_type: "VAEDecode", inputs: { samples: ["3", 0], vae: ["17", 0] } },
     "9": { class_type: "SaveImage", inputs: { filename_prefix: onek, images: ["8", 0] } },
     "11": { class_type: "ModelSamplingAuraFlow", inputs: { shift: 3, model: ["16", 0] } },
-    "13": { class_type: "EmptySD3LatentImage", inputs: { width: GEN, height: YUK, batch_size: 1 } },
+    "13": { class_type: "EmptySD3LatentImage", inputs: { width: en, height: boy, batch_size: 1 } },
     "16": { class_type: "UNETLoader", inputs: { unet_name: "z_image_turbo_bf16.safetensors", weight_dtype: "default" } },
     "17": { class_type: "VAELoader", inputs: { vae_name: "ae.safetensors" } },
     "18": { class_type: "CLIPLoader", inputs: { clip_name: "qwen_3_4b.safetensors", type: "lumina2" } },
   };
 }
 
-async function comfyUret(prompt, seed, onek) {
-  const r = await fetch(`${COMFY}/prompt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: workflow(prompt, seed, onek) }) });
+async function comfyUret(prompt, seed, onek, en, boy) {
+  const r = await fetch(`${COMFY}/prompt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: workflow(prompt, seed, onek, en, boy) }) });
   if (!r.ok) throw new Error(`ComfyUI /prompt ${r.status}: ${(await r.text()).slice(0, 300)}`);
   const { prompt_id } = await r.json();
   const bas = Date.now();
@@ -129,7 +136,8 @@ async function main() {
   if (!qDosya) throw new Error("questions.json bulunamadi");
   const qYol = path.join(yedekDir, "questions.json");
   await driveIndir(qDosya.id, qYol);
-  const questions = JSON.parse(fs.readFileSync(qYol, "utf8")).questions || [];
+  const qData = JSON.parse(fs.readFileSync(qYol, "utf8"));
+  const questions = qData.questions || [];
   console.log(`Job ${JOB_ID}: ${questions.length} soru, 01-gorseller=${gorselKlasor.id}`);
 
   // 3. YEDEK: tum gorsel-NN dosyalari
@@ -142,23 +150,39 @@ async function main() {
   }
   console.log(`💾 Yedek: ${gorseller.length} gorsel -> ${yedekDir}`);
 
-  // Slot secimi
-  const toplam = questions.length * 2;
+  // VIDEO slotlari: 01-gorseller'deki video-NN dosyasi VEYA questions.json video URL'i (02-gorsel-uret ile ayni alanlar).
+  // FLUX video slotuna da kare gorsel uretiyor; o gorsel render'da gorunmez, ama uzerine yazmak yanlis slota dokunmak olur.
+  const videoSlot = new Set((await klasorListele(gorselKlasor.id)).map(f => (f.name.match(/^video-(\d+)[-.]/) || [])[1]).filter(Boolean).map(n => parseInt(n, 10)));
+  questions.forEach((q, i) => {
+    const wyr = q.question_type === "would_you_rather";
+    if (wyr ? q.visible_option?.video_url : (q.question_video_url || q.uploaded_video_url)) videoSlot.add(2 * i + 1);
+    if (wyr ? q.surprise_option?.surprise_video_url : (q.fun_fact_video_url || q.uploaded_fact_video_url)) videoSlot.add(2 * i + 2);
+  });
+
+  // Slot secimi (arka plan = 2N+1, worker/02.5 ile ayni)
+  const BG_SLOT = questions.length * 2 + 1;
+  const toplam = BG_SLOT;
+  const tumSlotlar = Array.from({ length: toplam }, (_, i) => i + 1);
   let slotlar;
-  if (SLOT_ARG === "hepsi") slotlar = Array.from({ length: toplam }, (_, i) => i + 1);
-  else if (SLOT_ARG === "kare") slotlar = [...slotDosya.entries()].filter(([, d]) => d.w === d.h).map(([s]) => s).sort((a, b) => a - b);
+  if (SLOT_ARG === "hepsi") slotlar = tumSlotlar.filter(s => !videoSlot.has(s));
+  else if (SLOT_ARG === "kare") slotlar = tumSlotlar.filter(s => !videoSlot.has(s) && (!slotDosya.has(s) || slotDosya.get(s).w === slotDosya.get(s).h));
   else slotlar = SLOT_ARG.split(",").map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= toplam);
-  console.log(`🎯 Slotlar (${SLOT_ARG}): ${slotlar.map(s => String(s).padStart(2, "0")).join(", ") || "yok"}`);
+  const atlanan = SLOT_ARG === "hepsi" || SLOT_ARG === "kare" ? [...videoSlot].filter(s => s <= toplam).sort((a, b) => a - b) : [];
+  console.log(`🎬 Video slotlari: ${[...videoSlot].sort((a, b) => a - b).map(s => String(s).padStart(2, "0")).join(", ") || "yok"}${atlanan.length ? " (atlandi)" : ""}`);
+  console.log(`🎯 Slotlar (${SLOT_ARG}): ${slotlar.map(s => String(s).padStart(2, "0") + (s === BG_SLOT ? "(arka plan)" : "")).join(", ") || "yok"}`);
 
   // 4. Uret (+ 5. yukle)
   const sonuc = [];
   for (const slot of slotlar) {
-    const qi = Math.floor((slot - 1) / 2);
-    const fact = slot % 2 === 0;
-    const q = questions[qi];
+    const bg = slot === BG_SLOT;
+    const qi = Math.floor((slot - 1) / 2); // arka planda N -> worker: soruIdx=N + slotKey=image = 2N+1
+    const fact = !bg && slot % 2 === 0;
+    const q = bg ? {} : questions[qi];
     const slotStr = String(slot).padStart(2, "0");
     let base, stili;
-    if (q.question_type === "would_you_rather") {
+    if (bg) {
+      base = qData.background_prompt;
+    } else if (q.question_type === "would_you_rather") {
       base = fact ? q.surprise_option?.surprise_image_prompt : q.visible_option?.image_prompt;
       stili = fact ? q.surprise_option?.surprise_image_stili : q.visible_option?.image_stili;
     } else {
@@ -169,7 +193,7 @@ async function main() {
     const prompt = cleanGorselPrompt(base) + (GORSEL_STILLERI[stili || DEFAULT_STIL]?.promptAppend || "");
     const seed = 1000 + slot;
     const t0 = Date.now();
-    const png = await comfyUret(prompt, seed, `bilgisok/${JOB_ID}/gorsel-${slotStr}`);
+    const png = await comfyUret(prompt, seed, `bilgisok/${JOB_ID}/gorsel-${slotStr}`, bg ? BG_GEN : GEN, bg ? BG_YUK : YUK);
     const pngYol = path.join(ciktiDir, `gorsel-${slotStr}.png`);
     const jpgYol = path.join(ciktiDir, `gorsel-${slotStr}.jpg`);
     fs.writeFileSync(pngYol, png);
