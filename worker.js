@@ -1,3 +1,4 @@
+// REV 085/27EKI26 - Onay 2: icerik dogrulama (questions[].dogrulama) - supheli kart kenarligi + rozet + gerekce, ustte ozet
 // REV 084/18EKI26 - Onay 2 tek Yukle butonu (gorsel/video tur algilama), slot gorsel+video state temizligi, basarisiz yukleme takibi + submit onayi + edits._yukleme_hatalari
 // REV 083/17EKI26 - Onay 2: video da aninda /api/upload-medya (base64 yok, % ilerleme, yukleme bitmeden gonder kilitli) + siskin alan raporu + ekran_basligi konudan turetme fallback
 // REV 082/19SEP26 - stage=3 gorsel yonetimi + inline JS kesme isareti kacisi duzeltmesi
@@ -539,6 +540,7 @@ async function handleApprovalPage(request, env, url) {
   const qCards = questions.map((q, i) =>
     q.question_type === "would_you_rather" ? buildWyrCard(q, i) : buildQuestionCard(q, i)
   ).join("\n");
+  const dogrulamaOzet = dogrulamaOzetHtml(questions);
 
   const html = `<!DOCTYPE html>
 <html lang="tr">
@@ -609,6 +611,14 @@ textarea{min-height:56px}
 .picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:5px;padding:4px 0}
 .e-btn{width:44px;height:44px;font-size:1.6em;background:#111827;border:1px solid #374151;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
 .e-btn:hover{border-color:#3b82f6;background:#1e3a5f}
+.card.card-supheli{border:2px solid #f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.15)}
+.dg-badge{flex-shrink:0;background:#f59e0b;color:#111827;border-radius:6px;padding:2px 8px;font-size:.74em;font-weight:800;white-space:nowrap}
+.dg-note{background:#422006;border:1px solid #b45309;color:#fde68a;border-radius:6px;padding:7px 10px;font-size:.8em;line-height:1.4;margin-bottom:10px}
+.dg-note b{color:#fcd34d}
+.dg-note .dg-oneri{color:#d1d5db;margin-top:4px}
+.dg-ozet{margin-bottom:16px;padding:10px 14px;border-radius:10px;font-size:.86em;font-weight:700}
+.dg-ozet.var{background:#422006;border:1px solid #f59e0b;color:#fcd34d}
+.dg-ozet.yok{background:#1f2937;border:1px solid #374151;color:#9ca3af;font-weight:600}
 </style>
 </head>
 <body>
@@ -630,6 +640,7 @@ textarea{min-height:56px}
 <div id="status"></div>
 <div id="upload_bar" style="display:none;margin:0 16px 8px;padding:8px 12px;border-radius:8px;background:#78350f;color:#fef3c7;font-size:.82em;font-weight:600"></div>
 <form id="frm" onsubmit="return false" class="cards">
+${dogrulamaOzet}
 <div class="card" style="padding:12px 14px;border:1px solid #b45309">
   <div style="font-size:.8em;color:#fcd34d;font-weight:700;margin-bottom:10px">🎬 VİDEO METİNLERİ (ekranda görünen + Jess'in konuştuğu)</div>
 
@@ -1169,6 +1180,34 @@ async function kaydet(){
   return new Response(html, { headers: { "Content-Type": "text/html;charset=utf-8", "Cache-Control": "no-store" } });
 }
 
+// ─── İçerik doğrulama (01 → questions[].dogrulama) — SADECE gösterim, düzeltme yok ───
+const DOGRULAMA_ETIKET = { olgu: "Olgu", gorsel: "Görsel-soru", sik: "Şık" };
+
+function dogrulamaKart(q) {
+  const d = q && q.dogrulama;
+  if (!d || d.durum !== "supheli") return { cls: "", rozet: "", not: "" };
+  const kontroller = (d.kontroller || []).map(k => DOGRULAMA_ETIKET[k] || k);
+  return {
+    cls: " card-supheli",
+    rozet: `<span class="dg-badge" title="İçerik doğrulama">⚠ ŞÜPHELİ</span>`,
+    not: `<div class="dg-note"><b>⚠ ${esc(kontroller.join(", ") || "Doğrulama")}:</b> ${esc(d.gerekce || "")}` +
+      (d.oneri ? `<div class="dg-oneri">💡 Öneri: ${esc(d.oneri)}</div>` : "") + `</div>`,
+  };
+}
+
+function dogrulamaOzetHtml(questions) {
+  const kayitli = questions.filter(q => q && q.dogrulama);
+  if (!kayitli.length) return ""; // eski job / dogrulama calismamis -> kalabalik yapma
+  const supheli = kayitli.filter(q => q.dogrulama.durum === "supheli");
+  const kontrolsuz = questions.length - kayitli.length;
+  const ek = kontrolsuz ? ` · ${kontrolsuz} soru kontrol edilemedi` : "";
+  if (!supheli.length) return `<div class="dg-ozet yok">🔎 İçerik doğrulama: ${questions.length} sorunun hiçbiri şüpheli işaretlenmedi${ek}</div>`;
+  const sayac = Object.keys(DOGRULAMA_ETIKET)
+    .map(k => [DOGRULAMA_ETIKET[k], supheli.filter(q => (q.dogrulama.kontroller || []).includes(k)).length])
+    .filter(([, c]) => c > 0).map(([l, c]) => `${l} ${c}`).join(", ");
+  return `<div class="dg-ozet var">⚠ İçerik doğrulama: ${questions.length} sorudan ${supheli.length} tanesi şüpheli işaretlendi (${esc(sayac)})${ek}</div>`;
+}
+
 function buildQuestionCard(q, i) {
   const {
     question_text = "", options = ["","",""], correct_answer = 0,
@@ -1210,12 +1249,15 @@ function buildQuestionCard(q, i) {
     `</div>`
   ).join("");
 
-  return `<div class="card">
+  const dg = dogrulamaKart(q);
+  return `<div class="card${dg.cls}">
   <!-- a) Soru no + metin -->
   <div class="q-header" style="margin-bottom:8px">
     <span class="card-num" style="flex-shrink:0">Soru ${i + 1}</span>
     <textarea id="q${i}_qt" class="q-text">${esc(question_text)}</textarea>
+    ${dg.rozet}
   </div>
+  ${dg.not}
   <!-- b) Şıklar yan yana -->
   <div class="opts-list">${optRows}</div>
   <input type="hidden" id="q${i}_ca" value="${correct_answer}">
@@ -1282,11 +1324,14 @@ function buildWyrCard(q, i) {
   const sbImgContent = sbUrl ? `<img src="${esc(sbUrl)}" id="q${i}_sbimg_inner" alt="kutu" style="max-height:110px;max-width:100%;object-fit:contain;border-radius:8px">` : `<div class="no-img">Kutu yok</div>`;
   const sbUrlsJson = JSON.stringify(sbUrls);
 
-  return `<div class="card">
+  const dg = dogrulamaKart(q);
+  return `<div class="card${dg.cls}">
   <div class="q-header" style="margin-bottom:8px">
     <span class="card-num" style="flex-shrink:0;background:#f59e0b">🤔 WYR ${i + 1}</span>
     <span class="q-text" style="font-weight:700;font-size:18px;color:#f59e0b;padding:6px 10px;display:inline-block">PICK ONE!</span>
+    ${dg.rozet}
   </div>
+  ${dg.not}
   <div class="row2" style="gap:10px;margin-bottom:10px">
     <div>
       <div style="font-size:.72em;color:#10b981;font-weight:700;margin-bottom:4px">✅ Görünür Seçenek</div>

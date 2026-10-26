@@ -1,3 +1,4 @@
+// REV 014/27EKI26 - questions[].dogrulama (01 icerik dogrulama) Onay 2 payloadina tasinir
 // REV 013/19SEP26 - arka plan gorseli (url + prompt) payloada: son onay formu gorsel yonetimi
 /**
  * 02.5-onay-tetikle.js
@@ -340,6 +341,8 @@ async function main() {
             // Son onay formu (stage=3) ses metin kutularini bunlardan doldurur
             question_audio_text: q.question_audio_text || "",
             reveal_audio_text: q.reveal_audio_text || "",
+            // Icerik dogrulama (01) — Onay 2 formunda supheli isareti
+            dogrulama: q.dogrulama || null,
           };
         }
         return {
@@ -361,6 +364,8 @@ async function main() {
           // Son onay formu (stage=3) ses metin kutularini bunlardan doldurur
           question_audio_text: q.question_audio_text || "",
           answer_audio_text: q.answer_audio_text || "",
+          // Icerik dogrulama (01) — Onay 2 formunda supheli isareti
+          dogrulama: q.dogrulama || null,
         };
       }),
       created_at: new Date().toISOString(),

@@ -1,3 +1,4 @@
+// REV 034/27EKI26 - icerik dogrulama gecisi (lib/icerik-dogrula.js): questions[].dogrulama + Telegram ozet satiri. Duzeltme YOK
 // REV 033/19SEP26 - ekran_basligi/intro_title/konu_duyuru_audio_text/outro_audio_text questions.json a YAZILIYOR (uretiliyordu ama dusuruluyordu)
 /**
  * 01 - İçerik Üretimi v14 (GeniMini Tests Kids Quiz)
@@ -21,6 +22,7 @@ import {
 import { telegram } from "./lib/telegram.js";
 import { GORSEL_STILLERI, DEFAULT_STIL } from "./lib/gorsel-stilleri.js";
 import { BAYRAKLAR } from "./lib/bayraklar.js";
+import { icerikDogrula, dogrulamaUygula, dogrulamaOzetSatiri } from "./lib/icerik-dogrula.js";
 
 const {
   GEMINI_API_KEY,
@@ -1151,6 +1153,12 @@ async function main() {
       icerik = await icerikUret(konu, N_SORU_OVERRIDE, null);
     }
 
+    // DOGRULAMA: tek Gemini cagrisi, Drive/job islemleriyle PARALEL baslar (uretimi yavaslatmaz).
+    // Sadece isaretler; hata olursa uretim devam eder.
+    console.log(`🔎 Icerik dogrulama basladi (${icerik.questions.length} soru)...`);
+    const dogrulamaSoz = icerikDogrula(konu, icerik.questions, [GEMINI_API_KEY, GEMINI_API_KEY_2])
+      .catch(e => ({ kayitlar: icerik.questions.map(() => null), hata: e.message }));
+
     const safeTitle = konu.substring(0, 50).replace(/[^a-zA-Z0-9 ]/g, "");
     const tarihForFolder = TARIH || new Date().toISOString().split("T")[0].replace(/-/g, "");
     const klasorAdi = `${tarihForFolder}-${FORMAT}-${safeTitle}`;
@@ -1187,6 +1195,14 @@ async function main() {
       muzik_mood: icerik.muzik_mood,
     });
     
+    const dogrulama = await dogrulamaSoz;
+    dogrulamaUygula(icerik.questions, dogrulama.kayitlar);
+    const dogrulamaSatiri = dogrulamaOzetSatiri(icerik.questions, dogrulama.hata);
+    console.log(`🔎 ${dogrulamaSatiri}`);
+    icerik.questions.forEach((q, i) => {
+      if (q.dogrulama?.durum === "supheli") console.log(`   ⚠ Soru ${i + 1} [${q.dogrulama.kontroller.join(",")}]: ${q.dogrulama.gerekce}`);
+    });
+
     // questions.json'a da ekle (07-video-montaj da görsel için kullanır)
     const tmpDir = "/tmp/quiz-data";
     fs.mkdirSync(tmpDir, { recursive: true });
@@ -1242,6 +1258,7 @@ async function main() {
       `📌 ${icerik.baslik}\n` +
       `📺 ${FORMAT}\n` +
       `❓ ${icerik.questions.length} questions (2 audio per question)\n` +
+      `🔎 ${dogrulamaSatiri}\n` +
       `🦊 Mascot: Jess the Fox\n\n` +
       `📂 [Drive folder](${anaKlasor.link})\n\n` +
       `⏳ İçerik onay aşamasına geçiliyor...`
