@@ -1,15 +1,18 @@
+// REV 003/26EKI26 - arka plan (2N+1) varsayilan disi: kare/hepsi atlar, --arkaplan veya acik slot numarasiyla uretilir
 // REV 002/26EKI26 - video slotlari kare/hepsi'de atlanir, arka plan (slot 2N+1, background_prompt, 1280x720) eklendi
 // REV 001/20EKI26 - PC tarafi: ComfyUI (Z-Image Turbo) ile 1328x800 gorsel uret, yedekle, Drive 01-gorseller'e gorsel-NN olarak yukle
 /**
  * PC'de calisir (GitHub Actions'tan DEGIL — Actions PC'deki ComfyUI'ye erisemez).
  *
  * Kullanim:
- *   node scripts/pc-comfy-gorsel.js <JOB_ID> [--slots 01,03,05 | --slots kare | --slots hepsi] [--yukle]
+ *   node scripts/pc-comfy-gorsel.js <JOB_ID> [--slots 01,03,05 | --slots kare | --slots hepsi] [--arkaplan] [--yukle]
  *
  *   --slots kare   (varsayilan) Drive'daki gorseli kare (1024x1024 = FLUX) olan veya gorseli hic
  *                  olmayan slotlar. Kullanicinin yukledigi gorsellere dokunulmaz. VIDEO slotlari atlanir.
- *   --slots hepsi  tum slotlar (2 x soru sayisi + arka plan 2N+1). VIDEO slotlari atlanir.
+ *   --slots hepsi  tum soru slotlari (2 x soru sayisi). VIDEO slotlari atlanir.
  *   --slots 01,03  acikca istenen slotlar — video olsa bile uretilir (bilerek istenmis).
+ *   --arkaplan     arka plan slotunu (2N+1) da ekle. Remotion su an arka plan gorselini kullanmiyor
+ *                  (schemas.ts: background_image_path KALDIRILDI) -> kare/hepsi varsayilan olarak atlar.
  *   --yukle        uretilenleri Drive'a yukle. Yoksa sadece yerelde uretir (deneme).
  *
  *   Gecici klasorler os.tmpdir() altinda (Windows: TEMP). C: yerine D: icin:
@@ -43,7 +46,8 @@ const JOB_ID = args.find(a => !a.startsWith("--"));
 const argDeger = (ad) => { const i = args.indexOf(ad); return i >= 0 ? args[i + 1] : undefined; };
 const SLOT_ARG = argDeger("--slots") || "kare";
 const YUKLE = args.includes("--yukle");
-if (!JOB_ID) { console.error("Kullanim: node scripts/pc-comfy-gorsel.js <JOB_ID> [--slots kare|hepsi|01,03] [--yukle]"); process.exit(1); }
+const ARKAPLAN = args.includes("--arkaplan");
+if (!JOB_ID) { console.error("Kullanim: node scripts/pc-comfy-gorsel.js <JOB_ID> [--slots kare|hepsi|01,03] [--arkaplan] [--yukle]"); process.exit(1); }
 
 // 02-gorsel-uret.js cleanGorselPrompt ile ayni temizlik (orada export yok, kopya)
 function cleanGorselPrompt(p) {
@@ -167,6 +171,11 @@ async function main() {
   if (SLOT_ARG === "hepsi") slotlar = tumSlotlar.filter(s => !videoSlot.has(s));
   else if (SLOT_ARG === "kare") slotlar = tumSlotlar.filter(s => !videoSlot.has(s) && (!slotDosya.has(s) || slotDosya.get(s).w === slotDosya.get(s).h));
   else slotlar = SLOT_ARG.split(",").map(s => parseInt(s, 10)).filter(n => n >= 1 && n <= toplam);
+  if (SLOT_ARG === "hepsi" || SLOT_ARG === "kare") {
+    slotlar = slotlar.filter(s => s !== BG_SLOT);
+    if (ARKAPLAN) slotlar.push(BG_SLOT);
+    else console.log("arka plan atlandi (Remotion kullanmiyor, --arkaplan ile zorlayabilirsin)");
+  } else if (ARKAPLAN && !slotlar.includes(BG_SLOT)) slotlar.push(BG_SLOT);
   const atlanan = SLOT_ARG === "hepsi" || SLOT_ARG === "kare" ? [...videoSlot].filter(s => s <= toplam).sort((a, b) => a - b) : [];
   console.log(`🎬 Video slotlari: ${[...videoSlot].sort((a, b) => a - b).map(s => String(s).padStart(2, "0")).join(", ") || "yok"}${atlanan.length ? " (atlandi)" : ""}`);
   console.log(`🎯 Slotlar (${SLOT_ARG}): ${slotlar.map(s => String(s).padStart(2, "0") + (s === BG_SLOT ? "(arka plan)" : "")).join(", ") || "yok"}`);
