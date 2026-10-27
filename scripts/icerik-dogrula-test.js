@@ -1,3 +1,4 @@
+// REV 002/27EKI26 - sonunda ham dogrulama kayitlari (JSON) da basilir (Actions logu icin)
 // REV 001/27EKI26 - icerik dogrulama gecisini mevcut bir questions.json uzerinde calistirir (yerel test, Drive'a YAZMAZ)
 /**
  * Kullanim (PC):
@@ -51,3 +52,4 @@ qs.forEach((q, i) => {
     if (d.oneri) console.log(`    oneri: ${d.oneri}`);
   }
 });
+console.log("\nHam kayitlar:\n" + JSON.stringify(kayitlar, null, 1));
