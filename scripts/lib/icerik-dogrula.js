@@ -1,3 +1,4 @@
+// REV 002/27EKI26 - yanlis alarm azaltma: iyi bilinen konu adla yeterli (ozellik sorulmuyorsa); gerekce 320 kr, kelime sinirinda kesilir
 // REV 001/27EKI26 - Icerik dogrulama gecisi: olgu / gorsel-soru uyumu / sik netligi. SADECE isaretler, duzeltmez.
 /**
  * 01-icerik-uret icerigi urettikten SONRA tek Gemini cagrisi ile her soruyu kontrol eder.
@@ -11,8 +12,13 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export const KONTROL_ADLARI = ["olgu", "gorsel", "sik"];
-const MAX_METIN = 240; // issue govdesi 65KB limitine yakin -> gerekce/oneri kisa tutulur
-const kisalt = (s) => String(s || "").replace(/\s+/g, " ").trim().substring(0, MAX_METIN);
+const MAX_METIN = 320; // issue govdesi 65KB limitine yakin -> gerekce/oneri kisa tutulur
+const kisalt = (s) => {
+  const t = String(s || "").replace(/\s+/g, " ").trim();
+  if (t.length <= MAX_METIN) return t;
+  const k = t.substring(0, MAX_METIN - 1);
+  return k.substring(0, k.lastIndexOf(" ") > 200 ? k.lastIndexOf(" ") : k.length) + "…"; // kelime ortasinda kesme
+};
 const yildizsiz = (s) => String(s || "").replace(/\*\*/g, "");
 
 // Gemini'ye giden kompakt soru ozeti (url, ses metni vb. gonderilmez)
@@ -66,7 +72,9 @@ Image models do NOT reliably know species / landmark / object names: they draw f
 - Identify the distinguishing feature the question asks about or depends on (a back sail, horns, wings, stripes, colour, shape, size, number of legs, a landmark's shape...).
 - The question_image_prompt MUST describe that feature EXPLICITLY in visual words.
 - If the prompt only NAMES the subject (e.g. "Spinosaurus standing in a river") and does not describe the asked feature (e.g. "large tall sail on its back"), FLAG it — the child cannot find the answer from the image.
-- For "Which X is this?" questions: the prompt must describe the correct answer's identifying visual features, otherwise the model may draw a generic look-alike → FLAG.
+- For "Which X is this?" questions (no specific feature asked): only FLAG when X is obscure or easily confused with a wrong option AND the prompt gives no identifying visual words.
+  Very well-known subjects that image models draw reliably by name (e.g. T-Rex, elephant, giraffe, Eiffel Tower, pizza, a pterosaur shown flying) are OK by name alone — do NOT flag those.
+- Do not flag style or composition preferences; flag only when the child could NOT find or verify the answer from the image.
 - The prompt must not depict a WRONG option instead, and must not contradict the question.
 - fun_fact_image_prompt must match the fun fact; if it depicts something false or unrelated → FLAG.
 - For would_you_rather: each image_prompt must clearly show its own option / outcome.
